@@ -151,6 +151,9 @@ func (l *Lexer) readString() string {
 		if l.ch == '"' || l.ch == 0 {
 			break
 		}
+		if l.ch == '\n' {
+			l.line++
+		}
 		sb = append(sb, l.ch)
 	}
 	return string(sb)

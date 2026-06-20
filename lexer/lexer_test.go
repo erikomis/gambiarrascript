@@ -7,13 +7,7 @@ import (
 )
 
 func TestNextToken(t *testing.T) {
-	input := `bota x = 10
-mostra "salve"
-se_colar x >= 5 e x != 0
-    mostra x % 2
-acabou_finalmente
-# isso aqui e um comentario
-[1, 2]`
+	input := "bota x = 10\nmostra \"salve\"\nse_colar x >= 5 e x != 0\n    mostra x % 2\nacabou_finalmente\n# isso aqui e um comentario\n[1, 2]\n! 3.14\n\"multi\nlinha\" x"
 
 	esperado := []struct {
 		tipo    token.TokenType
@@ -44,7 +38,11 @@ acabou_finalmente
 		{token.COMMA, ",", 7},
 		{token.NUMERO, "2", 7},
 		{token.RBRACKET, "]", 7},
-		{token.EOF, "", 7},
+		{token.ILLEGAL, "!", 8},
+		{token.NUMERO, "3.14", 8},
+		{token.TEXTO, "multi\nlinha", 9},
+		{token.IDENT, "x", 10},
+		{token.EOF, "", 10},
 	}
 
 	l := New(input)
