@@ -138,7 +138,9 @@ func (s *SeColarStatement) String() string {
 		}
 		out.WriteString(c.String())
 		out.WriteString(" ")
-		out.WriteString(s.Consequences[i].String())
+		if i < len(s.Consequences) {
+			out.WriteString(s.Consequences[i].String())
+		}
 	}
 	if s.Alternative != nil {
 		out.WriteString("se_nao_colar ")
