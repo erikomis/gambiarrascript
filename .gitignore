@@ -1,0 +1,7 @@
+docs/superpowers/
+.claude/
+
+# Go / build
+/gs
+*.test
+*.out

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Roda o toolchain Go dentro de um container, sem instalar Go no host.
+set -euo pipefail
+docker run --rm \
+  -v "$PWD":/app -w /app \
+  -v gambiarrascript-gocache:/go \
+  golang:1.23 go "$@"
