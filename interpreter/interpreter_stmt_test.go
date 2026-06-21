@@ -2,6 +2,7 @@ package interpreter
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"gambiarrascript/lexer"
@@ -83,7 +84,23 @@ func TestArrumaQuebrou(t *testing.T) {
 quebrou erro
     mostra "peguei: " + erro
 acabou_finalmente`)
-	if out == "" || out[:7] != "peguei:" {
-		t.Fatalf("catch nao capturou o erro, got %q", out)
+	if !strings.HasPrefix(out, "peguei: ") {
+		t.Fatalf("saida nao comeca com 'peguei: ', got %q", out)
+	}
+	if !strings.Contains(out, "dividir por zero") {
+		t.Fatalf("mensagem de erro nao contem 'dividir por zero', got %q", out)
+	}
+}
+
+func TestGambiarraRecursiva(t *testing.T) {
+	out := rodar(t, `gambiarra fatorial(n)
+    se_colar n <= 1
+        funciona 1
+    acabou_finalmente
+    funciona n * fatorial(n - 1)
+acabou_finalmente
+mostra fatorial(5)`)
+	if out != "120\n" {
+		t.Fatalf("esperado '120\\n', got %q", out)
 	}
 }
