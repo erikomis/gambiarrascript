@@ -6,6 +6,7 @@ import (
 
 	"gambiarrascript/interpreter"
 	"gambiarrascript/lexer"
+	"gambiarrascript/lsp"
 	"gambiarrascript/object"
 	"gambiarrascript/parser"
 	"gambiarrascript/repl"
@@ -31,6 +32,11 @@ func main() {
 		fmt.Println("gs (GambiarraScript) " + Versao)
 	case "--help", "-h", "ajuda":
 		uso()
+	case "lsp":
+		if err := lsp.NovoServidor(os.Stdout).Rodar(os.Stdin); err != nil {
+			fmt.Fprintln(os.Stderr, "lsp: "+err.Error())
+			os.Exit(1)
+		}
 	default:
 		uso()
 		os.Exit(1)
