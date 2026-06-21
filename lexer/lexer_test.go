@@ -60,6 +60,30 @@ func TestNextToken(t *testing.T) {
 	}
 }
 
+func TestColunaAposStringMultilinha(t *testing.T) {
+	// a string ocupa da linha 1 ate a 2; o 'x' vem depois na linha 2
+	input := "bota s = \"abre\nfecha\"\nmostra x"
+	l := New(input)
+	var ultimo token.Token
+	for {
+		tok := l.NextToken()
+		if tok.Type == token.EOF {
+			break
+		}
+		ultimo = tok
+	}
+	// 'x' e o ultimo token antes do EOF: linha 3, coluna 8 (apos "mostra ")
+	if ultimo.Type != token.IDENT || ultimo.Literal != "x" {
+		t.Fatalf("ultimo token deveria ser IDENT x, got %q (%q)", ultimo.Type, ultimo.Literal)
+	}
+	if ultimo.Line != 3 {
+		t.Fatalf("linha do x: got %d, esperado 3", ultimo.Line)
+	}
+	if ultimo.Coluna != 8 {
+		t.Fatalf("coluna do x: got %d, esperado 8", ultimo.Coluna)
+	}
+}
+
 func TestColuna(t *testing.T) {
 	input := "bota x = 10\nmostra x"
 	esperado := []struct {

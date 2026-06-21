@@ -48,6 +48,9 @@ func uso() {
 	fmt.Println("uso:")
 	fmt.Println("  gs roda <arquivo.gs>   # executa um arquivo")
 	fmt.Println("  gs repl                # abre o modo interativo")
+	fmt.Println("  gs lsp                 # inicia o language server (usado pela extensao do VSCode)")
+	fmt.Println("  gs --version           # mostra a versao")
+	fmt.Println("  gs --help              # mostra esta ajuda")
 }
 
 func rodarArquivo(caminho string) {

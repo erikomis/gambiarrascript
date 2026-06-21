@@ -95,8 +95,8 @@ func TestErrosDetalhados(t *testing.T) {
 	if e.Linha != 1 {
 		t.Fatalf("linha do erro: got %d, esperado 1", e.Linha)
 	}
-	if e.Coluna <= 0 {
-		t.Fatalf("coluna do erro deveria ser > 0, got %d", e.Coluna)
+	if e.Coluna != 6 {
+		t.Fatalf("coluna do erro: got %d, esperado 6", e.Coluna)
 	}
 	if e.Msg == "" {
 		t.Fatal("mensagem do erro vazia")
