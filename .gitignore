@@ -8,3 +8,8 @@ docs/superpowers/
 
 # distribuicao
 /dist/
+
+# extensao vscode
+editors/vscode/node_modules/
+editors/vscode/out/
+*.vsix

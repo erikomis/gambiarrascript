@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Instala dependencias e compila a extensao VSCode via Docker (sem node local).
+set -euo pipefail
+cd "$(dirname "$0")/../editors/vscode"
+docker run --rm -v "$PWD":/ext -w /ext node:20 bash -lc 'npm install && npm run compile'
+echo "extensao compilada em editors/vscode/out/"
+echo "Pra empacotar um .vsix: docker run --rm -v \"\$PWD\":/ext -w /ext node:20 npx --yes @vscode/vsce package"

@@ -72,3 +72,21 @@ docker run --rm -it -v "$PWD":/app -w /app golang:1.23 go run ./cmd/gs repl
 ```
 
 Feito na gambiarra, com carinho. 🛠️
+
+## Instalando o `gs` (binário nativo)
+
+Compile uma vez via Docker e instale no PATH — depois roda sem Docker:
+
+```bash
+./scripts/build            # gera dist/gs nativo do seu sistema
+./scripts/install          # copia pra /usr/local/bin (use --user p/ ~/.local/bin)
+gs roda examples/fizzbuzz.gs
+```
+
+Pra gerar binários de todas as plataformas: `./scripts/build --all` (saída em `dist/`).
+
+## Extensão do VSCode
+
+Highlight, snippets, comando de rodar (F5) e language server com erros sublinhados.
+Veja [editors/vscode/README.md](editors/vscode/README.md) — em resumo:
+`./scripts/build-extension`, abra `editors/vscode` no VSCode e aperte F5.

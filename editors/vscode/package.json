@@ -7,6 +7,20 @@
   "license": "MIT",
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Programming Languages"],
+  "main": "./out/extension.js",
+  "activationEvents": ["onLanguage:gambiarrascript"],
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
   "contributes": {
     "languages": [
       {
@@ -26,6 +40,24 @@
     ],
     "snippets": [
       { "language": "gambiarrascript", "path": "./snippets/gambiarrascript.json" }
-    ]
+    ],
+    "commands": [
+      { "command": "gambiarrascript.rodar", "title": "GambiarraScript: Rodar arquivo" },
+      { "command": "gambiarrascript.repl", "title": "GambiarraScript: Abrir REPL" }
+    ],
+    "keybindings": [
+      { "command": "gambiarrascript.rodar", "key": "f5", "when": "editorLangId == gambiarrascript" },
+      { "command": "gambiarrascript.rodar", "key": "ctrl+r", "mac": "cmd+r", "when": "editorLangId == gambiarrascript" }
+    ],
+    "configuration": {
+      "title": "GambiarraScript",
+      "properties": {
+        "gambiarrascript.caminhoDoGs": {
+          "type": "string",
+          "default": "gs",
+          "description": "Caminho do binario gs (no PATH ou absoluto)."
+        }
+      }
+    }
   }
 }
