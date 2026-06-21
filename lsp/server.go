@@ -189,5 +189,8 @@ func (s *Servidor) notificar(metodo string, params interface{}) {
 }
 
 func (s *Servidor) responder(id *json.RawMessage, result interface{}) {
+	if result == nil {
+		result = json.RawMessage("null")
+	}
 	EscreverMensagem(s.out, &Mensagem{ID: id, Result: result})
 }

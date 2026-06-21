@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -30,6 +31,16 @@ func TestDiagnosticosSemErro(t *testing.T) {
 	got := out.String()
 	if !strings.Contains(got, `"diagnostics":[]`) {
 		t.Fatalf("codigo valido deveria ter zero diagnosticos, got %q", got)
+	}
+}
+
+func TestShutdownRespondeResultNull(t *testing.T) {
+	var out bytes.Buffer
+	s := NovoServidor(&out)
+	id := json.RawMessage(`1`)
+	s.tratar(&Mensagem{Method: "shutdown", ID: &id})
+	if !strings.Contains(out.String(), `"result":null`) {
+		t.Fatalf("shutdown deveria responder result:null, got %q", out.String())
 	}
 }
 
