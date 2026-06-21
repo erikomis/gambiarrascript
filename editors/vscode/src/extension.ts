@@ -14,13 +14,15 @@ function caminhoDoGs(): string {
     .get<string>('caminhoDoGs', 'gs');
 }
 
-function rodarNoTerminal(args: string): void {
-  const nome = 'GambiarraScript';
-  const term =
-    vscode.window.terminals.find((t) => t.name === nome) ??
-    vscode.window.createTerminal(nome);
+// Cria um terminal cujo processo E o gs, passando os args como argv (sem shell),
+// evitando interpretacao de metacaracteres no caminho do arquivo.
+function rodarGs(args: string[]): void {
+  const term = vscode.window.createTerminal({
+    name: 'GambiarraScript',
+    shellPath: caminhoDoGs(),
+    shellArgs: args,
+  });
   term.show();
-  term.sendText(`"${caminhoDoGs()}" ${args}`);
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -32,10 +34,10 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       await ed.document.save();
-      rodarNoTerminal(`roda "${ed.document.fileName}"`);
+      rodarGs(['roda', ed.document.fileName]);
     }),
     vscode.commands.registerCommand('gambiarrascript.repl', () => {
-      rodarNoTerminal('repl');
+      rodarGs(['repl']);
     })
   );
 
