@@ -41,14 +41,21 @@ var precedencias = map[token.TokenType]int{
 	token.LBRACKET: INDEX,
 }
 
+// ErroParse e um erro de analise com posicao no codigo-fonte.
+type ErroParse struct {
+	Linha  int
+	Coluna int
+	Msg    string
+}
+
 type (
 	prefixParseFn func() ast.Expression
 	infixParseFn  func(ast.Expression) ast.Expression
 )
 
 type Parser struct {
-	l      *lexer.Lexer
-	errors []string
+	l    *lexer.Lexer
+	errs []ErroParse
 
 	curToken  token.Token
 	peekToken token.Token
@@ -58,7 +65,7 @@ type Parser struct {
 }
 
 func New(l *lexer.Lexer) *Parser {
-	p := &Parser{l: l, errors: []string{}}
+	p := &Parser{l: l, errs: []ErroParse{}}
 
 	p.prefixParseFns = map[token.TokenType]prefixParseFn{}
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
@@ -91,7 +98,21 @@ func New(l *lexer.Lexer) *Parser {
 func (p *Parser) registerPrefix(tt token.TokenType, fn prefixParseFn) { p.prefixParseFns[tt] = fn }
 func (p *Parser) registerInfix(tt token.TokenType, fn infixParseFn)   { p.infixParseFns[tt] = fn }
 
-func (p *Parser) Errors() []string { return p.errors }
+func (p *Parser) addErro(linha, coluna int, formato string, args ...interface{}) {
+	p.errs = append(p.errs, ErroParse{Linha: linha, Coluna: coluna, Msg: fmt.Sprintf(formato, args...)})
+}
+
+// ErrosDetalhados devolve os erros com posicao (linha/coluna), para o LSP.
+func (p *Parser) ErrosDetalhados() []ErroParse { return p.errs }
+
+// Errors mantem a compatibilidade com o CLI, formatando "linha N: msg".
+func (p *Parser) Errors() []string {
+	out := make([]string, len(p.errs))
+	for i, e := range p.errs {
+		out[i] = fmt.Sprintf("linha %d: %s", e.Linha, e.Msg)
+	}
+	return out
+}
 
 func (p *Parser) nextToken() {
 	p.curToken = p.peekToken
@@ -106,8 +127,8 @@ func (p *Parser) expectPeek(t token.TokenType) bool {
 		p.nextToken()
 		return true
 	}
-	p.errors = append(p.errors, fmt.Sprintf(
-		"linha %d: esperava %q aqui, mas veio %q", p.peekToken.Line, t, p.peekToken.Literal))
+	p.addErro(p.peekToken.Line, p.peekToken.Coluna,
+		"esperava %q aqui, mas veio %q", t, p.peekToken.Literal)
 	return false
 }
 
@@ -128,8 +149,8 @@ func (p *Parser) curPrecedence() int {
 func (p *Parser) parseExpression(precedence int) ast.Expression {
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
-		p.errors = append(p.errors, fmt.Sprintf(
-			"linha %d: nao sei o que fazer com %q no comeco de uma expressao", p.curToken.Line, p.curToken.Literal))
+		p.addErro(p.curToken.Line, p.curToken.Coluna,
+			"nao sei o que fazer com %q no comeco de uma expressao", p.curToken.Literal)
 		return nil
 	}
 	left := prefix()
@@ -152,7 +173,7 @@ func (p *Parser) parseIdentifier() ast.Expression {
 func (p *Parser) parseNumero() ast.Expression {
 	val, err := strconv.ParseFloat(p.curToken.Literal, 64)
 	if err != nil {
-		p.errors = append(p.errors, fmt.Sprintf("linha %d: numero estranho %q", p.curToken.Line, p.curToken.Literal))
+		p.addErro(p.curToken.Line, p.curToken.Coluna, "numero estranho %q", p.curToken.Literal)
 		return nil
 	}
 	return &ast.NumeroLiteral{Token: p.curToken, Value: val}
@@ -344,8 +365,8 @@ func (p *Parser) parseSeColar() ast.Statement {
 	}
 
 	if !p.curTokenIs(token.ACABOU) {
-		p.errors = append(p.errors, fmt.Sprintf(
-			"linha %d: cade o acabou_finalmente pra fechar o se_colar?", p.curToken.Line))
+		p.addErro(p.curToken.Line, p.curToken.Coluna,
+			"cade o acabou_finalmente pra fechar o se_colar?")
 	}
 	return stmt
 }
@@ -357,8 +378,8 @@ func (p *Parser) parseEnquanto() ast.Statement {
 	p.nextToken()
 	stmt.Body = p.parseBlockStatement()
 	if !p.curTokenIs(token.ACABOU) {
-		p.errors = append(p.errors, fmt.Sprintf(
-			"linha %d: cade o acabou_finalmente pra fechar o enquanto?", p.curToken.Line))
+		p.addErro(p.curToken.Line, p.curToken.Coluna,
+			"cade o acabou_finalmente pra fechar o enquanto?")
 	}
 	return stmt
 }
@@ -392,8 +413,8 @@ func (p *Parser) parsePraCada() ast.Statement {
 		stmt.Body = p.parseBlockStatement()
 		return stmt
 	default:
-		p.errors = append(p.errors, fmt.Sprintf(
-			"linha %d: depois do pra_cada eu esperava 'de' ou 'em', veio %q", p.curToken.Line, p.curToken.Literal))
+		p.addErro(p.curToken.Line, p.curToken.Coluna,
+			"depois do pra_cada eu esperava 'de' ou 'em', veio %q", p.curToken.Literal)
 		return nil
 	}
 }
@@ -436,8 +457,8 @@ func (p *Parser) parseArruma() ast.Statement {
 	p.nextToken()
 	stmt.Try = p.parseBlockStatement()
 	if !p.curTokenIs(token.QUEBROU) {
-		p.errors = append(p.errors, fmt.Sprintf(
-			"linha %d: cade o 'quebrou' pra pegar o erro do arruma?", p.curToken.Line))
+		p.addErro(p.curToken.Line, p.curToken.Coluna,
+			"cade o 'quebrou' pra pegar o erro do arruma?")
 		return stmt
 	}
 	if !p.expectPeek(token.IDENT) {
@@ -447,8 +468,8 @@ func (p *Parser) parseArruma() ast.Statement {
 	p.nextToken()
 	stmt.Catch = p.parseBlockStatement()
 	if !p.curTokenIs(token.ACABOU) {
-		p.errors = append(p.errors, fmt.Sprintf(
-			"linha %d: cade o acabou_finalmente pra fechar o arruma?", p.curToken.Line))
+		p.addErro(p.curToken.Line, p.curToken.Coluna,
+			"cade o acabou_finalmente pra fechar o arruma?")
 	}
 	return stmt
 }

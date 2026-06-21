@@ -1,9 +1,11 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"gambiarrascript/ast"
+	"gambiarrascript/lexer"
 )
 
 func TestParseBota(t *testing.T) {
@@ -78,5 +80,30 @@ acabou_finalmente`
 	}
 	if stmt.ErrName.Value != "erro" {
 		t.Fatalf("nome do erro errado: %q", stmt.ErrName.Value)
+	}
+}
+
+func TestErrosDetalhados(t *testing.T) {
+	// 'bota' sem identificador: erro na posicao do '='
+	p := New(lexer.New("bota = 5"))
+	p.ParseProgram()
+	detalhes := p.ErrosDetalhados()
+	if len(detalhes) == 0 {
+		t.Fatal("esperava ao menos um ErroParse")
+	}
+	e := detalhes[0]
+	if e.Linha != 1 {
+		t.Fatalf("linha do erro: got %d, esperado 1", e.Linha)
+	}
+	if e.Coluna <= 0 {
+		t.Fatalf("coluna do erro deveria ser > 0, got %d", e.Coluna)
+	}
+	if e.Msg == "" {
+		t.Fatal("mensagem do erro vazia")
+	}
+	// Errors() continua funcionando e prefixa a linha
+	strs := p.Errors()
+	if len(strs) == 0 || !strings.HasPrefix(strs[0], "linha 1:") {
+		t.Fatalf("Errors() deveria prefixar 'linha 1:', got %v", strs)
 	}
 }
