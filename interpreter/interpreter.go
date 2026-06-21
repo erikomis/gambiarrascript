@@ -251,6 +251,8 @@ func iguais(a, b object.Object) bool {
 		return av.Value == b.(*object.Texto).Value
 	case *object.Booleano:
 		return av.Value == b.(*object.Booleano).Value
+	case *object.Numero:
+		return av.Value == b.(*object.Numero).Value
 	case *object.Nada:
 		return true
 	}
