@@ -17,6 +17,9 @@ function caminhoDoGs(): string {
 // Cria um terminal cujo processo E o gs, passando os args como argv (sem shell),
 // evitando interpretacao de metacaracteres no caminho do arquivo.
 function rodarGs(args: string[]): void {
+  vscode.window.terminals
+    .filter((t) => t.name === 'GambiarraScript')
+    .forEach((t) => t.dispose());
   const term = vscode.window.createTerminal({
     name: 'GambiarraScript',
     shellPath: caminhoDoGs(),
@@ -56,6 +59,16 @@ export function activate(context: vscode.ExtensionContext): void {
     clientOptions
   );
   client.start();
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('gambiarrascript.caminhoDoGs')) {
+        vscode.window.showInformationMessage(
+          'Mudou o caminho do gs — recarrega a janela (Developer: Reload Window) pra valer pro language server.'
+        );
+      }
+    })
+  );
 }
 
 export function deactivate(): Thenable<void> | undefined {
