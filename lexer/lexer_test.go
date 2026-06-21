@@ -59,3 +59,33 @@ func TestNextToken(t *testing.T) {
 		}
 	}
 }
+
+func TestColuna(t *testing.T) {
+	input := "bota x = 10\nmostra x"
+	esperado := []struct {
+		tipo   token.TokenType
+		linha  int
+		coluna int
+	}{
+		{token.BOTA, 1, 1},
+		{token.IDENT, 1, 6},
+		{token.ASSIGN, 1, 8},
+		{token.NUMERO, 1, 10},
+		{token.MOSTRA, 2, 1},
+		{token.IDENT, 2, 8},
+		{token.EOF, 2, 9},
+	}
+	l := New(input)
+	for i, esp := range esperado {
+		tok := l.NextToken()
+		if tok.Type != esp.tipo {
+			t.Fatalf("[%d] tipo: got %q, esperado %q", i, tok.Type, esp.tipo)
+		}
+		if tok.Line != esp.linha {
+			t.Fatalf("[%d] linha de %q: got %d, esperado %d", i, tok.Literal, tok.Line, esp.linha)
+		}
+		if tok.Coluna != esp.coluna {
+			t.Fatalf("[%d] coluna de %q: got %d, esperado %d", i, tok.Literal, tok.Coluna, esp.coluna)
+		}
+	}
+}
