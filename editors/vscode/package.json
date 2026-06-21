@@ -1,0 +1,31 @@
+{
+  "name": "gambiarrascript",
+  "displayName": "GambiarraScript",
+  "description": "Suporte a GambiarraScript: highlight, snippets, rodar e language server.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "gambiarrascript",
+        "aliases": ["GambiarraScript", "gambiarrascript"],
+        "extensions": [".gs"],
+        "configuration": "./language-configuration.json",
+        "icon": { "light": "./icons/gs.svg", "dark": "./icons/gs.svg" }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "gambiarrascript",
+        "scopeName": "source.gambiarrascript",
+        "path": "./syntaxes/gambiarrascript.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      { "language": "gambiarrascript", "path": "./snippets/gambiarrascript.json" }
+    ]
+  }
+}

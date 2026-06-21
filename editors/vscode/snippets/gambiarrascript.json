@@ -1,0 +1,27 @@
+{
+  "Gambiarra (funcao)": {
+    "prefix": "gambiarra",
+    "body": ["gambiarra ${1:nome}(${2:args})", "\t${0}", "acabou_finalmente"],
+    "description": "Declara uma funcao"
+  },
+  "Se colar (if)": {
+    "prefix": "se_colar",
+    "body": ["se_colar ${1:condicao}", "\t${0}", "acabou_finalmente"],
+    "description": "Condicional"
+  },
+  "Pra cada (numerico)": {
+    "prefix": "pra_cada",
+    "body": ["pra_cada ${1:i} de ${2:1} ate ${3:10}", "\t${0}", "acabou_finalmente"],
+    "description": "Laco numerico"
+  },
+  "Enquanto (while)": {
+    "prefix": "enquanto",
+    "body": ["enquanto ${1:condicao}", "\t${0}", "acabou_finalmente"],
+    "description": "Laco while"
+  },
+  "Arruma (try/catch)": {
+    "prefix": "arruma",
+    "body": ["arruma", "\t${1}", "quebrou ${2:erro}", "\t${0}", "acabou_finalmente"],
+    "description": "Tratamento de erro"
+  }
+}
