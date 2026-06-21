@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Compila o binário gs via Docker (sem Go local). Sem args: build nativo pro
+# host. Com --all: cross-compila as plataformas principais para dist/.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+mkdir -p dist
+IMG=golang:1.23
+run() { docker run --rm -v "$PWD":/app -w /app -v gambiarrascript-gocache:/go "$IMG" "$@"; }
+
+if [ "${1:-}" = "--all" ]; then
+  build() { echo "==> $1/$2 -> dist/$3"; run env GOOS="$1" GOARCH="$2" go build -o "dist/$3" ./cmd/gs; }
+  build darwin  arm64 gs-darwin-arm64
+  build darwin  amd64 gs-darwin-amd64
+  build linux   amd64 gs-linux-amd64
+  build windows amd64 gs-windows-amd64.exe
+  echo "binarios em dist/"
+else
+  host_os=$(uname -s | tr '[:upper:]' '[:lower:]')
+  host_arch=$(uname -m)
+  case "$host_arch" in
+    x86_64) host_arch=amd64 ;;
+    aarch64|arm64) host_arch=arm64 ;;
+  esac
+  echo "==> host ${host_os}/${host_arch} -> dist/gs"
+  run env GOOS="$host_os" GOARCH="$host_arch" go build -o dist/gs ./cmd/gs
+  echo "dist/gs pronto"
+fi

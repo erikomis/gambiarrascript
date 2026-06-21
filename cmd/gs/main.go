@@ -27,6 +27,10 @@ func main() {
 	case "repl":
 		fmt.Println("GambiarraScript REPL — manda ver (ctrl+d pra vazar)")
 		repl.Start(os.Stdin, os.Stdout)
+	case "--version", "-v", "version":
+		fmt.Println("gs (GambiarraScript) " + Versao)
+	case "--help", "-h", "ajuda":
+		uso()
 	default:
 		uso()
 		os.Exit(1)

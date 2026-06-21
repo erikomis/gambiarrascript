@@ -5,3 +5,6 @@ docs/superpowers/
 /gs
 *.test
 *.out
+
+# distribuicao
+/dist/

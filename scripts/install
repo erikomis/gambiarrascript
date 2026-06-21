@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Instala dist/gs num diretório do PATH. Padrão /usr/local/bin (usa sudo);
+# --user instala em ~/.local/bin sem sudo.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+[ -f dist/gs ] || { echo "rode ./scripts/build primeiro"; exit 1; }
+
+DEST=/usr/local/bin
+SUDO=sudo
+if [ "${1:-}" = "--user" ]; then
+  DEST="$HOME/.local/bin"; SUDO=""; mkdir -p "$DEST"
+fi
+$SUDO cp dist/gs "$DEST/gs"
+$SUDO chmod +x "$DEST/gs"
+echo "instalado em $DEST/gs"
+"$DEST/gs" --version
