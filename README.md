@@ -37,6 +37,12 @@ acabou_finalmente
 | `nada`              | null                |
 | `acabou_finalmente` | fecha o bloco       |
 
+## Pegadinhas / Semântica
+
+- **Escopo de função no estilo Python**: a variável do `pra_cada` e a da cláusula `quebrou` continuam existindo depois que o bloco fecha — elas vazam pro escopo da função que as contém.
+- **`e` / `ou` sempre devolvem booleano**: ao contrário de JS ou Python, `deu_bom e deu_bom` retorna `deu_bom` (booleano normalizado), nunca o operando original.
+- **Textos são crus**: ainda não existe sequência de escape dentro das aspas — `"linha1\nlinha2"` imprime literalmente `\n`, não uma quebra de linha.
+
 ## Quando deu ruim, a gente arruma
 
 ```

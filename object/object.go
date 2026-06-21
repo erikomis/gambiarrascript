@@ -97,12 +97,12 @@ type Erro struct{ Message string }
 func (e *Erro) Type() ObjectType { return ERRO_OBJ }
 func (e *Erro) Inspect() string  { return e.Message }
 
-type Vaza struct{}
+type Vaza struct{ Line int }
 
 func (v *Vaza) Type() ObjectType { return VAZA_OBJ }
 func (v *Vaza) Inspect() string  { return "vaza" }
 
-type Continua struct{}
+type Continua struct{ Line int }
 
 func (c *Continua) Type() ObjectType { return CONTINUA_OBJ }
 func (c *Continua) Inspect() string  { return "continua" }

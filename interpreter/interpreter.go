@@ -89,9 +89,9 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		}
 		return &object.Retorno{Value: val}
 	case *ast.VazaStatement:
-		return &object.Vaza{}
+		return &object.Vaza{Line: node.Token.Line}
 	case *ast.ContinuaStatement:
-		return &object.Continua{}
+		return &object.Continua{Line: node.Token.Line}
 	case *ast.BlockStatement:
 		return i.evalBlock(node, env)
 	case *ast.SeColarStatement:
@@ -131,6 +131,10 @@ func (i *Interpreter) evalProgram(prog *ast.Program, env *object.Environment) ob
 			return r.Value
 		case *object.Erro:
 			return r
+		case *object.Vaza:
+			return newError(r.Line, "deu `vaza` fora de um loop, parca — vaza pra onde?")
+		case *object.Continua:
+			return newError(r.Line, "deu `continua` fora de um loop, parca")
 		}
 	}
 	return result
@@ -450,6 +454,12 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 	}
 	if isError(avaliado) {
 		return avaliado
+	}
+	if v, ok := avaliado.(*object.Vaza); ok {
+		return newError(v.Line, "deu `vaza` fora de um loop, parca — vaza pra onde?")
+	}
+	if c, ok := avaliado.(*object.Continua); ok {
+		return newError(c.Line, "deu `continua` fora de um loop, parca")
 	}
 	return NADA
 }

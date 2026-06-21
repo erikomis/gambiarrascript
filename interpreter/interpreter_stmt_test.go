@@ -92,6 +92,23 @@ acabou_finalmente`)
 	}
 }
 
+func TestVazaForaDeLoop(t *testing.T) {
+	// vaza no topo do programa deve virar erro
+	got := eval(t, `vaza`)
+	if got.Type() != object.ERRO_OBJ {
+		t.Errorf("vaza top-level deveria gerar Erro, got %s (%q)", got.Type(), got.Inspect())
+	}
+
+	// vaza dentro do corpo de uma funcao (fora de qualquer loop) deve virar erro
+	got = eval(t, `gambiarra f()
+    vaza
+acabou_finalmente
+f()`)
+	if got.Type() != object.ERRO_OBJ {
+		t.Errorf("vaza dentro de funcao sem loop deveria gerar Erro, got %s (%q)", got.Type(), got.Inspect())
+	}
+}
+
 func TestGambiarraRecursiva(t *testing.T) {
 	out := rodar(t, `gambiarra fatorial(n)
     se_colar n <= 1
