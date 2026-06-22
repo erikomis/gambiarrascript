@@ -12,5 +12,8 @@ if [ "${1:-}" = "--user" ]; then
 fi
 $SUDO cp dist/gs "$DEST/gs"
 $SUDO chmod +x "$DEST/gs"
+# No macOS, copiar invalida a assinatura embutida e o binario morre ("Killed: 9").
+# Reassina ad-hoc no destino final.
+[ "$(uname -s)" = "Darwin" ] && $SUDO codesign --force -s - "$DEST/gs"
 echo "instalado em $DEST/gs"
 "$DEST/gs" --version
