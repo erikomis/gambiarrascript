@@ -23,5 +23,30 @@
     "prefix": "arruma",
     "body": ["arruma", "\t${1}", "quebrou ${2:erro}", "\t${0}", "acabou_finalmente"],
     "description": "Tratamento de erro"
+  },
+  "Pra cada (colecao)": {
+    "prefix": "pra_cada_em",
+    "body": ["pra_cada ${1:item} em ${2:colecao}", "\t${0}", "acabou_finalmente"],
+    "description": "Laco sobre lista ou dicionario"
+  },
+  "Busca (HTTP)": {
+    "prefix": "busca",
+    "body": ["bota ${1:resp} = busca(\"${2:https://}\")"],
+    "description": "Requisicao HTTP (cliente)"
+  },
+  "Rota (servidor)": {
+    "prefix": "rota",
+    "body": [
+      "gambiarra ${1:handler}(pedido)",
+      "\tfunciona ${2:\"salve\"}",
+      "acabou_finalmente",
+      "rota(\"${3:GET}\", \"${4:/}\", ${1:handler})"
+    ],
+    "description": "Registra uma rota HTTP"
+  },
+  "Escuta (servidor)": {
+    "prefix": "escuta",
+    "body": ["escuta(${1:8080})"],
+    "description": "Sobe o servidor HTTP na porta"
   }
 }

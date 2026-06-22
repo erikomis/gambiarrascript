@@ -8,6 +8,7 @@
     { "include": "#numbers" },
     { "include": "#constants" },
     { "include": "#funcdecl" },
+    { "include": "#builtins" },
     { "include": "#keywords" }
   ],
   "repository": {
@@ -34,6 +35,10 @@
         "1": { "name": "keyword.declaration.gambiarrascript" },
         "2": { "name": "entity.name.function.gambiarrascript" }
       }
+    },
+    "builtins": {
+      "match": "\\b(tamanho|chaves|tem|texto|numero|busca|rota|escuta)\\b",
+      "name": "support.function.builtin.gambiarrascript"
     },
     "keywords": {
       "patterns": [

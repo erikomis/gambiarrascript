@@ -43,7 +43,9 @@ var keywords = []string{
 }
 
 // builtinsCompletion são as funções nativas da linguagem expostas no autocomplete.
-var builtinsCompletion = []string{"tamanho", "chaves", "tem", "texto", "numero"}
+var builtinsCompletion = []string{
+	"tamanho", "chaves", "tem", "texto", "numero", "busca", "rota", "escuta",
+}
 
 // ---- servidor ----
 
