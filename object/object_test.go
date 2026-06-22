@@ -38,3 +38,24 @@ func TestInspectBooleano(t *testing.T) {
 		t.Fatal("false deveria inspecionar como deu_ruim")
 	}
 }
+
+func TestChaveHash(t *testing.T) {
+	if (&Texto{Value: "a"}).ChaveHash() != (&Texto{Value: "a"}).ChaveHash() {
+		t.Fatal("textos iguais deveriam ter a mesma ChaveHash")
+	}
+	if (&Texto{Value: "a"}).ChaveHash() == (&Texto{Value: "b"}).ChaveHash() {
+		t.Fatal("textos diferentes nao deveriam colidir")
+	}
+	if (&Numero{Value: 1}).ChaveHash() == (&Texto{Value: "1"}).ChaveHash() {
+		t.Fatal("numero 1 e texto \"1\" nao deveriam ter a mesma chave (tipos diferentes)")
+	}
+}
+
+func TestDicionarioInspect(t *testing.T) {
+	d := &Dicionario{Pares: map[HashKey]ParDic{}}
+	chave := &Texto{Value: "nome"}
+	d.Pares[chave.ChaveHash()] = ParDic{Chave: chave, Valor: &Texto{Value: "Erik"}}
+	if d.Inspect() != `{"nome": "Erik"}` {
+		t.Fatalf("Inspect errado: got %q", d.Inspect())
+	}
+}

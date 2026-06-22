@@ -21,6 +21,9 @@ const (
 	ERRO_OBJ     = "ERRO"
 	VAZA_OBJ     = "VAZA"
 	CONTINUA_OBJ = "CONTINUA"
+
+	BUILTIN_OBJ    = "BUILTIN"
+	DICIONARIO_OBJ = "DICIONARIO"
 )
 
 type Object interface {
@@ -106,3 +109,54 @@ type Continua struct{ Line int }
 
 func (c *Continua) Type() ObjectType { return CONTINUA_OBJ }
 func (c *Continua) Inspect() string  { return "continua" }
+
+type BuiltinFunc func(args []Object) Object
+
+type Builtin struct {
+	Nome string
+	Fn   BuiltinFunc
+}
+
+func (b *Builtin) Type() ObjectType { return BUILTIN_OBJ }
+func (b *Builtin) Inspect() string  { return "builtin " + b.Nome }
+
+// HashKey e a chave canonica usada no mapa interno do dicionario.
+type HashKey struct {
+	Tipo  ObjectType
+	Valor string
+}
+
+// Chaveavel e implementado pelos tipos que podem ser chave de dicionario.
+type Chaveavel interface {
+	ChaveHash() HashKey
+}
+
+func (t *Texto) ChaveHash() HashKey    { return HashKey{Tipo: TEXTO_OBJ, Valor: t.Value} }
+func (n *Numero) ChaveHash() HashKey   { return HashKey{Tipo: NUMERO_OBJ, Valor: FormatNumero(n.Value)} }
+func (b *Booleano) ChaveHash() HashKey { return HashKey{Tipo: BOOLEANO_OBJ, Valor: b.Inspect()} }
+
+type ParDic struct {
+	Chave Object
+	Valor Object
+}
+
+type Dicionario struct {
+	Pares map[HashKey]ParDic
+}
+
+func (d *Dicionario) Type() ObjectType { return DICIONARIO_OBJ }
+func (d *Dicionario) Inspect() string {
+	partes := make([]string, 0, len(d.Pares))
+	for _, par := range d.Pares {
+		partes = append(partes, inspectComAspas(par.Chave)+": "+inspectComAspas(par.Valor))
+	}
+	return "{" + strings.Join(partes, ", ") + "}"
+}
+
+// inspectComAspas envolve textos em aspas (estilo JSON) e usa Inspect no resto.
+func inspectComAspas(o Object) string {
+	if t, ok := o.(*Texto); ok {
+		return `"` + t.Value + `"`
+	}
+	return o.Inspect()
+}
