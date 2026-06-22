@@ -83,6 +83,14 @@ func TestPraJsonChaveNumerica(t *testing.T) {
 	}
 }
 
+func TestDeJsonComCrase(t *testing.T) {
+	// mostra de_json(`{"n": 7}`)["n"]
+	out := rodar(t, "mostra de_json(\x60{\"n\": 7}\x60)[\"n\"]")
+	if out != "7\n" {
+		t.Fatalf("de_json com crase: got %q", out)
+	}
+}
+
 func TestPraJsonNaoSerializavelEmDict(t *testing.T) {
 	got := eval(t, `gambiarra f()
     funciona 1

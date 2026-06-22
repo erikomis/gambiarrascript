@@ -131,6 +131,49 @@ func TestStringEscapes(t *testing.T) {
 	}
 }
 
+func TestRawStringCrase(t *testing.T) {
+	// fonte gs: `{"nome": "Erik"}`  (crase, json com aspas, crase)
+	input := "\x60{\"nome\": \"Erik\"}\x60"
+	l := New(input)
+	tok := l.NextToken()
+	if tok.Type != token.TEXTO {
+		t.Fatalf("tipo: got %q, esperado TEXTO", tok.Type)
+	}
+	if tok.Literal != `{"nome": "Erik"}` {
+		t.Fatalf("literal: got %q", tok.Literal)
+	}
+	if l.NextToken().Type != token.EOF {
+		t.Fatal("esperava EOF apos a string de crase")
+	}
+}
+
+func TestRawStringNaoProcessaEscape(t *testing.T) {
+	// fonte gs: `a\nb`  -> conteudo cru "a\nb" (barra-n literal, 4 chars)
+	input := "\x60a\\nb\x60"
+	l := New(input)
+	tok := l.NextToken()
+	if tok.Literal != "a\\nb" {
+		t.Fatalf("crase nao deveria processar escape: got %q (esperado %q)", tok.Literal, "a\\nb")
+	}
+}
+
+func TestRawStringMultilinha(t *testing.T) {
+	// fonte gs: `ab\n(real)cd` numa crase, depois quebra real, depois x
+	input := "\x60ab\ncd\x60\nx"
+	l := New(input)
+	str := l.NextToken()
+	if str.Literal != "ab\ncd" {
+		t.Fatalf("multilinha: got %q", str.Literal)
+	}
+	id := l.NextToken() // x, na linha 3 (linha1: `ab, linha2: cd`, linha3: x)
+	if id.Type != token.IDENT || id.Literal != "x" {
+		t.Fatalf("esperava IDENT x, got %q (%q)", id.Type, id.Literal)
+	}
+	if id.Line != 3 {
+		t.Fatalf("linha do x apos raw string multilinha: got %d, esperado 3", id.Line)
+	}
+}
+
 func TestTokensDicionario(t *testing.T) {
 	input := `{"a": 1}`
 	esperado := []token.TokenType{

@@ -103,6 +103,8 @@ func (l *Lexer) NextToken() token.Token {
 		tok = newToken(token.COLON, l.ch, linha, coluna)
 	case '"':
 		tok = token.Token{Type: token.TEXTO, Literal: l.readString(), Line: linha, Coluna: coluna}
+	case '`':
+		tok = token.Token{Type: token.TEXTO, Literal: l.readRawString(), Line: linha, Coluna: coluna}
 	case 0:
 		tok = token.Token{Type: token.EOF, Literal: "", Line: linha, Coluna: coluna}
 	default:
@@ -182,6 +184,20 @@ func (l *Lexer) readString() string {
 				sb = append(sb, '\\')
 			}
 			continue
+		}
+		sb = append(sb, l.ch)
+	}
+	return string(sb)
+}
+
+// readRawString le uma string crua entre crases: nada e escapado e quebras de
+// linha reais fazem parte do valor (padrao raw string do Go). Para no ` ou no EOF.
+func (l *Lexer) readRawString() string {
+	var sb []byte
+	for {
+		l.readChar()
+		if l.ch == '`' || l.ch == 0 {
+			break
 		}
 		sb = append(sb, l.ch)
 	}
