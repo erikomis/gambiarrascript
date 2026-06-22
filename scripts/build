@@ -23,5 +23,8 @@ else
   esac
   echo "==> host ${host_os}/${host_arch} -> dist/gs"
   run env GOOS="$host_os" GOARCH="$host_arch" go build -o dist/gs ./cmd/gs
+  # Cross-compile via Docker sai sem assinatura; no macOS o binario nao
+  # assinado e morto ("Killed: 9"). Assina ad-hoc pra poder rodar no host.
+  [ "$host_os" = "darwin" ] && codesign --force -s - dist/gs
   echo "dist/gs pronto"
 fi

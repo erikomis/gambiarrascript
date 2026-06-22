@@ -14,18 +14,21 @@ function caminhoDoGs(): string {
     .get<string>('caminhoDoGs', 'gs');
 }
 
-// Cria um terminal cujo processo E o gs, passando os args como argv (sem shell),
-// evitando interpretacao de metacaracteres no caminho do arquivo.
+// Coloca o texto entre aspas simples de forma segura pro shell POSIX (zsh/bash),
+// pra caminhos com espaco ou metacaracteres nao quebrarem o comando.
+function aspas(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+// Roda o gs DENTRO de um terminal normal (o shell continua vivo depois que o gs
+// termina), pra saida nao sumir. Reaproveita o mesmo terminal entre execucoes.
 function rodarGs(args: string[]): void {
-  vscode.window.terminals
-    .filter((t) => t.name === 'GambiarraScript')
-    .forEach((t) => t.dispose());
-  const term = vscode.window.createTerminal({
-    name: 'GambiarraScript',
-    shellPath: caminhoDoGs(),
-    shellArgs: args,
-  });
+  const term =
+    vscode.window.terminals.find((t) => t.name === 'GambiarraScript') ??
+    vscode.window.createTerminal('GambiarraScript');
   term.show();
+  const cmd = [caminhoDoGs(), ...args].map(aspas).join(' ');
+  term.sendText(cmd, true);
 }
 
 export function activate(context: vscode.ExtensionContext): void {

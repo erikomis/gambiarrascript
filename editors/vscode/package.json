@@ -45,9 +45,18 @@
       { "language": "gambiarrascript", "path": "./snippets/gambiarrascript.json" }
     ],
     "commands": [
-      { "command": "gambiarrascript.rodar", "title": "GambiarraScript: Rodar arquivo" },
+      { "command": "gambiarrascript.rodar", "title": "GambiarraScript: Rodar arquivo", "icon": "$(play)" },
       { "command": "gambiarrascript.repl", "title": "GambiarraScript: Abrir REPL" }
     ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "gambiarrascript.rodar",
+          "when": "editorLangId == gambiarrascript",
+          "group": "navigation"
+        }
+      ]
+    },
     "keybindings": [
       { "command": "gambiarrascript.rodar", "key": "f5", "when": "editorLangId == gambiarrascript" },
       { "command": "gambiarrascript.rodar", "key": "ctrl+r", "mac": "cmd+r", "when": "editorLangId == gambiarrascript" }
