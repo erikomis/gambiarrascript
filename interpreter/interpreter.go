@@ -82,8 +82,11 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		if isError(val) {
 			return val
 		}
-		env.Set(node.Name.Value, val)
-		return NADA
+		if node.Name != nil {
+			env.Set(node.Name.Value, val)
+			return NADA
+		}
+		return i.evalAtribuiIndice(node.Indice, val, env)
 	case *ast.FuncionaStatement:
 		val := i.Eval(node.Value, env)
 		if isError(val) {
@@ -256,6 +259,40 @@ func (i *Interpreter) evalInfixNumero(op string, l, r float64, linha int) object
 		return boolDoNativo(l != r)
 	}
 	return newError(linha, "operador desconhecido pra numeros: %s", op)
+}
+
+func (i *Interpreter) evalAtribuiIndice(alvo *ast.IndexExpression, val object.Object, env *object.Environment) object.Object {
+	cont := i.Eval(alvo.Left, env)
+	if isError(cont) {
+		return cont
+	}
+	idx := i.Eval(alvo.Index, env)
+	if isError(idx) {
+		return idx
+	}
+	linha := alvo.Token.Line
+	switch c := cont.(type) {
+	case *object.Lista:
+		n, ok := idx.(*object.Numero)
+		if !ok {
+			return newError(linha, "indice de lista tem que ser numero, veio %s", idx.Type())
+		}
+		pos := int(n.Value)
+		if pos < 0 || pos >= len(c.Elements) {
+			return newError(linha, "esse indice (%d) ta fora da lista, o", pos)
+		}
+		c.Elements[pos] = val
+		return NADA
+	case *object.Dicionario:
+		chave, ok := idx.(object.Chaveavel)
+		if !ok {
+			return newError(linha, "essa chave (%s) nao da pra usar num dicionario", idx.Type())
+		}
+		c.Pares[chave.ChaveHash()] = object.ParDic{Chave: idx, Valor: val}
+		return NADA
+	default:
+		return newError(linha, "so da pra atribuir indice em lista ou dicionario, e isso ai e %s", cont.Type())
+	}
 }
 
 func (i *Interpreter) evalDicionario(node *ast.DicionarioLiteral, env *object.Environment) object.Object {
@@ -444,12 +481,21 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 	if isError(it) {
 		return it
 	}
-	lista, ok := it.(*object.Lista)
-	if !ok {
-		return newError(node.Token.Line, "pra_cada ... em ... so funciona com lista, e isso ai e %s", it.Type())
+
+	var itens []object.Object
+	switch c := it.(type) {
+	case *object.Lista:
+		itens = c.Elements
+	case *object.Dicionario:
+		for _, par := range c.Pares {
+			itens = append(itens, par.Chave)
+		}
+	default:
+		return newError(node.Token.Line, "pra_cada ... em ... so funciona com lista ou dicionario, e isso ai e %s", it.Type())
 	}
-	for _, elem := range lista.Elements {
-		env.Set(node.Var.Value, elem)
+
+	for _, item := range itens {
+		env.Set(node.Var.Value, item)
 		res := i.evalBlock(node.Body, env)
 		if res != nil {
 			switch res.Type() {

@@ -324,10 +324,18 @@ func (p *Parser) parseExpressionStatement() ast.Statement {
 
 func (p *Parser) parseBota() ast.Statement {
 	stmt := &ast.BotaStatement{Token: p.curToken}
-	if !p.expectPeek(token.IDENT) {
+	p.nextToken()
+	alvo := p.parseExpression(LOWEST)
+	switch a := alvo.(type) {
+	case *ast.Identifier:
+		stmt.Name = a
+	case *ast.IndexExpression:
+		stmt.Indice = a
+	default:
+		p.addErro(p.curToken.Line, p.curToken.Coluna,
+			"depois do bota eu esperava um nome ou um alvo[indice], veio outra coisa")
 		return nil
 	}
-	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 	if !p.expectPeek(token.ASSIGN) {
 		return nil
 	}

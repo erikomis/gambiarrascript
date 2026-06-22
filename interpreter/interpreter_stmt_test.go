@@ -142,3 +142,35 @@ mostra a == c`)
 		t.Fatalf("got %q", out)
 	}
 }
+
+func TestAtribuiIndiceDicionario(t *testing.T) {
+	out := rodar(t, `bota d = {"a": 1}
+bota d["a"] = 99
+bota d["novo"] = 7
+mostra d["a"]
+mostra d["novo"]`)
+	if out != "99\n7\n" {
+		t.Fatalf("got %q", out)
+	}
+}
+
+func TestAtribuiIndiceLista(t *testing.T) {
+	out := rodar(t, `bota nums = [10, 20, 30]
+bota nums[1] = 99
+mostra nums[1]`)
+	if out != "99\n" {
+		t.Fatalf("got %q", out)
+	}
+}
+
+func TestPraCadaDicionario(t *testing.T) {
+	out := rodar(t, `bota d = {"a": 1, "b": 2, "c": 3}
+bota soma = 0
+pra_cada chave em d
+    bota soma = soma + d[chave]
+acabou_finalmente
+mostra soma`)
+	if out != "6\n" {
+		t.Fatalf("got %q", out)
+	}
+}

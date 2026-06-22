@@ -48,15 +48,22 @@ func (p *Program) String() string {
 // ---- Statements ----
 
 type BotaStatement struct {
-	Token token.Token
-	Name  *Identifier
-	Value Expression
+	Token  token.Token
+	Name   *Identifier      // setado quando o alvo e uma variavel simples
+	Indice *IndexExpression // setado quando o alvo e uma atribuicao por indice
+	Value  Expression
 }
 
 func (s *BotaStatement) statementNode()       {}
 func (s *BotaStatement) TokenLiteral() string { return s.Token.Literal }
 func (s *BotaStatement) String() string {
-	return "bota " + s.Name.String() + " = " + s.Value.String()
+	alvo := ""
+	if s.Name != nil {
+		alvo = s.Name.String()
+	} else if s.Indice != nil {
+		alvo = s.Indice.String()
+	}
+	return "bota " + alvo + " = " + s.Value.String()
 }
 
 type MostraStatement struct {
