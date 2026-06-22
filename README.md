@@ -37,6 +37,17 @@ acabou_finalmente
 | `nada`              | null                |
 | `acabou_finalmente` | fecha o bloco       |
 
+## Falando com o mundo (HTTP)
+
+```
+bota r = busca("https://httpbin.org/get")
+se_colar r["ok"]
+    mostra r["corpo"]
+acabou_finalmente
+```
+
+`busca(url)` faz um GET; `busca(url, {"metodo": "POST", "corpo": "...", "cabecalhos": {...}, "timeout": 10})` cobre o resto. A resposta é um dicionário `{"status", "ok", "corpo", "cabecalhos"}`. É bloqueante (sem async): o resultado já vem pronto.
+
 ## Pegadinhas / Semântica
 
 - **Escopo de função no estilo Python**: a variável do `pra_cada` e a da cláusula `quebrou` continuam existindo depois que o bloco fecha — elas vazam pro escopo da função que as contém.
