@@ -66,6 +66,20 @@ dicionário `{"status", "corpo", "cabecalhos"}`. `escuta(porta)` sobe o servidor
 É serializado (uma requisição por vez) — concorrência de verdade vem depois.
 Cabeçalhos e query usam a forma canônica nas chaves (ex.: `pedido["cabecalhos"]["X-Teste"]`, com maiúscula); quando um cabeçalho ou parâmetro de query vem com múltiplos valores, eles chegam unidos por `", "`.
 
+## JSON
+
+```
+bota dados = de_json("{\"nome\": \"Erik\"}")
+mostra dados["nome"]                       # Erik
+mostra pra_json({"ok": deu_bom, "n": 42})  # {"ok":true,"n":42}
+```
+
+`de_json(texto)` transforma JSON em dicionário/lista/texto/número/booleano/`nada`;
+`pra_json(valor)` faz o caminho inverso (compacto). Junto com `busca`, `rota` e
+`escuta`, dá pra escrever uma API REST inteira: parsear o corpo do pedido com
+`de_json(pedido["corpo"])` e responder com `pra_json(...)` e o cabeçalho
+`Content-Type: application/json`.
+
 ## Pegadinhas / Semântica
 
 - **Escopo de função no estilo Python**: a variável do `pra_cada` e a da cláusula `quebrou` continuam existindo depois que o bloco fecha — elas vazam pro escopo da função que as contém.
