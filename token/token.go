@@ -36,6 +36,9 @@ const (
 	RPAREN   = ")"
 	LBRACKET = "["
 	RBRACKET = "]"
+	LBRACE   = "{"
+	RBRACE   = "}"
+	COLON    = ":"
 
 	BOTA         = "BOTA"
 	MOSTRA       = "MOSTRA"

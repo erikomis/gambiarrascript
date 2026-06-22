@@ -95,6 +95,12 @@ func (l *Lexer) NextToken() token.Token {
 		tok = newToken(token.LBRACKET, l.ch, linha, coluna)
 	case ']':
 		tok = newToken(token.RBRACKET, l.ch, linha, coluna)
+	case '{':
+		tok = newToken(token.LBRACE, l.ch, linha, coluna)
+	case '}':
+		tok = newToken(token.RBRACE, l.ch, linha, coluna)
+	case ':':
+		tok = newToken(token.COLON, l.ch, linha, coluna)
 	case '"':
 		tok = token.Token{Type: token.TEXTO, Literal: l.readString(), Line: linha, Coluna: coluna}
 	case 0:

@@ -113,3 +113,17 @@ func TestColuna(t *testing.T) {
 		}
 	}
 }
+
+func TestTokensDicionario(t *testing.T) {
+	input := `{"a": 1}`
+	esperado := []token.TokenType{
+		token.LBRACE, token.TEXTO, token.COLON, token.NUMERO, token.RBRACE, token.EOF,
+	}
+	l := New(input)
+	for idx, tt := range esperado {
+		tok := l.NextToken()
+		if tok.Type != tt {
+			t.Fatalf("[%d] tipo errado: got %q, esperado %q", idx, tok.Type, tt)
+		}
+	}
+}
