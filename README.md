@@ -48,6 +48,23 @@ acabou_finalmente
 
 `busca(url)` faz um GET; `busca(url, {"metodo": "POST", "corpo": "...", "cabecalhos": {...}, "timeout": 10})` cobre o resto. A resposta é um dicionário `{"status", "ok", "corpo", "cabecalhos"}`. É bloqueante (sem async): o resultado já vem pronto.
 
+## Servindo HTTP (servidor)
+
+```
+gambiarra ola(pedido)
+    funciona "salve, " + pedido["caminho"]
+acabou_finalmente
+
+rota("GET", "/", ola)
+escuta(8080)
+```
+
+`rota(metodo, caminho, handler)` registra uma rota; o `handler` é uma `gambiarra`
+que recebe um dicionário-pedido (`pedido["metodo"]`, `["caminho"]`, `["corpo"]`,
+`["cabecalhos"]`, `["query"]`) e devolve um texto (corpo, status 200) ou um
+dicionário `{"status", "corpo", "cabecalhos"}`. `escuta(porta)` sobe o servidor.
+É serializado (uma requisição por vez) — concorrência de verdade vem depois.
+
 ## Pegadinhas / Semântica
 
 - **Escopo de função no estilo Python**: a variável do `pra_cada` e a da cláusula `quebrou` continuam existindo depois que o bloco fecha — elas vazam pro escopo da função que as contém.
