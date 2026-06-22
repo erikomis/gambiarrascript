@@ -123,6 +123,23 @@ rota("GET", "/ver", ver)`)
 	}
 }
 
+func TestServidorStatusInvalidoVira500(t *testing.T) {
+	srv := servidorDeTeste(t, `gambiarra h(pedido)
+    funciona {"status": 99, "corpo": "x"}
+acabou_finalmente
+rota("GET", "/clamp", h)`)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/clamp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 500 {
+		t.Fatalf("status invalido 99 deveria virar 500, got %d", resp.StatusCode)
+	}
+}
+
 func TestEscutaPortaInvalida(t *testing.T) {
 	i := New(io.Discard)
 	res := i.servidor.builtinEscuta([]object.Object{&object.Numero{Value: 999999}})

@@ -63,6 +63,10 @@ func (i *Interpreter) ServidorHandler() http.Handler {
 
 func (s *servidorEstado) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// O lock serializa TODA interação com o estado compartilhado: não só
+		// s.rotas, mas também o Environment global do programa, que os handlers
+		// leem e escrevem. Não remova este lock sem antes tornar o Environment
+		// thread-safe.
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
@@ -73,14 +77,22 @@ func (s *servidorEstado) Handler() http.Handler {
 			return
 		}
 
-		pedido := s.montaPedido(r)
+		pedido, err := s.montaPedido(r)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, "nao consegui ler o corpo do pedido, parca")
+			return
+		}
 		resultado := s.i.applyFunction(handler, []object.Object{pedido}, 0)
 		s.escreveResposta(w, resultado)
 	})
 }
 
-func (s *servidorEstado) montaPedido(r *http.Request) *object.Dicionario {
-	corpo, _ := io.ReadAll(r.Body)
+func (s *servidorEstado) montaPedido(r *http.Request) (*object.Dicionario, error) {
+	corpo, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	pares := map[object.HashKey]object.ParDic{}
 	set := func(chave string, valor object.Object) {
@@ -92,7 +104,7 @@ func (s *servidorEstado) montaPedido(r *http.Request) *object.Dicionario {
 	set("corpo", &object.Texto{Value: string(corpo)})
 	set("cabecalhos", dicDeMultimap(r.Header))
 	set("query", dicDeMultimap(r.URL.Query()))
-	return &object.Dicionario{Pares: pares}
+	return &object.Dicionario{Pares: pares}, nil
 }
 
 // dicDeMultimap converte um map[string][]string (header/query) num dicionario
@@ -136,11 +148,15 @@ func (s *servidorEstado) escreveRespostaDict(w http.ResponseWriter, d *object.Di
 			}
 		}
 	}
-	// status (default 200)
+	// status (default 200); clamp: valores fora de 100-599 viram 500
 	status := http.StatusOK
 	if par, ok := d.Pares[(&object.Texto{Value: "status"}).ChaveHash()]; ok {
 		if n, ok := par.Valor.(*object.Numero); ok {
-			status = int(n.Value)
+			s := int(n.Value)
+			if s < 100 || s > 599 {
+				s = http.StatusInternalServerError
+			}
+			status = s
 		}
 	}
 	w.WriteHeader(status)
