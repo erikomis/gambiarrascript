@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"gambiarrascript/object"
 )
@@ -88,8 +89,42 @@ func TestBuscaPostComCorpoEHeader(t *testing.T) {
 	if autorizacao != "Bearer 123" {
 		t.Fatalf("o servidor recebeu Authorization %q", autorizacao)
 	}
+	if ok := leChave(t, d, "ok"); ok.Inspect() != "deu_bom" {
+		t.Fatalf("ok: got %s", ok.Inspect())
+	}
 	if c := leChave(t, d, "corpo"); c.Inspect() != "criado" {
 		t.Fatalf("corpo: got %q", c.Inspect())
+	}
+}
+
+func TestBuscaTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		io.WriteString(w, "nunca chega")
+	}))
+	defer srv.Close()
+
+	opcoes := &object.Dicionario{Pares: map[object.HashKey]object.ParDic{}}
+	porChave := func(k string, v object.Object) {
+		key := &object.Texto{Value: k}
+		opcoes.Pares[key.ChaveHash()] = object.ParDic{Chave: key, Valor: v}
+	}
+	porChave("timeout", &object.Numero{Value: 0.05})
+
+	res := builtinBusca([]object.Object{&object.Texto{Value: srv.URL}, opcoes})
+	if res.Type() != object.ERRO_OBJ {
+		t.Fatalf("esperava ERRO por timeout, got %s: %s", res.Type(), res.Inspect())
+	}
+}
+
+func TestBuscaConexaoRecusada(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	url := srv.URL
+	srv.Close() // porta morta
+
+	res := builtinBusca([]object.Object{&object.Texto{Value: url}})
+	if res.Type() != object.ERRO_OBJ {
+		t.Fatalf("esperava ERRO por conexao recusada, got %s: %s", res.Type(), res.Inspect())
 	}
 }
 
