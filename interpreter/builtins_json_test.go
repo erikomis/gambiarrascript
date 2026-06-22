@@ -11,6 +11,7 @@ func TestDeJsonTipos(t *testing.T) {
 		{`mostra de_json("42")`, "42"},
 		{`mostra de_json("\"oi\"")`, "oi"},
 		{`mostra de_json("true")`, "deu_bom"},
+		{`mostra de_json("false")`, "deu_ruim"},
 		{`mostra de_json("null")`, "nada"},
 		{`mostra de_json("[1, 2, 3]")`, "[1, 2, 3]"},
 		{`mostra de_json("{\"nome\": \"Erik\"}")["nome"]`, "Erik"},
@@ -79,5 +80,15 @@ func TestPraJsonChaveNumerica(t *testing.T) {
 	out := rodar(t, `mostra pra_json({1: "a"})`)
 	if out != `{"1":"a"}`+"\n" {
 		t.Fatalf("chave numerica deveria virar string: got %q", out)
+	}
+}
+
+func TestPraJsonNaoSerializavelEmDict(t *testing.T) {
+	got := eval(t, `gambiarra f()
+    funciona 1
+acabou_finalmente
+pra_json({"fn": f})`)
+	if got.Type() != object.ERRO_OBJ {
+		t.Fatalf("gambiarra dentro de dict deveria dar erro, got %s", got.Type())
 	}
 }

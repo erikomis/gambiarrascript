@@ -161,13 +161,27 @@ func (l *Lexer) readString() string {
 		if l.ch == 0 {
 			break
 		}
-		if l.ch == '\\' && l.peekChar() == '"' {
-			l.readChar()
-			sb = append(sb, '"')
-			continue
-		}
 		if l.ch == '"' {
 			break
+		}
+		if l.ch == '\\' {
+			switch l.peekChar() {
+			case '"':
+				l.readChar()
+				sb = append(sb, '"')
+			case '\\':
+				l.readChar()
+				sb = append(sb, '\\')
+			case 'n':
+				l.readChar()
+				sb = append(sb, '\n')
+			case 't':
+				l.readChar()
+				sb = append(sb, '\t')
+			default:
+				sb = append(sb, '\\')
+			}
+			continue
 		}
 		sb = append(sb, l.ch)
 	}

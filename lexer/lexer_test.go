@@ -114,6 +114,23 @@ func TestColuna(t *testing.T) {
 	}
 }
 
+func TestStringEscapes(t *testing.T) {
+	input := `"a\"b\\c\nd\te"`
+	expected := "a\"b\\c\nd\te"
+	l := New(input)
+	tok := l.NextToken()
+	if tok.Type != token.TEXTO {
+		t.Fatalf("tipo errado: got %q, esperado %q", tok.Type, token.TEXTO)
+	}
+	if tok.Literal != expected {
+		t.Fatalf("literal errado: got %q, esperado %q", tok.Literal, expected)
+	}
+	eof := l.NextToken()
+	if eof.Type != token.EOF {
+		t.Fatalf("proximo token deveria ser EOF, got %q", eof.Type)
+	}
+}
+
 func TestTokensDicionario(t *testing.T) {
 	input := `{"a": 1}`
 	esperado := []token.TokenType{
