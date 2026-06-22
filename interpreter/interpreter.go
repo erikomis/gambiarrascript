@@ -161,6 +161,9 @@ func (i *Interpreter) evalIdentifier(node *ast.Identifier, env *object.Environme
 	if val, ok := env.Get(node.Value); ok {
 		return val
 	}
+	if b, ok := builtins[node.Value]; ok {
+		return b
+	}
 	return newError(node.Token.Line, "cade o `%s`? voce nao botou isso ainda", node.Value)
 }
 
@@ -528,6 +531,9 @@ func (i *Interpreter) evalArruma(node *ast.ArrumaStatement, env *object.Environm
 }
 
 func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linha int) object.Object {
+	if b, ok := fn.(*object.Builtin); ok {
+		return b.Fn(args)
+	}
 	funcao, ok := fn.(*object.Funcao)
 	if !ok {
 		return newError(linha, "isso ai (%s) nao e gambiarra pra voce sair chamando", fn.Type())

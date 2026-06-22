@@ -174,3 +174,52 @@ mostra soma`)
 		t.Fatalf("got %q", out)
 	}
 }
+
+func TestBuiltins(t *testing.T) {
+	casos := []struct {
+		input string
+		esp   string
+	}{
+		{`mostra tamanho([1, 2, 3])`, "3\n"},
+		{`mostra tamanho({"a": 1, "b": 2})`, "2\n"},
+		{`mostra tamanho("salve")`, "5\n"},
+		{`mostra tem({"a": 1}, "a")`, "deu_bom\n"},
+		{`mostra tem({"a": 1}, "z")`, "deu_ruim\n"},
+		{`mostra texto(42)`, "42\n"},
+		{`mostra numero("10") + 5`, "15\n"},
+	}
+	for _, c := range casos {
+		out := rodar(t, c.input)
+		if out != c.esp {
+			t.Errorf("input %q => got %q, esperado %q", c.input, out, c.esp)
+		}
+	}
+}
+
+func TestBuiltinChaves(t *testing.T) {
+	out := rodar(t, `mostra tamanho(chaves({"a": 1, "b": 2}))`)
+	if out != "2\n" {
+		t.Fatalf("got %q", out)
+	}
+}
+
+func TestBuiltinErroCapturavel(t *testing.T) {
+	out := rodar(t, `arruma
+    bota x = numero("abc")
+quebrou erro
+    mostra "peguei"
+acabou_finalmente`)
+	if out != "peguei\n" {
+		t.Fatalf("erro de builtin deveria ser capturavel, got %q", out)
+	}
+}
+
+func TestBuiltinSombreavel(t *testing.T) {
+	out := rodar(t, `gambiarra tamanho(x)
+    funciona 999
+acabou_finalmente
+mostra tamanho([1, 2, 3])`)
+	if out != "999\n" {
+		t.Fatalf("a funcao do usuario deveria sombrear o builtin, got %q", out)
+	}
+}
