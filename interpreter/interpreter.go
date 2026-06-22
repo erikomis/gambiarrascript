@@ -54,6 +54,8 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 			return elems[0]
 		}
 		return &object.Lista{Elements: elems}
+	case *ast.DicionarioLiteral:
+		return i.evalDicionario(node, env)
 
 	// --- operadores ---
 	case *ast.PrefixExpression:
@@ -256,20 +258,51 @@ func (i *Interpreter) evalInfixNumero(op string, l, r float64, linha int) object
 	return newError(linha, "operador desconhecido pra numeros: %s", op)
 }
 
+func (i *Interpreter) evalDicionario(node *ast.DicionarioLiteral, env *object.Environment) object.Object {
+	pares := map[object.HashKey]object.ParDic{}
+	for _, par := range node.Pares {
+		chave := i.Eval(par.Chave, env)
+		if isError(chave) {
+			return chave
+		}
+		chaveavel, ok := chave.(object.Chaveavel)
+		if !ok {
+			return newError(node.Token.Line, "nao da pra usar %s como chave de dicionario", chave.Type())
+		}
+		valor := i.Eval(par.Valor, env)
+		if isError(valor) {
+			return valor
+		}
+		pares[chaveavel.ChaveHash()] = object.ParDic{Chave: chave, Valor: valor}
+	}
+	return &object.Dicionario{Pares: pares}
+}
+
 func (i *Interpreter) evalIndex(left, index object.Object, linha int) object.Object {
-	lista, ok := left.(*object.Lista)
-	if !ok {
-		return newError(linha, "so da pra indexar lista, e isso ai e %s", left.Type())
+	switch c := left.(type) {
+	case *object.Lista:
+		idx, ok := index.(*object.Numero)
+		if !ok {
+			return newError(linha, "indice de lista tem que ser numero, veio %s", index.Type())
+		}
+		pos := int(idx.Value)
+		if pos < 0 || pos >= len(c.Elements) {
+			return newError(linha, "esse indice (%d) ta fora da lista, o", pos)
+		}
+		return c.Elements[pos]
+	case *object.Dicionario:
+		chave, ok := index.(object.Chaveavel)
+		if !ok {
+			return newError(linha, "essa chave (%s) nao da pra usar num dicionario", index.Type())
+		}
+		par, existe := c.Pares[chave.ChaveHash()]
+		if !existe {
+			return NADA
+		}
+		return par.Valor
+	default:
+		return newError(linha, "so da pra indexar lista ou dicionario, e isso ai e %s", left.Type())
 	}
-	idx, ok := index.(*object.Numero)
-	if !ok {
-		return newError(linha, "indice de lista tem que ser numero, veio %s", index.Type())
-	}
-	pos := int(idx.Value)
-	if pos < 0 || pos >= len(lista.Elements) {
-		return newError(linha, "esse indice (%d) ta fora da lista, o", pos)
-	}
-	return lista.Elements[pos]
 }
 
 func boolDoNativo(b bool) *object.Booleano {
@@ -302,6 +335,18 @@ func iguais(a, b object.Object) bool {
 	case *object.Numero:
 		return av.Value == b.(*object.Numero).Value
 	case *object.Nada:
+		return true
+	case *object.Dicionario:
+		bd := b.(*object.Dicionario)
+		if len(av.Pares) != len(bd.Pares) {
+			return false
+		}
+		for k, pa := range av.Pares {
+			pb, ok := bd.Pares[k]
+			if !ok || !iguais(pa.Valor, pb.Valor) {
+				return false
+			}
+		}
 		return true
 	}
 	return a == b

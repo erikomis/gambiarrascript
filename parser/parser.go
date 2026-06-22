@@ -78,6 +78,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.NAO, p.parsePrefix)
 	p.registerPrefix(token.LPAREN, p.parseGrouped)
 	p.registerPrefix(token.LBRACKET, p.parseLista)
+	p.registerPrefix(token.LBRACE, p.parseDicionario)
 
 	p.infixParseFns = map[token.TokenType]infixParseFn{}
 	for _, tt := range []token.TokenType{
@@ -219,6 +220,27 @@ func (p *Parser) parseLista() ast.Expression {
 	lista := &ast.ListaLiteral{Token: p.curToken}
 	lista.Elements = p.parseExpressionList(token.RBRACKET)
 	return lista
+}
+
+func (p *Parser) parseDicionario() ast.Expression {
+	dic := &ast.DicionarioLiteral{Token: p.curToken}
+	for !p.peekTokenIs(token.RBRACE) {
+		p.nextToken()
+		chave := p.parseExpression(LOWEST)
+		if !p.expectPeek(token.COLON) {
+			return nil
+		}
+		p.nextToken()
+		valor := p.parseExpression(LOWEST)
+		dic.Pares = append(dic.Pares, ast.ParAST{Chave: chave, Valor: valor})
+		if !p.peekTokenIs(token.RBRACE) && !p.expectPeek(token.COMMA) {
+			return nil
+		}
+	}
+	if !p.expectPeek(token.RBRACE) {
+		return nil
+	}
+	return dic
 }
 
 func (p *Parser) parseCall(fn ast.Expression) ast.Expression {

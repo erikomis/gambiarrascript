@@ -121,3 +121,24 @@ mostra fatorial(5)`)
 		t.Fatalf("esperado '120\\n', got %q", out)
 	}
 }
+
+func TestDicionarioAcesso(t *testing.T) {
+	out := rodar(t, `bota pessoa = {"nome": "Erik", "idade": 25}
+mostra pessoa["nome"]
+mostra pessoa["idade"]
+mostra pessoa["faltando"]`)
+	if out != "Erik\n25\nnada\n" {
+		t.Fatalf("got %q", out)
+	}
+}
+
+func TestDicionarioIgualdade(t *testing.T) {
+	out := rodar(t, `bota a = {"x": 1}
+bota b = {"x": 1}
+bota c = {"x": 2}
+mostra a == b
+mostra a == c`)
+	if out != "deu_bom\ndeu_ruim\n" {
+		t.Fatalf("got %q", out)
+	}
+}

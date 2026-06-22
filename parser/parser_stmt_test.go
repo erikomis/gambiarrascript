@@ -107,3 +107,24 @@ func TestErrosDetalhados(t *testing.T) {
 		t.Fatalf("Errors() deveria prefixar 'linha 1:', got %v", strs)
 	}
 }
+
+func TestParseDicionario(t *testing.T) {
+	prog := parse(t, `bota d = {"nome": "Erik", "idade": 25}`)
+	stmt := prog.Statements[0].(*ast.BotaStatement)
+	dic, ok := stmt.Value.(*ast.DicionarioLiteral)
+	if !ok {
+		t.Fatalf("esperava DicionarioLiteral, got %T", stmt.Value)
+	}
+	if len(dic.Pares) != 2 {
+		t.Fatalf("esperava 2 pares, got %d", len(dic.Pares))
+	}
+}
+
+func TestParseDicionarioVazio(t *testing.T) {
+	prog := parse(t, `bota d = {}`)
+	stmt := prog.Statements[0].(*ast.BotaStatement)
+	dic, ok := stmt.Value.(*ast.DicionarioLiteral)
+	if !ok || len(dic.Pares) != 0 {
+		t.Fatalf("esperava dicionario vazio, got %T", stmt.Value)
+	}
+}

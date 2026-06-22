@@ -330,3 +330,23 @@ func (e *IndexExpression) TokenLiteral() string { return e.Token.Literal }
 func (e *IndexExpression) String() string {
 	return "(" + e.Left.String() + "[" + e.Index.String() + "])"
 }
+
+type ParAST struct {
+	Chave Expression
+	Valor Expression
+}
+
+type DicionarioLiteral struct {
+	Token token.Token
+	Pares []ParAST
+}
+
+func (e *DicionarioLiteral) expressionNode()      {}
+func (e *DicionarioLiteral) TokenLiteral() string { return e.Token.Literal }
+func (e *DicionarioLiteral) String() string {
+	partes := make([]string, len(e.Pares))
+	for i, par := range e.Pares {
+		partes[i] = par.Chave.String() + ": " + par.Valor.String()
+	}
+	return "{" + strings.Join(partes, ", ") + "}"
+}
