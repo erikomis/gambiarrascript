@@ -16,11 +16,19 @@ var (
 )
 
 type Interpreter struct {
-	out io.Writer
+	out               io.Writer
+	servidor          *servidorEstado
+	builtinsInstancia map[string]*object.Builtin
 }
 
 func New(out io.Writer) *Interpreter {
-	return &Interpreter{out: out}
+	i := &Interpreter{out: out}
+	i.servidor = &servidorEstado{rotas: map[string]*object.Funcao{}, i: i}
+	i.builtinsInstancia = map[string]*object.Builtin{
+		"rota":   {Nome: "rota", Fn: i.servidor.builtinRota},
+		"escuta": {Nome: "escuta", Fn: i.servidor.builtinEscuta},
+	}
+	return i
 }
 
 func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object {
@@ -160,6 +168,9 @@ func (i *Interpreter) evalExpressions(exps []ast.Expression, env *object.Environ
 func (i *Interpreter) evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
 	if val, ok := env.Get(node.Value); ok {
 		return val
+	}
+	if b, ok := i.builtinsInstancia[node.Value]; ok {
+		return b
 	}
 	if b, ok := builtins[node.Value]; ok {
 		return b
