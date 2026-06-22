@@ -84,7 +84,7 @@ mostra pra_json({"ok": deu_bom, "n": 42})  # {"ok":true,"n":42}
 
 - **Escopo de função no estilo Python**: a variável do `pra_cada` e a da cláusula `quebrou` continuam existindo depois que o bloco fecha — elas vazam pro escopo da função que as contém.
 - **`e` / `ou` sempre devolvem booleano**: ao contrário de JS ou Python, `deu_bom e deu_bom` retorna `deu_bom` (booleano normalizado), nunca o operando original.
-- **Textos são crus**: ainda não existe sequência de escape dentro das aspas — `"linha1\nlinha2"` imprime literalmente `\n`, não uma quebra de linha.
+- **Escapes em textos**: as sequências `\"` (aspas), `\\` (barra invertida), `\n` (quebra de linha) e `\t` (tab) funcionam dentro das aspas — qualquer outro `\x` é mantido literal, barra e tudo.
 
 ## Quando deu ruim, a gente arruma
 

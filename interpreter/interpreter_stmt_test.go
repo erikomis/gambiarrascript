@@ -245,6 +245,16 @@ func TestDicionarioErros(t *testing.T) {
 	}
 }
 
+func TestIgualdadeDeLista(t *testing.T) {
+	out := rodar(t, `mostra [1, 2, 3] == [1, 2, 3]
+mostra [1, 2] == [1, 2, 3]
+mostra [1, 2] == [1, 9]
+mostra ["a", "b"] == ["a", "b"]`)
+	if out != "deu_bom\ndeu_ruim\ndeu_ruim\ndeu_bom\n" {
+		t.Fatalf("got %q", out)
+	}
+}
+
 func TestAtribuiIndiceAninhada(t *testing.T) {
 	out := rodar(t, `bota m = {"x": {"y": 1}}
 bota m["x"]["y"] = 42
