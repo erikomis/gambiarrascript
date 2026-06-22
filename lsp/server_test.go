@@ -63,3 +63,14 @@ func TestCompletionTemKeywords(t *testing.T) {
 		t.Error("completion deveria conter o identificador 'contador' visto no texto")
 	}
 }
+
+func TestCompletionTemBuiltin(t *testing.T) {
+	s := NovoServidor(&bytes.Buffer{})
+	itens := s.itensCompletion("")
+	for _, it := range itens {
+		if it.Label == "tamanho" {
+			return
+		}
+	}
+	t.Error("completion deveria conter o builtin 'tamanho'")
+}

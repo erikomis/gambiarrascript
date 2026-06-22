@@ -42,6 +42,9 @@ var keywords = []string{
 	"e", "ou", "nao",
 }
 
+// builtinsCompletion são as funções nativas da linguagem expostas no autocomplete.
+var builtinsCompletion = []string{"tamanho", "chaves", "tem", "texto", "numero"}
+
 // ---- servidor ----
 
 type Servidor struct {
@@ -165,13 +168,19 @@ func (s *Servidor) PublicarDiagnosticos(uri string) {
 	})
 }
 
-// itensCompletion devolve keywords + identificadores vistos no texto.
+// itensCompletion devolve keywords + builtins + identificadores vistos no texto.
 func (s *Servidor) itensCompletion(texto string) []ItemCompletion {
 	vistos := map[string]bool{}
 	var itens []ItemCompletion
 	for _, kw := range keywords {
 		itens = append(itens, ItemCompletion{Label: kw, Kind: 14}) // 14 = Keyword
 		vistos[kw] = true
+	}
+	for _, b := range builtinsCompletion {
+		if !vistos[b] {
+			itens = append(itens, ItemCompletion{Label: b, Kind: 3}) // 3 = Function
+			vistos[b] = true
+		}
 	}
 	l := lexer.New(texto)
 	for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {

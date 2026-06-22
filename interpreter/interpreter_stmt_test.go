@@ -223,3 +223,33 @@ mostra tamanho([1, 2, 3])`)
 		t.Fatalf("a funcao do usuario deveria sombrear o builtin, got %q", out)
 	}
 }
+
+func TestDicionarioErros(t *testing.T) {
+	casos := []string{
+		// atribuição fora do range em lista
+		"bota l = [1, 2]\nbota l[9] = 5",
+		// chave não-chaveável em literal de dicionário (lista não é Chaveavel)
+		`bota d = {[1, 2]: "x"}`,
+		// indexar um não-container
+		`mostra 42["x"]`,
+		// builtin com aridade errada
+		`mostra tamanho()`,
+		// chaves em não-dicionário
+		`mostra chaves([1, 2])`,
+	}
+	for _, in := range casos {
+		got := eval(t, in)
+		if got.Type() != object.ERRO_OBJ {
+			t.Errorf("input %q deveria gerar Erro, got %s (%q)", in, got.Type(), got.Inspect())
+		}
+	}
+}
+
+func TestAtribuiIndiceAninhada(t *testing.T) {
+	out := rodar(t, `bota m = {"x": {"y": 1}}
+bota m["x"]["y"] = 42
+mostra m["x"]["y"]`)
+	if out != "42\n" {
+		t.Fatalf("atribuicao aninhada falhou: got %q", out)
+	}
+}
