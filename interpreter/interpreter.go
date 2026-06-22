@@ -387,6 +387,17 @@ func iguais(a, b object.Object) bool {
 		return av.Value == b.(*object.Numero).Value
 	case *object.Nada:
 		return true
+	case *object.Lista:
+		bl, ok := b.(*object.Lista)
+		if !ok || len(av.Elements) != len(bl.Elements) {
+			return false
+		}
+		for j, e := range av.Elements {
+			if !iguais(e, bl.Elements[j]) {
+				return false
+			}
+		}
+		return true
 	case *object.Dicionario:
 		bd := b.(*object.Dicionario)
 		if len(av.Pares) != len(bd.Pares) {

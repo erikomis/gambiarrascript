@@ -15,6 +15,8 @@ var builtins = map[string]*object.Builtin{
 	"texto":   {Nome: "texto", Fn: builtinTexto},
 	"numero":  {Nome: "numero", Fn: builtinNumero},
 	"busca":   {Nome: "busca", Fn: builtinBusca},
+	"de_json":  {Nome: "de_json", Fn: builtinDeJson},
+	"pra_json": {Nome: "pra_json", Fn: builtinPraJson},
 }
 
 func erroBuiltin(formato string, args ...interface{}) *object.Erro {

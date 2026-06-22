@@ -158,7 +158,15 @@ func (l *Lexer) readString() string {
 	var sb []byte
 	for {
 		l.readChar()
-		if l.ch == '"' || l.ch == 0 {
+		if l.ch == 0 {
+			break
+		}
+		if l.ch == '\\' && l.peekChar() == '"' {
+			l.readChar()
+			sb = append(sb, '"')
+			continue
+		}
+		if l.ch == '"' {
 			break
 		}
 		sb = append(sb, l.ch)
