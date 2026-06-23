@@ -1,6 +1,6 @@
 # JSON na GambiarraScript: parsear e serializar
 
-bota json_texto = "{\"nome\": \"Erik\", \"idade\": 25, \"langs\": [\"go\", \"gs\"]}"
+bota json_texto = `{"nome": "Erik", "idade": 25, "langs": ["go", "gs"]}`
 bota dados = de_json(json_texto)
 
 mostra "nome: " + dados["nome"]

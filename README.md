@@ -80,6 +80,19 @@ mostra pra_json({"ok": deu_bom, "n": 42})  # {"ok":true,"n":42}
 `de_json(pedido["corpo"])` e responder com `pra_json(...)` e o cabeçalho
 `Content-Type: application/json`.
 
+### Strings com crase (sem escapar aspas)
+
+Pra escrever JSON, caminhos ou regex sem escapar cada `"`, use crase — string
+crua, igual ao Go e ao Node:
+
+```
+bota j = `{"nome": "Erik", "tags": ["go", "gs"]}`
+mostra de_json(j)["nome"]   # Erik
+```
+
+Dentro de crases nada é escapado (`\n` é barra-n literal) e a string pode ocupar
+várias linhas. Pra escapes (`\n`, `\t`, `\"`) use aspas duplas `"..."`.
+
 ## Pegadinhas / Semântica
 
 - **Escopo de função no estilo Python**: a variável do `pra_cada` e a da cláusula `quebrou` continuam existindo depois que o bloco fecha — elas vazam pro escopo da função que as contém.
