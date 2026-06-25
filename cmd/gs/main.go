@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 
+	"gambiarrascript/compiler"
 	"gambiarrascript/interpreter"
 	"gambiarrascript/lexer"
 	"gambiarrascript/lsp"
 	"gambiarrascript/object"
 	"gambiarrascript/parser"
 	"gambiarrascript/repl"
+	"gambiarrascript/vm"
 )
 
 func main() {
@@ -20,11 +22,20 @@ func main() {
 
 	switch os.Args[1] {
 	case "roda":
-		if len(os.Args) < 3 {
-			fmt.Println("uso: gs roda <arquivo.gs>")
+		usarVM := false
+		arquivo := ""
+		for _, a := range os.Args[2:] {
+			if a == "--vm" {
+				usarVM = true
+			} else {
+				arquivo = a
+			}
+		}
+		if arquivo == "" {
+			fmt.Println("uso: gs roda [--vm] <arquivo.gs>")
 			os.Exit(1)
 		}
-		rodarArquivo(os.Args[2])
+		rodarArquivo(arquivo, usarVM)
 	case "repl":
 		fmt.Println("GambiarraScript REPL — manda ver (ctrl+d pra vazar)")
 		repl.Start(os.Stdin, os.Stdout)
@@ -53,7 +64,7 @@ func uso() {
 	fmt.Println("  gs --help              # mostra esta ajuda")
 }
 
-func rodarArquivo(caminho string) {
+func rodarArquivo(caminho string, usarVM bool) {
 	fonte, err := os.ReadFile(caminho)
 	if err != nil {
 		fmt.Printf("nao consegui abrir %q: %v\n", caminho, err)
@@ -68,6 +79,20 @@ func rodarArquivo(caminho string) {
 			fmt.Println("  - " + e)
 		}
 		os.Exit(1)
+	}
+
+	if usarVM {
+		comp := compiler.New()
+		if err := comp.Compile(prog); err != nil {
+			fmt.Println("eita, a VM nao compilou: " + err.Error())
+			os.Exit(1)
+		}
+		maquina := vm.New(comp.Bytecode(), os.Stdout)
+		if err := maquina.Run(); err != nil {
+			fmt.Println("deu ruim na VM: " + err.Error())
+			os.Exit(1)
+		}
+		return
 	}
 
 	interp := interpreter.New(os.Stdout)
