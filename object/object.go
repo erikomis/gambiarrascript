@@ -1,6 +1,7 @@
 package object
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -24,6 +25,8 @@ const (
 
 	BUILTIN_OBJ    = "BUILTIN"
 	DICIONARIO_OBJ = "DICIONARIO"
+
+	NATIVO_OBJ = "NATIVO"
 )
 
 type Object interface {
@@ -39,10 +42,29 @@ func FormatNumero(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
-type Numero struct{ Value float64 }
+// Numero guarda um numero da linguagem. Quando EhInt e true ele representa um
+// inteiro exato em Int (e Value e so um espelho aproximado pra builtins de mat);
+// caso contrario o valor real e o float64 em Value. Inteiros exatos evitam a
+// perda de precisao do float64 acima de 2^53 (ex.: somas/contagens gigantes).
+type Numero struct {
+	Value float64 // sempre preenchido (espelho de Int quando EhInt)
+	Int   int64   // valor exato quando EhInt
+	EhInt bool
+}
+
+// NumInt cria um numero inteiro exato.
+func NumInt(i int64) *Numero { return &Numero{Value: float64(i), Int: i, EhInt: true} }
+
+// NumFloat cria um numero de ponto flutuante.
+func NumFloat(f float64) *Numero { return &Numero{Value: f} }
 
 func (n *Numero) Type() ObjectType { return NUMERO_OBJ }
-func (n *Numero) Inspect() string  { return FormatNumero(n.Value) }
+func (n *Numero) Inspect() string {
+	if n.EhInt {
+		return strconv.FormatInt(n.Int, 10)
+	}
+	return FormatNumero(n.Value)
+}
 
 type Texto struct{ Value string }
 
@@ -95,10 +117,44 @@ type Retorno struct{ Value Object }
 func (r *Retorno) Type() ObjectType { return RETORNO_OBJ }
 func (r *Retorno) Inspect() string  { return r.Value.Inspect() }
 
-type Erro struct{ Message string }
+// StackFrame e um nivel da pilha de chamadas num traço de erro.
+type StackFrame struct {
+	Funcao string // nome da gambiarra chamada (ou "<topo>" / "<anonima>")
+	Line   int    // linha da chamada no codigo-fonte
+}
+
+// Erro e o valor de erro da linguagem. Message continua sendo o texto que o
+// usuario ve (compativel com concatenacao: Inspect devolve Message), mas agora
+// carrega tambem Line, Kind, Stack e Cause pra inspecao programatica.
+type Erro struct {
+	Message string       // texto completo que o usuario ve
+	Line    int          // linha de origem (0 = desconhecida, p.ex. builtin)
+	Kind    string       // "runtime", "builtin", "io", "rede", "parse", "usuario"
+	Stack   []StackFrame // traço de pilha, do mais externo pro mais interno
+	Cause   *Erro        // erro original (para encadeamento / wrap)
+}
 
 func (e *Erro) Type() ObjectType { return ERRO_OBJ }
-func (e *Erro) Inspect() string  { return e.Message }
+
+// Inspect devolve so Message — assim `erro + "x"` continua funcionando como
+// antes e a saida nao muda retroativamente.
+func (e *Erro) Inspect() string { return e.Message }
+
+// Traco devolve o traço de pilha formatado em multi-linhas, pra mostrar em
+// diagnosticos e na builtin erro_pilha.
+func (e *Erro) Traco() string {
+	if len(e.Stack) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, f := range e.Stack {
+		if f.Funcao == "" {
+			f.Funcao = "<anonima>"
+		}
+		fmt.Fprintf(&b, "  em %s (linha %d)\n", f.Funcao, f.Line)
+	}
+	return b.String()
+}
 
 type Vaza struct{ Line int }
 
@@ -132,7 +188,12 @@ type Chaveavel interface {
 }
 
 func (t *Texto) ChaveHash() HashKey    { return HashKey{Tipo: TEXTO_OBJ, Valor: t.Value} }
-func (n *Numero) ChaveHash() HashKey   { return HashKey{Tipo: NUMERO_OBJ, Valor: FormatNumero(n.Value)} }
+func (n *Numero) ChaveHash() HashKey {
+	if n.EhInt {
+		return HashKey{Tipo: NUMERO_OBJ, Valor: strconv.FormatInt(n.Int, 10)}
+	}
+	return HashKey{Tipo: NUMERO_OBJ, Valor: FormatNumero(n.Value)}
+}
 func (b *Booleano) ChaveHash() HashKey { return HashKey{Tipo: BOOLEANO_OBJ, Valor: b.Inspect()} }
 
 type ParDic struct {
@@ -152,6 +213,15 @@ func (d *Dicionario) Inspect() string {
 	}
 	return "{" + strings.Join(partes, ", ") + "}"
 }
+
+// Nativo e um handle opaco que embrulha um valor Go (ex.: uma conexao de banco).
+type Nativo struct {
+	Rotulo string
+	Valor  interface{}
+}
+
+func (n *Nativo) Type() ObjectType { return NATIVO_OBJ }
+func (n *Nativo) Inspect() string  { return "<nativo: " + n.Rotulo + ">" }
 
 // inspectComAspas envolve textos em aspas (estilo JSON) e usa Inspect no resto.
 func inspectComAspas(o Object) string {

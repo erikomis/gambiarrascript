@@ -1,7 +1,6 @@
 package interpreter
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -9,18 +8,60 @@ import (
 )
 
 var builtins = map[string]*object.Builtin{
-	"tamanho": {Nome: "tamanho", Fn: builtinTamanho},
-	"chaves":  {Nome: "chaves", Fn: builtinChaves},
-	"tem":     {Nome: "tem", Fn: builtinTem},
-	"texto":   {Nome: "texto", Fn: builtinTexto},
-	"numero":  {Nome: "numero", Fn: builtinNumero},
-	"busca":   {Nome: "busca", Fn: builtinBusca},
-	"de_json":  {Nome: "de_json", Fn: builtinDeJson},
-	"pra_json": {Nome: "pra_json", Fn: builtinPraJson},
-}
+	"tamanho":   {Nome: "tamanho", Fn: builtinTamanho},
+	"chaves":    {Nome: "chaves", Fn: builtinChaves},
+	"tem":       {Nome: "tem", Fn: builtinTem},
+	"texto":     {Nome: "texto", Fn: builtinTexto},
+	"numero":    {Nome: "numero", Fn: builtinNumero},
+	"busca":     {Nome: "busca", Fn: builtinBusca},
+	"de_json":   {Nome: "de_json", Fn: builtinDeJson},
+	"pra_json":  {Nome: "pra_json", Fn: builtinPraJson},
 
-func erroBuiltin(formato string, args ...interface{}) *object.Erro {
-	return &object.Erro{Message: "deu ruim: " + fmt.Sprintf(formato, args...)}
+	// texto
+	"separa":      {Nome: "separa", Fn: builtinSepara},
+	"junta":       {Nome: "junta", Fn: builtinJunta},
+	"maiusculo":   {Nome: "maiusculo", Fn: builtinMaiusculo},
+	"minusculo":   {Nome: "minusculo", Fn: builtinMinusculo},
+	"substitui":   {Nome: "substitui", Fn: builtinSubstitui},
+	"fatia":       {Nome: "fatia", Fn: builtinFatia},
+	"contem":      {Nome: "contem", Fn: builtinContem},
+	"comeca_com":  {Nome: "comeca_com", Fn: builtinComecaCom},
+	"termina_com": {Nome: "termina_com", Fn: builtinTerminaCom},
+	"tira_espaco": {Nome: "tira_espaco", Fn: builtinTiraEspaco},
+
+	// lista
+	"adiciona": {Nome: "adiciona", Fn: builtinAdiciona},
+	"remove":    {Nome: "remove", Fn: builtinRemove},
+	"ordena":    {Nome: "ordena", Fn: builtinOrdena},
+	"inverte":   {Nome: "inverte", Fn: builtinInverte},
+
+	// matematica
+	"raiz":      {Nome: "raiz", Fn: builtinRaiz},
+	"aleatorio": {Nome: "aleatorio", Fn: builtinAleatorio},
+	"arredonda": {Nome: "arredonda", Fn: builtinArredonda},
+	"teto":      {Nome: "teto", Fn: builtinTeto},
+	"chao":      {Nome: "chao", Fn: builtinChao},
+	"abs":       {Nome: "abs", Fn: builtinAbs},
+	"min":       {Nome: "min", Fn: builtinMin},
+	"max":       {Nome: "max", Fn: builtinMax},
+
+	// arquivo
+	"le_arquivo":     {Nome: "le_arquivo", Fn: builtinLeArquivo},
+	"escreve_arquivo": {Nome: "escreve_arquivo", Fn: builtinEscreveArquivo},
+	"anexa_arquivo":   {Nome: "anexa_arquivo", Fn: builtinAnexaArquivo},
+
+	// banco de dados
+	"conecta": {Nome: "conecta", Fn: builtinConecta},
+	"fecha":   {Nome: "fecha", Fn: builtinFecha},
+
+	// erros
+	"quebra":       {Nome: "quebra", Fn: builtinQuebra},
+	"erro_msg":     {Nome: "erro_msg", Fn: builtinErroMsg},
+	"erro_linha":   {Nome: "erro_linha", Fn: builtinErroLinha},
+	"erro_tipo":    {Nome: "erro_tipo", Fn: builtinErroTipo},
+	"erro_pilha":   {Nome: "erro_pilha", Fn: builtinErroPilha},
+	"erro_causa":   {Nome: "erro_causa", Fn: builtinErroCausa},
+	"envolve_erro": {Nome: "envolve_erro", Fn: builtinEnvolveErro},
 }
 
 func builtinTamanho(args []object.Object) object.Object {
@@ -29,11 +70,11 @@ func builtinTamanho(args []object.Object) object.Object {
 	}
 	switch arg := args[0].(type) {
 	case *object.Lista:
-		return &object.Numero{Value: float64(len(arg.Elements))}
+		return object.NumInt(int64(len(arg.Elements)))
 	case *object.Dicionario:
-		return &object.Numero{Value: float64(len(arg.Pares))}
+		return object.NumInt(int64(len(arg.Pares)))
 	case *object.Texto:
-		return &object.Numero{Value: float64(len([]rune(arg.Value)))}
+		return object.NumInt(int64(len([]rune(arg.Value))))
 	default:
 		return erroBuiltin("tamanho() nao funciona com %s", args[0].Type())
 	}
