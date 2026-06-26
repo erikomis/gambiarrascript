@@ -34,8 +34,17 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 		resultado := interp.Eval(prog, env)
-		if resultado != nil && resultado.Type() == object.ERRO_OBJ {
-			fmt.Fprintln(out, resultado.Inspect())
+		if resultado != nil {
+			switch resultado.Type() {
+			case object.ERRO_OBJ:
+				fmt.Fprintln(out, resultado.Inspect())
+			case object.NADA_OBJ:
+				// nada a mostrar pra bota/se_colar/etc — REPL mais limpo
+			default:
+				// imprime valor de expressoes (a la Python/Lua) — grande ganho
+				// de DX enquando debuga interativamente.
+				fmt.Fprintln(out, "=> "+resultado.Inspect())
+			}
 		}
 	}
 }
