@@ -1,0 +1,182 @@
+---
+title: Listas e dicionarios
+description: "Colecoes do GambiarraScript: lista (array) e dicionario (hash map)."
+---
+
+GambiarraScript tem duas colecoes: **lista** (array ordenado, indice inteiro)
+e **dicionario** (hash map, chave em texto/numero/booleano). As duas suportam
+`pra_cada`, indexacao `x[i]` e atribuicao `x[i] = v`.
+
+## Listas
+
+Literal entre `[]`, separado por virgula. Indices em 0.
+
+```gambiarrascript
+bota xs = [10, 20, 30]
+mostra xs[0]               # 10
+mostra tamanho(xs)         # 3
+
+bota xs[1] = 99            # bota obrigatorio tambem em index assignment
+mostra xs                  # [10, 99, 30]
+```
+
+Indice fora da lista vira erro de runtime (nao `nada`):
+
+```gambiarrascript
+mostra xs[10]              # erro: indice 10 ta fora da lista
+```
+
+### Aninhamento
+
+Listas podem guardar listas, dicionarios, funcoes, qualquer coisa:
+
+```gambiarrascript
+bota matriz = [[1, 2], [3, 4]]
+mostra matriz[0][1]        # 2
+
+bota misto = [1, "dois", [3, 4], {"cinco": 5}]
+mostra misto[2][1]         # 4
+mostra misto[3]["cinco"]   # 5
+```
+
+### Builtins de lista
+
+| Builtin | Assinatura | Devolve | Notas |
+| --- | --- | --- | --- |
+| `tamanho(lista)` | `(lista)` | `numero` | len da lista |
+| `adiciona(lista, item)` | `(lista, valor)` | `nada` | **muta in place** (push back) |
+| `remove(lista, item)` | `(lista, valor)` | `nada` | remove **primeira** ocorrencia igual (`iguais`); muta |
+| `ordena(lista)` | `(lista)` | `nada` | sort estavel in-place; so mix de Numero e/ou Texto |
+| `inverte(lista)` | `(lista)` | `nada` | in-place |
+| `mapeia(lista, fn)` | `(lista, gambiarra)` | `lista` | nova lista com `fn(elem)` — nao muta |
+| `filtra(lista, fn)` | `(lista, gambiarra)` | `lista` | nova lista com elems onde `fn(elem)` e truthy |
+
+`junta(lista, sep)` tambem funciona em lista (veja [Textos](/docs/strings)).
+
+### Exemplo
+
+```gambiarrascript
+bota nums = [5, 2, 8, 1, 9]
+
+adiciona(nums, 3)
+ordena(nums)
+mostra "ordenados: " + junta(nums, ", ")   # "1, 2, 3, 5, 8, 9"
+
+inverte(nums)
+mostra "invertidos: " + junta(nums, ", ")  # "9, 8, 5, 3, 2, 1"
+
+remove(nums, 9)
+mostra "sem o 9: " + junta(nums, ", ")     # "8, 5, 3, 2, 1"
+
+gambiarra dobra(n)
+    funciona n * 2
+acabou_finalmente
+mostra mapeia(nums, dobra)                 # [16, 10, 6, 4, 2]
+
+gambiarra par(n)
+    funciona n % 2 == 0
+acabou_finalmente
+mostra filtra(nums, par)                   # [8, 6, 4, 2]
+```
+
+<Callout type="warn" title="adiciona/remove/ordena/inverte mutam">
+  Eles devolvem `nada`. Se voce fizer `bota y = adiciona(x, 1)`, `y` sera
+  `nada` — a mutacao acontece em `x`. Compare com `mapeia`/`filtra`, que
+  **devolvem** uma nova lista e nao tocam a original.
+</Callout>
+
+## Dicionarios
+
+Literal entre `{}`, pares `chave: valor`. Chave pode ser **texto**, **numero**
+ou **booleano** (qualquer expressao que avalie pra um desses tipos).
+
+```gambiarrascript
+bota pessoa = {"nome": "Erik", "idade": 25, "dev": deu_bom}
+
+mostra pessoa["nome"]                          # Erik
+mostra pessoa["idade"]                          # 25
+mostra pessoa["dev"]                            # deu_bom
+
+bota pessoa["cidade"] = "Sao Paulo"            # upsert
+mostra pessoa["sobrenome"]                      # nada (chave nao existe -> nao erro)
+```
+
+### Chaves dinamicas
+
+A chave é uma expressao, entao voce pode computar:
+
+```gambiarrascript
+bota k = "nome"
+mostra pessoa[k]                                # Erik
+bota dic = {"2024": 1, "2025": 2}
+mostra dic["202" + "4"]                         # 1
+```
+
+Atencao: `{"1": "x"}` e `{1: "x"}` tem chaves **diferentes** — uma é TEXTO e a
+outra NUMERO. Eles nao colidem; sao duas chaves distintas.
+
+### Builtins de dicionario
+
+| Builtin | Assinatura | Devolve | Notas |
+| --- | --- | --- | --- |
+| `tamanho(dic)` | `(dicionario)` | `numero` | numero de pares |
+| `chaves(dic)` | `(dicionario)` | `lista` | lista de chaves (ordem nao garantida) |
+| `tem(dic, chave)` | `(dicionario, valor)` | `booleano` | confere se a chave existe |
+
+```gambiarrascript
+bota d = {"a": 1, "b": 2, "c": 3}
+mostra tamanho(d)               # 3
+mostra chaves(d)                # ["a", "b", "c"] (ordem varia)
+mostra tem(d, "b")              # deu_bom
+mostra tem(d, "z")              # deu_ruim
+```
+
+### Iteracao com `pra_cada`
+
+`pra_cada k em dicionario` itera sobre as **chaves** (nao os valores):
+
+```gambiarrascript
+bota d = {"a": 1, "b": 2, "c": 3}
+pra_cada chave em d
+    mostra chave + " = " + texto(d[chave])
+acabou_finalmente
+# "a = 1", "b = 2", "c = 3"
+```
+
+Pra iterar os valores, basta indexar `d[chave]` dentro do loop, como acima.
+
+### Atribuicao aninhada
+
+```gambiarrascript
+bota config = {
+    "banco": {"host": "localhost", "porta": 5432},
+    "cache": {"host": "redis", "porta": 6379}
+}
+
+bota config["banco"]["porta"] = 5433        # funciona: config["banco"] ja existe
+mostra config["banco"]["porta"]             # 5433
+
+bota config["novos"]["x"] = 1              # ERRO: config["novos"] e nada,
+                                            # so da pra atribuir indice em lista/dic
+```
+
+<Callout type="warn" title="Sem auto-vivificacao">
+  Atribuir em `dic["a"]["b"]` so funciona se `dic["a"]` ja for um
+  dicionario/lista. Se a chave intermediaria nao existe, da erro em runtime —
+  o interpretador nao cria dicionarios no meio do caminho automaticamente (como
+  Perl, por exemplo). Crie o aninhado explicitamente antes:
+  `bota dic["a"] = {}` e depois `bota dic["a"]["b"] = 1`.
+</Callout>
+
+### Igualdade de dicionarios
+
+Dois dicionarios sao iguais se tiverem o mesmo numero de pares e, para cada
+chave em um, a outra tiver a mesma chave com o mesmo valor (recursivo). Ordem
+das chaves nao importa:
+
+```gambiarrascript
+mostra {"a": 1, "b": 2} == {"b": 2, "a": 1}     # deu_bom
+mostra {"a": 1} == {"a": 1, "b": 2}              # deu_ruim
+```
+
+Mais sobre igualdade em [Tipos e operadores](/docs/tipos#igualdade).

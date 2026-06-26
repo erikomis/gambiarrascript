@@ -1,0 +1,295 @@
+---
+title: Concorrencia
+description: "bora, espera, cano: goroutines, futuros e canais no jeitinho brasileiro."
+---
+
+GambiarraScript agora tem concorrencia de verdade: `bora` dispara uma
+gambiarra numa goroutine, `espera` aguarda o resultado, `cano` cria um
+canal pra sincronizar produtores e consumidores.
+
+<Callout title="Por baixo dos panos">
+  Tudo vira goroutine/channel do Go. O `Environment` ja e thread-safe (tem
+  `sync.RWMutex`); cada chamada ganha seu proprio escopo filho. O `mostra`
+  concorrente usa um lock interno pra nao intercalar meia linha com meia
+  linha.
+</Callout>
+
+## bora: dispara em paralelo
+
+`bora fn(args)` e uma **expressao prefix**: roda `fn(args)` numa goroutine
+e devolve imediatamente um **Futuro**. Sem bloquear.
+
+```gambiarrascript
+gambiarra demora(n)
+    bota out = 0
+    pra_cada i de 1 ate n
+        bota out = out + i
+    acabou_finalmente
+    funciona out
+acabou_finalmente
+
+bota f1 = bora demora(100)
+bota f2 = bora demora(1000)
+
+mostra "as duas ja tanque que tanque em paralelo..."
+mostra espera(f1)   # 5050
+mostra espera(f2)   # 500500
+```
+
+Formas de uso:
+
+```gambiarrascript
+# fire-and-forget (nao espera resultado)
+bora avisa("salve")
+
+# captura o futuro pr aguardar depois
+bota f = bora calculations(42)
+
+# dispara em lista
+bota fs = [bora demora(1), bora demora(2), bora demora(3)]
+```
+
+`bora` so aceita uma chamada de funcao a direita — `bora fn(args)`. Nao
+rola `bora x` nem `bora 1 + 1`. A chamada resolve normal (incluindo builtins
+e `paralelo`), so que em paralelo.
+
+## espera: aguarda o Futuro
+
+`espera(futuro)` bloqueia a goroutine atual ate o Futuro resolver e devolve
+o valor (ou `*Erro` se a fn deu pau).
+
+```gambiarrascript
+bota f = bora demora(100)
+mostra espera(f)   # bloqueia ate f resolver
+```
+
+Tambem aceita **uma lista de Futuros**: devolve uma lista de valores (na
+ordem original), esperando todos em paralelo:
+
+```gambiarrascript
+bota fs = [bora demora(100), bora demora(1000), bora demora(10000)]
+bota results = espera(fs)   # espera todos
+mostra results              # [5050, 500500, 50005000]
+```
+
+### Desambiguacao com assert de teste
+
+`espera` tem **dois papeis**, separados por arity:
+
+| Aridade | O que faz |
+| --- | --- |
+| 1 arg (Futuro ou lista de Futuros) | aguarda o(s) futuro(s) — **wait de concorrencia** |
+| 2 args (recebido, esperado) | assert de teste (gs testa) — comparacao |
+
+Veja [Testes](/docs/ferramentas) e [asserts](/docs/biblioteca#console-e-cli)
+pra detalhes do assert de teste.
+
+## cano: canal de mensagens
+
+`cano([capacidade])` cria um canal (Go channel) pra trocar mensagens entre
+goroutines. Sem argumentos = **sincrono** (envia bloqueia ate alguem
+receber). Com capacidade = **bufferizado** (envia bloqueia so quando o
+buffer enche).
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `cano([cap])` | `() ou (numero)` | `Cano` (novo canal) |
+| `envia(cano, valor)` | `(Cano, valor)` | `nada` (bloqueia ate ter espaco) |
+| `recebe(cano)` | `(Cano)` | valor (ou `nada` se cano fechado e vazio) |
+| `fecha(cano)` | `(Cano ou conexao)` | `nada` (idempotente) |
+
+### Produtor / consumidor
+
+```gambiarrascript
+gambiarra produtor(c)
+    pra_cada i de 1 ate 3
+        mostra "produzi " + i
+        envia(c, i)
+    acabou_finalmente
+    fecha(c)
+acabou_finalmente
+
+bota c = cano(2)        # buffer de 2
+bora produtor(c)
+
+# consumidor na goroutine principal
+enquanto deu_bom
+    bota v = recebe(c)
+    se_colar v == nada
+        vaza
+    acabou_finalmente
+    mostra "consumi " + v
+acabou_finalmente
+```
+
+### Cano sincrono (sem buffer)
+
+Sem capacidade, `envia` so retorna quando tem receptor esperando. Excelente
+pra fazer handshake entre duas goroutines:
+
+```gambiarrascript
+bota sync = cano()        # sincrono
+bora gambiarra()
+    # ... prepara algo ...
+    envia(sync, "pronto")  # so avanca quando o receive da main ja esta esperando
+acabou_finalmente
+
+mostra recebe(sync)       # aqui roda o momento do "pronto"
+mostra "e logo"
+```
+
+### Fan-out / fan-in
+
+```gambiarrascript
+gambiarra trabalhador(id, saida)
+    pra_cada i de 1 ate 3
+        envia(saida, "t" + id + ":" + i)
+    acabou_finalmente
+acabou_finalmente
+
+bota saida = cano(20)
+bora trabalhador("A", saida)
+bora trabalhador("B", saida)
+bora trabalhador("C", saida)
+
+pra_cada i de 1 ate 9
+    mostra recebe(saida)
+acabou_finalmente
+fecha(saida)
+```
+
+## Atomics e estado compartilhado
+
+Cada `bora` ganha seu proprio escopo filho (filho do env onde `fn` foi
+definida, como em chamada normal). O que compartilha entre goroutines:
+
+- O `Environment` pai (**leitura** — `env.Get` e seguro; mutar via `bota
+  nome = ...` cria **shadown** no escopo novo, efeito similar a JS `let`
+  no block).
+- **Listas** e **Dicionarios** — passados por referencia. Mutacoes via
+  `lista[i] = v` ou `dic[k] = v` (que fazem `evalAtribuiIndice`) sao
+  visiveis pra quem compartilha a mesma Lista/Dicionario. **Atencao**: nao
+  tem lock automatico neles. Use um `cano` pra coordenar mutacoes ou faça
+  producer-consumer tudo por cano.
+
+Para estado mutavel compartilhado, preferir:
+1. Cada goroutine escreve no seu propio dicionario e devolve por `funciona`.
+   Junta tudo por `espera` de lista de futuros.
+2. Ou usar `cano` — o trabalhador manda o resultado pelo cano, e um
+   "redutor" consome num so thread, evitando corrida.
+
+### NAO evantado
+
+```gambiarrascript
+bota cont = 0
+bora gambiarra() pra_cada i de 1 ate 100000 acabou_finalmente bota cont = cont + 1 acabou_finalmente
+bora gambiarra() pra_cada i de 1 ate 100000 acabou_finalmente bota cont = cont + 1 acabou_finalmente
+# espera
+espera(bora identidade(cont))  # "esperado 200000"
+mostra cont                    # pode ser 113429, 138827, 141001...
+```
+
+Isso pq cada `bota cont = cont + 1` faz shadow em vez de mutar o `cont`
+global — o resultado nunca e 200000. Se precisa de contador compartilhado,
+use um `cano` que redireciona as atualizacoes pra um so goroutine.
+
+## Limite
+
+Nao ha limite explicito no `bora` (cuidado com fan-out gigante — pode
+sobrecarregar). O `paralelo(lista, fn)` tem limite de 256 goroutines
+simultaneas; `bora` nao tem. Se precisar de fan-out massivo, prefira
+`paralelo` ou implementa um pool com `cano`.
+
+## Erros em goroutines
+
+Erro de runtime dentro da `bora fn` e capturado no Futuro. `espera(f)`
+devolve entao um `*Erro`. Pode capturar com `arruma...quebrou`:
+
+```gambiarrascript
+arruma
+    mostra espera(bora divide(10, 0))
+quebrou erro
+    mostra "deu ruim: " + erro
+acabou_finalmente
+```
+
+Panic dentro da goroutine tb e capturado e virado erro (nao derruba o
+processo).
+
+## Receitas rapidas
+
+### N goroutines espera todas
+
+```gambiarrascript
+gambiarra tarefa(id)
+    funciona "result-" + id
+acabou_finalmente
+
+bota fs = []
+pra_cada i de 1 ate 10
+    adiciona(fs, bora tarefa(i))
+acabou_finalmente
+mostra espera(fs)  # ["result-1", "result-2", ..., "result-10"]
+```
+
+### Race HTTP: primeiro que volta ganha
+
+```gambiarrascript
+gambiarra get(url)
+    funciona busca(url)
+acabou_finalmente
+
+bota ganha = cano(1)
+bora envia(ganha, espera(bora get("https://api1.com")))
+bora envia(ganha, espera(bora get("https://api2.com")))
+mostra recebe(ganha)["corpo"]  # o primeiro que chegar vence
+fecha(ganha)
+```
+
+### Pipeline
+
+```gambiarrascript
+gambiarra gerador(saida)
+    pra_cada i de 1 ate 5
+        envia(saida, i)
+    acabou_finalmente
+    fecha(saida)
+acabou_finalmente
+
+gambiarra quadrado(entrada, saida)
+    enquanto deu_bom
+        bota v = recebe(entrada)
+        se_colar v == nada
+            vaza
+        acabou_finalmente
+        envia(saida, v * v)
+    acabou_finalmente
+    fecha(saida)
+acabou_finalmente
+
+bota c1 = cano(5)
+bota c2 = cano(5)
+bora gerador(c1)
+bora quadrado(c1, c2)
+
+enquanto deu_bom
+    bota v = recebe(c2)
+    se_colar v == nada
+        vaza
+    acabou_finalmente
+    mostra v
+acabou_finalmente
+# 1, 4, 9, 16, 25
+```
+
+## O que **nao** existe ainda
+
+- `select` pra esperar em multiplos canos (cada `espera` e por Futuro; cano
+  nao tem multiplexador `select` != ainda).
+- Locks/mutexes (use `cano` com buffer 1).
+- Atomicos / compare-and-swap.
+- Async/await syntatico (nao tem `assincrono`/`espera` keyword; `espera`
+  builtin e a unica forma de aguardar).
+- Detach/kill de Futuro (nao tem cancelamento propagado).
+
+Se quiser `select` de multiplos `cano`, vale o PR.

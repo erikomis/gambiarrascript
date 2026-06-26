@@ -1,0 +1,59 @@
+---
+title: Servidor HTTP
+description: rota() e escuta() — sobe um servidor HTTP no GambiarraScript.
+---
+
+```gambiarrascript
+gambiarra ola(pedido)
+    funciona "salve, " + pedido["caminho"]
+acabou_finalmente
+
+rota("GET", "/", ola)
+escuta(8080)
+```
+
+## rota(metodo, caminho, handler)
+
+Registra uma rota. O `handler` e uma `gambiarra` que recebeum dicionario
+`pedido` com:
+
+| chave        | tipo | conteudo                                          |
+| ------------ | ---- | ------------------------------------------------- |
+| `metodo`     | texto | metodo HTTP (`"GET"`, `"POST"`...)               |
+| `caminho`    | texto | path da URL (`"/"`, `"/usuarios"`)                |
+| `corpo`      | texto | corpo do request (use `de_json` pra parsear)      |
+| `cabecalhos` | dic  | headers canonizados                                |
+| `query`      | dic  | query string parseada, chaves lowercase           |
+
+## Resposta
+
+O handler devolve:
+
+- um **texto** -> corpo + status 200, ou
+- um **dicionario** `{"status": numero, "corpo": texto, "cabecalhos": dic}`
+
+```gambiarrascript
+gambiarra api(pedido)
+    arruma
+        bota dados = de_json(pedido["corpo"])
+        funciona pra_json({"ok": deu_bom, "recebido": dados})
+    quebrou e
+        funciona {"status": 400, "corpo": "json zuado", "cabecalhos": {"Content-Type": "text/plain"}}
+    acabou_finalmente
+acabou_finalmente
+
+rota("POST", "/api", api)
+escuta(8090)
+```
+
+## escuta(porta)
+
+Bloqueia e serve. **Serializado** (uma requisicao por vez) — concorrencia de
+verdade vem depois.
+
+## Cabecalhos e query com multiplos valores
+
+Quando um header ou parametro de query vem com multiplos valores, eles chegam
+unidos por `", "`. As chaves dos cabecalhos usam a forma canonica do Go (ex.:
+`pedido["cabecalhos"]["X-Teste"]`, com `T` maiusculo). Query usa lowercase nas
+chaves.

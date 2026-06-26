@@ -1,0 +1,163 @@
+---
+title: Editor e formata
+description: Extensao VSCode, LSP, formatter e snippets.
+---
+
+GambiarraScript vem com tres ferramentas: uma extensao pro VSCode, um servidor
+LSP (que qualquer editor moderno consegue usar) e um formatter de linha de
+comando.
+
+## Extensao VSCode (recomendado)
+
+A extensao empacota tudo: highlight, snippets, comando de rodar, LSP.
+
+### Instalar
+
+```bash
+cd editors/vscode
+npm install
+npm run compile
+# gera o .vsix (ja tem um em editors/vscode/gambiarrascript-0.1.0.vsix)
+```
+
+Depois instala no VSCode:
+
+```bash
+code --install-extension editors/vscode/gambiarrascript-0.1.0.vsix
+```
+
+Ou, dentro do VSCode: `Extensions` → `...` menu → `Install from VSIX...` →
+aponta o `gambiarrascript-0.1.0.vsix`.
+
+### O que ela tem
+
+- **Syntax highlight** baseado em TextMate (`syntaxes/gambiarrascript.tmLanguage.json`).
+- **Snippets** (`snippets/gambiarrascript.json`): `gambiarra`, `se_colar`,
+  `pra_cada`, `pra_cada_em`, `enquanto`, `arruma`, `busca`, `rota`, `escuta`.
+- **Rodar arquivo**: tecla `F5` ou `cmd/Ctrl+R`, command palette
+  `GambiarraScript: Rodar arquivo`.
+- **Abrir REPL**: command `GambiarraScript: Abrir REPL`.
+- **LSP integrado** (diagnosticos, autocomplete, hover).
+- Icone `.gs` customizado.
+
+### Config
+
+- `gambiarrascript.caminhoDoGs` (default `"gs"`): caminho do binario `gs`.
+  Sete pra um absoluto se o `gs` nao estiver no `PATH`.
+
+## LSP (`gs lsp`)
+
+O servidor LSP usa stdin/stdout em JSON-RPC. Suporta:
+
+| feature | sim/nao |
+| --- | --- |
+| Diagnosticos (parse errors com linha/col) | sim, em `didOpen`/`didChange` |
+| Autocomplete | sim — palavras-chave, builtins, identificadores |
+| Hover | sim — curta descricao de palavras-chave e builtins |
+| Go-to-definition | nao (ainda) |
+| Rename | nao |
+| Document symbols | nao |
+
+### Configurando o LSP em outros editores
+
+#### Neovim (com `nvim-lspconfig`)
+
+```lua
+local configs = require 'lspconfig.configs'
+if not configs.gambiarrascript then
+  configs.gambiarrascript = {
+    default_config = {
+      cmd = { 'gs', 'lsp' },
+      filetypes = { 'gambiarrascript' },
+      root_dir = function(fname) return vim.fn.getcwd() end,
+      settings = {},
+    },
+  }
+end
+require('lspconfig').gambiarrascript.setup {}
+```
+
+Adiciona a extensao `.gs` em `filetype`:
+
+```vim
+autocmd BufRead,BufNewFile *.gs set filetype=gambiarrascript
+```
+
+#### Helix
+
+Em `~/.config/helix/languages.toml`:
+
+```toml
+[[language]]
+name = "gambiarrascript"
+scope = "source.gambiarrascript"
+file-types = ["gs"]
+roots = []
+comment-token = "#"
+
+[language-server.gambiarrascript]
+command = "gs"
+args = ["lsp"]
+```
+
+#### Zed
+
+```json
+{
+  "languages": {
+    "GambiarraScript": {
+      "language_servers": ["gambiarrascript"],
+      "extensions": ["gs"]
+    }
+  },
+  "lsp": {
+    "gambiarrascript": {
+      "binary": { "path": "gs", "args": ["lsp"] }
+    }
+  }
+}
+```
+
+## Formatter (`gs formata`)
+
+```bash
+gs formata sujo.gs > lindo.gs
+gs formata sujo.gs | gs roda /dev/stdin
+```
+
+O formatter re-emite o AST. Regras:
+
+- Indent: **4 espacos** por nivel.
+- Blocos: abre em linha separada, fecha com `acabou_finalmente` no nivel pai.
+- `else if` vira `se_nao_colar se_colar ...`.
+- Infix recebe parenteses so quando a precedencia exige.
+- Listas e dicionarios literais ficam inline (sem quebra de linha).
+- Texto e re-citado via `strconv.Quote` — escapamentos sao normalizados pra
+  `\"`, `\\`, etc.
+- **Comentarios sao descartados**: o lexer nao emite tokens de comentario,
+  entao o formatter nao tem como preserva-los. Use o formatter com cuidado
+  em arquivos com historia nos comentarios.
+
+<Callout type="warn" title="Comentarios somem no formatter">
+  Se voce rodar `gs formata` num arquivo com `#` ou `/* */`, os comentarios
+  **somem** completamente. E uma limitacao conhecida do lexer (nao emite
+  tokens de comentario). Guarde os comentarios antes, ou aceite o risco.
+</Callout>
+
+### Indentacao
+
+Identacao visual e livre na linguagem (nao e significativa como em Python);
+o que conta e o par `se_colar`/`acabou_finalmente`. O formatter impoe 4
+espacos pra ficar consistente.
+
+## Highlight sem editor
+
+Se so quer colorir como shell, da pra improvisar com `shiki` ou Pygments;
+nao tem grammar oficial pra eles ainda. Pra web, o [playground](/playground)
+usa CodeMirror com syntax de JavaScript como fallback (nao tenho grammar
+ propria ainda).
+
+## Proximo passo
+
+- [Linha de comando](/docs/cli) — referncia completa do `gs`.
+- [Biblioteca padrao](/docs/biblioteca) — todos os builtins.

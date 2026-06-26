@@ -1,0 +1,28 @@
+---
+title: Arruma / quebrou
+description: Tratamento de erros com arruma...quebrou.
+---
+
+Erro se trata do jeitinho brasileiro: **arruma** tenta, **quebrou** pega.
+
+```gambiarrascript
+arruma
+    bota resultado = 10 / 0
+quebrou erro
+    mostra "deu ruim, parca: " + erro
+acabou_finalmente
+```
+
+`erro` e uma variavel texto com a mensagem de erro. Qualquer erro de runtime
+dentro do bloco `arruma` e capturado: divisao por zero, indice fora da lista,
+chamada de nao-funcao, etc.
+
+## Sem quebrou
+
+Se nao tiver clausula `quebrou`, o erro propaga normalmente.
+
+## Sinais de controle
+
+`funciona`, `vaza` e `continua` dentro de um `arruma` nao sao capturados pelo
+`quebrou` — eles passam direto pro escopo de cima (retorno/loop continuam
+funcionando).

@@ -1,0 +1,118 @@
+---
+title: Inicio
+description: A linguagem de programacao do jeitinho brasileiro, escrita em Go.
+---
+
+<Callout title="GambiarraScript">
+  A linguagem onde voce nao fecha bloco com `}` nem com `end` — voce fecha com
+  `acabou_finalmente`, porque programar no Brasil e isso: deu trabalho, mas
+  graças a Deus acabou.
+</Callout>
+
+```gambiarrascript
+mostra "Salve, tropa!"
+
+bota nome = "Erik"
+bota idade = 25
+
+se_colar idade >= 18
+    mostra nome + " pode entrar"
+se_nao_colar
+    mostra "volta daqui a pouco"
+acabou_finalmente
+
+gambiarra dobra(n)
+    funciona n * 2
+acabou_finalmente
+
+pra_cada i de 1 ate 3
+    mostra "dobro de " + i + " = " + dobra(i)
+acabou_finalmente
+```
+
+GambiarraScript e uma linguagem interpretada escrita em Go. Tem lexer, parser,
+interpretador (tree-walking) e uma VM experimental (bytecode). Tambem tem LSP,
+formatter, extensao pro VSCode e um runtime WASM que roda no navegador.
+
+## Caracteristicas
+
+<TypeTable
+  type={{
+    "objetivo": { type: "string", description: "divertir e ensinar" },
+    "linguagem": { type: "'GambiarraScript'", description: "interpretada, dinamica, tipagem fraca" },
+    "implementada_em": { type: "'Go'", description: "1.23.12+" },
+    "palavras_chave": { type: "string", description: "em portugues, fixas, sem alias" },
+    "tipos": { type: "string", description: "numero, texto, booleano, nada, lista, dicionario" },
+    "modulos": { type: "boolean", default: true, description: "importa \"arquivo.gs\"" },
+    "http": { type: "boolean", default: true, description: "cliente (busca) e servidor (rota/escuta)" },
+    "json": { type: "boolean", default: true, description: "de_json / pra_json" },
+    "arquivo": { type: "boolean", default: true, description: "le_arquivo / escreve_arquivo" },
+    "lsp": { type: "boolean", default: true, description: "diagnosticos, autocomplete, hover" },
+    "wasm": { type: "boolean", default: true, description: "roda no navegador (playground)" },
+    "formata": { type: "boolean", default: true, description: "gs formata" },
+    "vm": { type: "boolean", default: "experimental", description: "gs roda --vm (sem builtins ainda)" }
+  }}
+/>
+
+## Por onde comecar
+
+<Steps>
+  <Step title="Instala">
+    [Instalacao](/docs/instalacao) — coloca o `gs` na mao (compila, docker, ou
+    binario).
+  </Step>
+
+  <Step title="Primeiros passos">
+    [Primeiros passos](/docs/primeiros-passos) — hello world, REPL, comenta
+    codigo.
+  </Step>
+
+  <Step title="Conhece o vocabulario">
+    [Vocabulario](/docs/vocabulario) — as palavras-chave e operadores.
+  </Step>
+
+  <Step title="Brinca no playground">
+    [Playground](/playground) — roda direto no navegador, sem instalar nada.
+  </Step>
+</Steps>
+
+## Mapa da docs
+
+<Accordions>
+  <Accordion title="Basico">
+    - [Vocabulario](/docs/vocabulario)
+    - [Estruturas de controle](/docs/estruturas)
+    - [Gambiarra (funcoes)](/docs/funcoes)
+    - [Tipos e operadores](/docs/tipos)
+    - [Textos](/docs/strings)
+    - [Listas e dicionarios](/docs/colecoes)
+  </Accordion>
+  <Accordion title="Avancado">
+    - [Biblioteca padrao](/docs/biblioteca)
+    - [Arruma / quebrou](/docs/erros)
+    - [Modulos](/docs/modulos)
+    - [Pegadinhas](/docs/pegadinhas)
+  </Accordion>
+  <Accordion title="Lidando com mundo externo">
+    - [JSON](/docs/json)
+    - [HTTP (cliente)](/docs/http)
+    - [Servidor HTTP](/docs/servidor)
+  </Accordion>
+  <Accordion title="Ferramentas">
+    - [Linha de comando](/docs/cli)
+    - [Editor e formata](/docs/ferramentas)
+  </Accordion>
+  <Accordion title="Pratico">
+    - [Receitas](/docs/exemplos)
+  </Accordion>
+</Accordions>
+
+## O jeitinho brasileiro
+
+GambiarraScript nao e uma linguagem pra usar em producao (ainda bem), e uma
+**gambiarra intencional**: cada palavra-chave e um nego que voce falaria num
+Dia de Quadrilha — `se_colar`? `acabou_finalmente`? `arruma...quebrou`? A
+ideia e rir um pouco enquanto aprende como uma linguagem funciona por baixo.
+
+O codigo do interpretador (em Go) e aberto e curto o suficiente pra fuçar —
+começa pelo `cmd/gs/main.go` se quiser ver como tudo se encaixa.

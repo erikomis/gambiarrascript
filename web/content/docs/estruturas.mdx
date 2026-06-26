@@ -1,0 +1,77 @@
+---
+title: Estruturas de controle
+description: se_colar, enquanto, pra_cada e o fechamento com acabou_finalmente.
+---
+
+Todo bloco aberto e fechado com `acabou_finalmente`. Indentacao e livre (nao e
+significativa como em Python) — o que conta e o par abre/fecha.
+
+## se_colar / se_nao_colar
+
+```gambiarrascript
+bota nota = 7
+
+se_colar nota >= 7
+    mostra "passou direto"
+se_nao_colar se_colar nota >= 5
+    mostra "ficou de recuperacao"
+se_nao_colar
+    mostra "reprovou, parca"
+acabou_finalmente
+```
+
+`se_nao_colar` encadeia como `else if`. O ultimo `se_nao_colar` sem condicao e
+o `else` final.
+
+## enquanto (while)
+
+```gambiarrascript
+bota i = 0
+enquanto i < 3
+    mostra i
+    bota i = i + 1
+acabou_finalmente
+```
+
+## pra_cada numerico
+
+```gambiarrascript
+pra_cada i de 1 ate 10
+    mostra i
+acabou_finalmente
+```
+
+O intervalo e inclusivo nos dois lados (`de 1 ate 10` inclui o 10).
+
+## pra_cada em (for-each)
+
+Funciona com listas e dicionarios (itera nas **chaves** do dicionario):
+
+```gambiarrascript
+bota frutas = ["abacaxi", "goiaba", "caju"]
+pra_cada fruta em frutas
+    mostra "hoje tem: " + fruta
+acabou_finalmente
+
+bota dic = {"a": 1, "b": 2}
+pra_cada chave em dic
+    mostra chave + " = " + dic[chave]
+acabou_finalmente
+```
+
+## vaza e continua
+
+```gambiarrascript
+pra_cada i de 1 ate 10
+    se_colar i == 5
+        vaza
+    acabou_finalmente
+    se_colar i % 2 == 0
+        continua
+    acabou_finalmente
+    mostra i
+acabou_finalmente
+```
+
+`vaza` sai do loop, `continua` pula pra proxima iteracao. Fora de um loop os
+dois viram erro de runtime.

@@ -1,0 +1,33 @@
+---
+title: JSON
+description: de_json e pra_json — parse e serializacao de JSON.
+---
+
+```gambiarrascript
+bota dados = de_json(`{"nome": "Erik"}`)
+mostra dados["nome"]                          # Erik
+mostra pra_json({"ok": deu_bom, "n": 42})     # {"ok":true,"n":42}
+```
+
+## de_json(texto)
+
+Transforma JSON em dicionario / lista / texto / numero / booleano / `nada`.
+Strings com aspas viram crase pra escapar internamente, mas pra voce e texto.
+
+## pra_json(valor)
+
+Faz o caminho inverso — saida **compacta** (sem espacos). Junto com `busca`,
+`rota` e `escuta`, da pra escrever uma API REST inteira:
+
+```gambiarrascript
+gambiarra handler(pedido)
+    bota corpo = de_json(pedido["corpo"])
+    funciona pra_json({"echo": corpo["msg"]})
+acabou_finalmente
+
+rota("POST", "/echo", handler)
+escuta(8080)
+```
+
+Lembre de setar o header `Content-Type: application/json` na resposta quando
+quiser que o cliente entenda.

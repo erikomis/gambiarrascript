@@ -1,0 +1,141 @@
+---
+title: Linha de comando
+description: O binario gs — subcomandos, flags e como roda o teu script.
+---
+
+O `gs` e o binario unico que faz tudo. Sem subcomandos escondidos.
+
+## Uso
+
+```
+gs <subcomando> [flags] [argumentos]
+
+Subcomandos:
+  roda      roda um script .gs
+  formata   formata um script .gs
+  repl      abre o REPL interativo
+  lsp       roda o servidor LSP (pra editor)
+  version   mostra a versao
+  ajuda     mostra esta mensagem
+```
+
+## `gs roda`
+
+```bash
+gs roda [--vm] <arquivo.gs> [args...]
+```
+
+- Roda o arquivo no interpretador tree-walking (default).
+- `--vm` liga a VM experimental em bytecode. **A VM nao suporta builtins**
+  ainda — so linguagem basica. Use so pra benchmark/curiosidade.
+- Tudo depois do arquivo vira argumento acessivel via `argumentos()` no script.
+- `dirBase` (usado por `importa`) vira o diretorio do arquivo rodado.
+
+```bash
+gs roda exemplo.gs              # roda
+gs roda --vm exemplo.gs         # roda na VM (sem builtins)
+gs roda script.gs prim seg      # arg[0]="prim", arg[1]="seg"
+```
+
+Erros de parse dao `exit 1`. Erro de runtime imprime a mensagem e `exit 1`.
+
+## `gs formata`
+
+```bash
+gs formata <arquivo.gs>
+```
+
+Parseia e re-emite o AST formatado pra stdout (indent 4 espacos). Comentarios
+sao descartados pelo lexer — **nao sobrevivem ao formatter**.
+
+```bash
+gs formata sujo.gs > lindo.gs
+gs formata sujo.gs | gs roda /dev/stdin
+```
+
+Mais em [Editor e formata](/docs/ferramentas).
+
+## `gs repl`
+
+```bash
+gs repl
+```
+
+Abre o REPL interativo. Prompt: `gambiarra> `. So uma linha por vez; pode
+declarar `bota` e `gambiarra`, que persistem entre linhas. `ctrl+d` vaza.
+
+Nao tem dot-commands (`.help`, `.exit`, `.load`); saida e so EOF.
+
+Expressoes sem `mostra` nao imprimem nada — se quiser ver o valor,
+mande um `mostra X`. O REPL foi desenhado pra fuçar； pra experimentar uma
+ideia rapida:
+
+```bash
+gambiarra> bota x = 10
+gambiarra> gambiarra dobra(n)
+gambiarra>     funciona n * 2
+gambiarra> acabou_finalmente
+gambiarra> mostra dobra(x)
+20
+gambiarra> <ctrl+d>
+```
+
+## `gs lsp`
+
+```bash
+gs lsp
+```
+
+Roda o servidor LSP no stdin/stdout (protocolo JSON-RPC). Nao e pra voce
+rodar direto — voce configura no teu editor pra chamar `gs lsp`. Veja
+[Editor e formata](/docs/ferramentas).
+
+## `gs version` / `--version` / `-v`
+
+```bash
+gs --version
+# gs (GambiarraScript) 0.1.0
+```
+
+## `gs ajuda` / `--help` / `-h`
+
+Imprime o help do CLI.
+
+## Argumentos no script
+
+Qualquer coisa depois do arquivo vira `argumentos()` no runtime:
+
+```gambiarrascript
+# args.gs
+mostra "recebi " + texto(tamanho(argumentos())) + " argumentos:"
+pra_cada arg em argumentos()
+    mostra "  - " + arg
+acabou_finalmente
+```
+
+```bash
+$ gs roda args.gs a b c
+recebi 3 argumentos:
+  - a
+  - b
+  - c
+```
+
+`argumentos()` e uma lista de textos. Use `numero(arg)` pra converter numeros.
+
+## Exemplos pra rodar
+
+O repo vem com `examples/` ja prontos:
+
+```bash
+gs roda examples/salve.gs
+gs roda examples/fizzbuzz.gs
+gs roda examples/texto.gs
+gs roda examples/dicionario.gs
+gs roda examples/matematica.gs
+gs roda examples/lista.gs
+gs roda examples/servidor.gs      # sobe um servidor HTTP na 8080
+gs roda examples/http.gs          # chama uma API publica
+```
+
+Olha `examples/` no repo — sao scripts curtos, boas fontes de ideias.

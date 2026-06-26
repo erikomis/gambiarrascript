@@ -1,0 +1,61 @@
+---
+title: Pegadinhas
+description: Semantica que foge do comum e costume dar furada.
+---
+
+## Escopo do `pra_cada` e do `quebrou` (estilo Python)
+
+A variavel do `pra_cada` e a da clausula `quebrou` **continuam existindo**
+depois que o bloco fecha — elas vazam pro escopo da funcao que as contem.
+
+```gambiarrascript
+pra_cada i de 1 ate 3
+acabou_finalmente
+mostra i              # 4 (no for de..ate) ou o ultimo item (no for..em)
+
+arruma
+    bota x = 1 / 0
+quebrou erro
+    mostra erro
+acabou_finalmente
+mostra erro           # ainda visivel: mensagem de erro
+```
+
+## `e` / `ou` sempre devolvem booleano
+
+Diferente de JS e Python, `e`/`ou` no GambiarraScript **normalizam** o operando
+pra `deu_bom`/`deu_ruim`:
+
+```gambiarrascript
+mostra "x" e "y"      # deu_bom  (nao devolve "y")
+mostra nada ou "ok"   # deu_bom
+```
+
+Esse e o comportamento que te protege de bugs chatos de coercao.
+
+## Escapes em textos
+
+So `\"`, `\\`, `\n` e `\t` escapam dentro de `"..."`. Qualquer outro `\x` e
+mantido literal (barra e tudo). Pra texto cravo (JSON, regex, path Windows),
+use crase `` `...` `` — la nada e escapado.
+
+## Truthiness
+
+So `nada` e `deu_ruim` sao falsy. **Tudo o mais** e truthy: `0`, `""`, `[]`, `{}`
+inclusive. Se quiser checar vazio, faca explicitamente (`tamanho(x) == 0`,
+`x == ""`, etc).
+
+## Divisao por zero
+
+`/ 0` e `% 0` dao erro de runtime (nao `Inf`/`NaN`). Pra deixar passar, enrole
+num `arruma...quebrou`.
+
+## Nada vs 0 vs ""
+
+Sao coisas diferentes:
+
+```gambiarrascript
+mostra nada == 0      # deu_ruim
+mostra nada == nada   # deu_bom
+mostra "" == nada     # deu_ruim
+```

@@ -1,0 +1,127 @@
+---
+title: Primeiros passos
+description: Escreve e roda o teu primeiro script GambiarraScript.
+---
+
+Voce ja tem o `gs` na maquina? Se nao, segue [Instalacao](/docs/instalacao)
+ primeiro.
+
+Mantem o estilo: o jeito mais rapido de entender e abrindo o [playground](/playground)
+no navegador. Sem instalar nada.
+
+## Hello world
+
+Cria um arquivo `salve.gs`:
+
+```gambiarrascript
+mostra "Salve, tropa!"
+```
+
+Roda:
+
+```bash
+gs roda salve.gs
+# Salve, tropa!
+```
+
+`mostra` e o statement de imprimir (nao e uma funcao, nao leva parenteses).
+Ele avalia a expressao ao lado e joga na saida.
+
+## Variaveis e conta basica
+
+```gambiarrascript
+bota nome = "Erik"
+bota idade = 25
+
+mostra "salve, " + nome + "!"
+mostra "ano que vem faco " + (idade + 1) + " primaveras"
+```
+
+`bota` declara (e tambem reatribui) variavel. Toda atribuicao precisa de
+`bota` — `x = 5` puro nao funciona (erro de parse). Veja
+[Tipos e operadores](/docs/tipos) pra detalhes.
+
+## Condicao com `se_colar`
+
+```gambiarrascript
+bota nota = 7
+
+se_colar nota >= 7
+    mostra "passou direto"
+se_nao_colar se_colar nota >= 5
+    mostra "ficou de recuperacao"
+se_nao_colar
+    mostra "reprovou, parca"
+acabou_finalmente
+```
+
+`acabou_finalmente` fecha o bloco. Sempre. Mais em
+[Estruturas de controle](/docs/estruturas).
+
+## Loop e funcao
+
+```gambiarrascript
+gambiarra dobra(n)
+    funciona n * 2
+acabou_finalmente
+
+pra_cada i de 1 ate 3
+    mostra "dobro de " + i + " = " + dobra(i)
+acabou_finalmente
+```
+
+`gambiarra` declara funcao, `funciona` devolve (veja [Gambiarra](/docs/funcoes)).
+`pra_cada i de A ate B` roda de A ate B inclusivo.
+
+## Comentando o codigo
+
+Tem dois jeitos:
+
+```gambiarrascript
+# isso e comentario de linha (da Hash em diante ate o fim dela)
+
+/*
+  isso e comentario de bloco
+  pode ter varias linhas e nao aninha
+*/
+
+bota x = 1 /* inline */ + 2
+mostra x   # comenta rapidinho na mesma linha
+```
+
+`#` faz linha; `/* ... */` faz bloco (nao aninha — fecha no primeiro
+`*/`). Comentarios sao descartados pelo lexer: o formatter nao preserva
+eles (leia [Editor e formata](/docs/ferramentas)).
+
+## REPL pra fuçar
+
+```bash
+gs repl
+gambiarra> bota x = 10
+gambiarra> mostra x * 2
+20
+gambiarra> <ctrl+d>
+```
+
+So entra uma linha por vez. Declaracoes (`bota`, `gambiarra`) persistem
+entre as linhas. Expressoes sem `mostra` nao imprimem nada — manda
+`mostra X` explicto. `ctrl+d` pra vazar.
+
+## Rodando os exemplos
+
+No repo tem `examples/` com varios scripts prontos:
+
+```bash
+ls examples/                  # fizzbuzz.gs, servidor.gs, json.gs, ...
+gs roda examples/fizzbuzz.gs
+gs roda examples/texto.gs
+```
+
+Sao um bom ponto de partida pra fuçar [Biblioteca padrao](/docs/biblioteca)
+e [Receitas](/docs/exemplos).
+
+## proximos passos
+
+- [Vocabulario](/docs/vocabulario) — referencia rapida das palavras-chave
+- [Biblioteca padrao](/docs/biblioteca) — todos os builtins
+- [Linha de comando](/docs/cli) — `gs roda`, `gs formata`, `gs lsp`...

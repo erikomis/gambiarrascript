@@ -1,0 +1,22 @@
+{
+  "index": "Inicio",
+  "instalacao": "Instalacao",
+  "primeiros-passos": "Primeiros passos",
+  "vocabulario": "Vocabulario",
+  "estruturas": "Estruturas de controle",
+  "funcoes": "Gambiarra (funcoes)",
+  "tipos": "Tipos e operadores",
+  "strings": "Textos",
+  "colecoes": "Listas e dicionarios",
+  "biblioteca": "Biblioteca padrao",
+  "concorrencia": "Concorrencia",
+  "erros": "Arruma / quebrou",
+  "json": "JSON",
+  "http": "HTTP (cliente)",
+  "servidor": "Servidor HTTP",
+  "modulos": "Modulos",
+  "cli": "Linha de comando",
+  "ferramentas": "Editor e formata",
+  "exemplos": "Receitas",
+  "pegadinhas": "Pegadinhas"
+}

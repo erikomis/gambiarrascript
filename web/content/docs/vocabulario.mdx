@@ -1,0 +1,97 @@
+---
+title: Vocabulario
+description: As palavras-chave do GambiarraScript, traduzidas pro jeitinho brasileiro.
+---
+
+GambiarraScript usa uma pegada so pra cada conceito — sem alias concorrentes.
+Decorou essa tabela, decorou a lingua.
+
+## Palavras-chave
+
+| Palavra             | Equivalente          | O que faz |
+| ------------------- | -------------------- | --------- |
+| `bota`              | `let` / `var`        | declara (ou reatribui) variavel |
+| `mostra`            | `print`              | imprime na tela (statement, nao funcao) |
+| `se_colar`          | `if`                 | abre condicional |
+| `se_nao_colar`      | `else` / `else if`   | clausula do `se_colar`; pega condicao (vira else-if) ou nao (else final) |
+| `enquanto`          | `while`              | loop enquanto condição for verdadeira |
+| `pra_cada ... de A ate B` | `for i in range(A, B+1)` | loop numerico inclusivo |
+| `pra_cada x em colecao`   | `for x in ...` | for-each em lista ou dicionario (itera as **chaves** do dic) |
+| `gambiarra`         | `func` / `fn` / `def`| declara funcao |
+| `funciona`          | `return`             | devolve valor da gambiarra |
+| `arruma`            | `try`                | abre bloco de tratamento de erro |
+| `quebrou <nome>`    | `catch <e>`          | captura erro numa variavel texto |
+| `vaza`              | `break`              | sai do loop |
+| `continua`          | `continue`           | pula pra proxima iteracao |
+| `importa`           | `import`             | importa modulo `.gs` relativo |
+| `deu_bom` / `deu_ruim` | `true` / `false`  | booleanos singleton |
+| `nada`              | `null` / `None`      | o unico valor nulo |
+| `acabou_finalmente` | `}`                  | fecha **qualquer** bloco (`se_colar`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`) |
+| `bora`              | `go` (goroutine)     | dispara funcao em paralelo; devolve `Futuro` |
+
+As palavras-chave sao fixas: nao tem alias pra escolher a que voce gosta mais.
+O que existe e o sentimento: `acabou_finalmente` fecha qualquer bloco aberto.
+
+## Operadores
+
+| Categoria    | Simbolos |
+| ------------ | -------- |
+| Aritmeticos  | `+ - * / %` |
+| Comparacao   | `== != < > <= >=` |
+| Logicos      | `e` (and), `ou` (or), `nao` (not prefix) |
+| Atribuicao   | `=` (sempre precedido por `bota`) |
+| Indexacao    | `expr[expr]` |
+| Chamada      | `expr(args)` |
+
+Nao tem exponenciacao (`**`), nem atribuicao composta (`+=`, `-=`, etc.). Pra
+potencia use multiplicacao numa funcao, ou `raiz()` no lugar de raiz quadrada.
+
+### Precedencia (do mais fraco pro mais forte)
+
+1. `ou`
+2. `e`
+3. `== !=`
+4. `< > <= >=`
+5. `+ -`
+6. `* / %`
+7. prefix (`-`, `nao`)
+8. chamada `f(args)`
+9. indexacao `x[i]`
+
+## Booleanos e nulos
+
+`deu_bom` e `deu_ruim` sao os booleanos `true`/`false`. `nada` e o singleton de
+nulo (null/None). Operadores logicos `e` e `ou` **sempre devolvem booleano**
+(normalizam o operando), ao contrario de JS/Python. `nao` inverte.
+
+```gambiarrascript
+bota maior = 10 > 5          # deu_bom
+bota ativo = deu_bom e maior
+bota falso = nao maior
+mostra falso                 # deu_ruim
+mostra nada
+```
+
+## Truthiness
+
+So `nada` e `deu_ruim` sao **falsy**. Tudo o mais e truthy: `0`, `""`, `[]`,
+`{}` — tudo vira verdadeiro numa condicao. Se quiser checar vazio, faca
+explicito: `tamanho(x) == 0`, `x == ""`, etc. Veja [Pegadinhas](/docs/pegadinhas).
+
+## Builtins de uma olhada
+
+A [Biblioteca padrao](/docs/biblioteca) tem a referencia completa. Resumo
+para referencia rapida:
+
+| Categoria | Funcoes |
+| --------- | -------- |
+| Texto | `tamanho` `maiusculo` `minusculo` `fatia` `contem` `comeca_com` `termina_com` `tira_espaco` `substitui` `separa` `junta` `texto` `numero` |
+| Lista | `tamanho` `adiciona` `remove` `ordena` `inverte` `mapeia` `filtra` |
+| Dicionario | `chaves` `tem` |
+| Numero | `raiz` `abs` `arredonda` `teto` `chao` `min` `max` `aleatorio` |
+| JSON | `de_json` `pra_json` |
+| Arquivo | `le_arquivo` `escreve_arquivo` |
+| HTTP | `busca` |
+| Servidor | `rota` `escuta` |
+| Console/CLI | `pergunta` `argumentos` |
+| Concorrencia | `bora` `espera` `cano` `envia` `recebe` `fecha` `paralelo` |

@@ -1,0 +1,61 @@
+---
+title: Gambiarra (funcoes)
+description: Como declarar e chamar funcoes no GambiarraScript.
+---
+
+Funcao e Gambiarra. `gambiarra` declara, `funciona` devolve. O fechamento obvio
+e `acabou_finalmente`.
+
+## Declarando e chamando
+
+```gambiarrascript
+gambiarra saudacao(nome)
+    mostra "salve, " + nome
+acabou_finalmente
+
+saudacao("Erik")        # salve, Erik
+```
+
+## Retorno
+
+```gambiarrascript
+gambiarra dobra(n)
+    funciona n * 2
+acabou_finalmente
+
+mostra dobra(21)        # 42
+```
+
+`funciona` sem expressao devolve `nada`.
+
+## Aridade
+
+O numero de argumentos tem que bater. Se a gambiarra quer 2 parametros e voce
+passa 3, da erro de runtime.
+
+```gambiarrascript
+gambiarra soma(a, b)
+    funciona a + b
+acabou_finalmente
+
+mostra soma(2, 3)       # 5
+```
+
+## Funcoes como valores
+
+Funcoes sao first-class: podem entrar em listas, dicionarios e serem passadas
+como argumento (usado por `mapeia`, `filtra`, `rota`).
+
+```gambiarrascript
+bota ops = [gambiarra(x) funciona x + 1 acabou_finalmente,
+            gambiarra(x) funciona x * 2 acabou_finalmente]
+
+# sao inline: nao tem nome, so roda chamando
+mostra ops[0](10)       # 11
+```
+
+<Callout type="warn" title="Escopo do pra_cada">
+  A variavel do `pra_cada` e a da clausula `quebrou` **vazam** pro escopo da
+  funcao que contem o bloco — mesmo estilo Python. Veja
+  [Pegadinhas](/docs/pegadinhas).
+</Callout>

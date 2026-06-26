@@ -1,0 +1,123 @@
+---
+title: Tipos e operadores
+description: Numeros, textos, booleanos, listas e dicionarios - e como operar eles.
+---
+
+GambiarraScript tem seis tipos:
+
+| Tipo        | Literal                                  | Inspect |
+| ----------- | ----------------------------------------- | ------- |
+| Numero      | `25`, `3.14`, `-1`                       | `25`, `3.14` |
+| Texto       | `"ola"` ou `` `ola` ``                    | `"ola"` |
+| Booleano    | `deu_bom` / `deu_ruim`                    | `deu_bom` / `deu_ruim` |
+| Nada        | `nada`                                    | `nada` |
+| Lista       | `[1, 2, 3]`                               | `[1, 2, 3]` |
+| Dicionario  | `{"nome": "Erik", "idade": 25}`           | `{"nome": "Erik", "idade": 25}` |
+
+Nao e estaticamente tipada; o tipo e o que voce guarda no runtime. Nao tem
+`null` nao-tipado separado de `nada` — `nada` e o unico valor nulo.
+
+## Numeros
+
+Sempre `float64` por baixo. Inteiros sao numeros com parte zero (sao impressos
+sem casa decimal pela tag; `5` mostra `5`, nao `5.0`).
+
+Operadores: `+ - * / %`. Comparacao: `== != < > <= >=`.
+
+- `/` e `%` por zero dao **erro de runtime** (nao `Inf`/`NaN`).
+- `%` e `math.Mod` (sinal do dividendo).
+- Nao existe exponenciacao (`**`); faca uma `gambiarra potencia(base, exp)`.
+- Builtins matematicos: `raiz`, `abs`, `arredonda`, `teto`, `chao`, `min`, `max`,
+  `aleatorio` — veja [Biblioteca padrao](/docs/biblioteca#numeros-e-matematica).
+
+## Textos
+
+Dois literais:
+- `"..."` com escapes limitados: `\n`, `\t`, `\"`, `\\`. Outros `\x` ficam literal.
+- `` `...` `` crase: string crua, multiline, sem escape nenhum.
+
+Concatenacao com `+` se qualquer lado for texto. Mais em [Textos](/docs/strings).
+
+## Booleanos
+
+`deu_bom` / `deu_ruim` sao singleton. `e` e `ou` **sempre devolvem booleano**
+(normalizam o operando), ao contrario de JS/Python:
+
+```gambiarrascript
+mostra deu_bom e "texto"   # deu_ruim (nao devolve "texto")
+mostra 5 ou 0              # deu_bom
+mostra nada ou "ok"        # deu_bom
+mostra "x" e "y"           # deu_bom
+```
+
+`nao` e prefixo e devolve booleano: `nao deu_bom` → `deu_ruim`.
+
+## Truthiness
+
+So `nada` e `deu_ruim` sao **falsy**. Tudo o mais e truthy: `0`, `""`, `[]`,
+`{}` inclusive. Se quiser checar vazio, faca explicito (`tamanho(x) == 0`,
+`x == ""`). Veja [Pegadinhas](/docs/pegadinhas#truthiness).
+
+## Nada
+
+`nada` e o unico valor "sem nada". Tentar operar aritmeticamente com `nada`
+(e `+ 1` por ex.) da erro de runtime, exceto concatenar `nada` como operando
+nao-texto (e raro acertar). Comparar `nada == 0` e `deu_ruim`, `nada == nada`
+e `deu_bom`, `nada == ""` e `deu_ruim`.
+
+## Listas e Dicionarios
+
+Os tipos compostos. Listas indexadas por inteiro, dicionarios por
+texto/numero/booleano. Ambos mutaveis, ambos iteraveis com `pra_cada`. Detalhes
+em [Listas e dicionarios](/docs/colecoes).
+
+## Operadores logicos
+
+- `e` — and (curto-circuito, devolve booleano)
+- `ou` — or (curto-circuito, devolve booleano)
+- `nao` — not (prefixo, devolve booleano)
+
+Precedencia: `ou` < `e` < comparacao < `+ -` < `* / %` < prefix < chamada < index.
+
+## Igualdade
+
+`==` e `!=` fazem **comparacao estrutural**:
+
+- Numeros: valor exato (`float64 ==`).
+- Textos: caractere a caractere.
+- Booleanos: valor.
+- `nada` so e igual a `nada`.
+- Listas: mesmos elementos, mesma ordem, recursivo.
+- Dicionarios: mesmas chaves (tipo + valor da chave), mesmos valores,
+  recursivo. Ordem nao importa.
+
+```gambiarrascript
+mostra [1, 2, 3] == [1, 2, 3]                # deu_bom
+mostra [[1, 2], [3]] == [[1, 2], [3]]        # deu_bom
+mostra {"a": 1} == {"a": 1}                 # deu_bom
+mostra {"a": 1, "b": 2} == {"b": 2, "a": 1}  # deu_bom (ordem nao importa)
+mostra {"1": 1} == {1: 1}                   # deu_ruim (chave texto vs numero)
+```
+
+Instancias diferentes mas mesmo conteudo sao **iguais**. Nao existe
+"identidade" (`is`) nem `===`.
+
+## Operadores invalidos
+
+Tentativas que dao erro em runtime:
+
+- `texto < texto` — comparacao so pra numero.
+- `lista + lista` — `+` so concatena texto e soma numero (nao lista).
+- `nada + 1` — erro.
+- `numero == texto` (`1 == "1"`) — erro? nao: devolve `deu_ruim` (tipos
+  diferentes, comparacao estrutural).
+
+## Conversao entre tipos
+
+| De -> Para | Como |
+| --- | --- |
+| numero -> texto | `texto(n)` ou concatena com `""` (`"" + n`) |
+| texto -> numero | `numero(t)` (NaN se nao for numerico) |
+| booleano -> texto | `texto(deu_bom)` ou na concatenacao automatica |
+| qualquer -> texto | `texto(v)` |
+| dicionario -> texto | `pra_json(d)` (formato JSON) |

@@ -1,0 +1,42 @@
+---
+title: HTTP (cliente)
+description: busca() faz requisicoes HTTP no GambiarraScript.
+---
+
+## GET simples
+
+```gambiarrascript
+bota r = busca("https://httpbin.org/get")
+se_colar r["ok"]
+    mostra r["corpo"]
+acabou_finalmente
+```
+
+`busca(url)` faz um GET. A resposta e um dicionario:
+
+| chave        | tipo    | conteudo                              |
+| ------------ | ------- | ------------------------------------- |
+| `status`     | numero  | codigo HTTP (200, 404, etc.)          |
+| `ok`         | booleano| `deu_bom` se 2xx                       |
+| `corpo`      | texto   | corpo da resposta                      |
+| `cabecalhos` | dic     | headers canonizados (ex.: `Content-Type`) |
+
+## Opcoes (POST, corpo, cabecalhos, timeout)
+
+```gambiarrascript
+bota r = busca("https://httpbin.org/post", {
+    "metodo": "POST",
+    "corpo": pra_json({"msg": "salve"}),
+    "cabecalhos": {"Content-Type": "application/json"},
+    "timeout": 10
+})
+mostra r["status"]
+```
+
+- `metodo`: `"GET"` (default), `"POST"`, `"PUT"`, `"DELETE"`, etc.
+- `corpo`: texto do corpo da requisicao.
+- `cabecalhos`: dicionario, chaves no formato que o Go canoniza (ex.: `X-Teste`
+  com inicial maiscula).
+- `timeout`: em segundos; default 30.
+
+A chamada e **bloqueante** (sem async/await): o resultado ja vem pronto.

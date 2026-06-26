@@ -1,0 +1,336 @@
+---
+title: Receitas
+description: Exemplos prontos e jeitos práticos de fazer coisas comuns em GambiarraScript.
+---
+
+Receitas batidas pra voce copiar, colar e adaptar. A maior parte combina
+alguns builtins — o jeito do GambiarraScript e juntar pecinhas.
+
+<Callout title="Exemplos no repo">
+  Alem das receitas aqui, o repo tem a pasta `examples/` com scripts .gs
+  prontos. Da pra rodar diretamente: `gs roda examples/fizzbuzz.gs`. Veja
+  a lista em [Linha de comando](/docs/cli#exemplos-pra-rodar).
+</Callout>
+
+## FizzBuzz
+
+```gambiarrascript
+pra_cada i de 1 ate 30
+    se_colar i % 15 == 0
+        mostra "FizzBuzz"
+    se_nao_colar se_colar i % 3 == 0
+        mostra "Fizz"
+    se_nao_colar se_colar i % 5 == 0
+        mostra "Buzz"
+    se_nao_colar
+        mostra i
+    acabou_finalmente
+acabou_finalmente
+```
+
+## Tabuada
+
+```gambiarrascript
+gambiarra tabuada(n)
+    pra_cada i de 1 ate 10
+        mostra n + " x " + i + " = " + (n * i)
+    acabou_finalmente
+acabou_finalmente
+
+tabuada(7)
+```
+
+## Ler entrada do teclado (`pergunta`)
+
+```gambiarrascript
+mostra "Bem-vindo a GambiarraScript"
+bota nome = pergunta("Qual teu nome? ")
+mostra "Eai " + nome + ", bora tirar uma duvida"
+
+bota chute = numero(pergunta("Quanto e 6 * 7? "))
+se_colar chute == 42
+    mostra "Acertou, " + nome + "!"
+se_nao_colar
+    mostra "Quase! era 42, parca"
+acabou_finalmente
+```
+
+`pergunta()` le uma linha do stdin (trim `\r\n`) e devolve texto. Use `numero()`
+pra converter.
+
+## Argumentos de linha de comando
+
+```gambiarrascript
+# rode: gs roda args.gs um dois treis
+bota args = argumentos()
+mostra "recebi " + texto(tamanho(args)) + " argumentos"
+pra_cada a em args
+    mostra "- " + a
+acabou_finalmente
+```
+
+## Parse e re-serializar JSON
+
+```gambiarrascript
+bota json_texto = `{"nome": "Erik", "idade": 25, "langs": ["go", "gs"]}`
+bota dados = de_json(json_texto)
+
+mostra "nome: " + dados["nome"]
+mostra "primeira lang: " + dados["langs"][0]
+mostra "idade + 1: " + texto(dados["idade"] + 1)
+
+bota resposta = {"ok": deu_bom, "total": 2, "itens": ["a", "b"]}
+mostra pra_json(resposta)  # {"ok":true,"total":2,"itens":["a","b"]}
+```
+
+Note: `pra_json` gera JSON **compacto** (sem espacos). Chaves do `de_json` sempre
+viram **texto**, mesmo se no JSON original eram numeros.
+
+## Cliente HTTP
+
+```gambiarrascript
+bota r = busca("https://httpbin.org/get")
+
+mostra "status: " + texto(r["status"])
+se_colar r["ok"]
+    mostra "deu bom! resposta:"
+    mostra r["corpo"]
+se_nao_colar
+    mostra "deu ruim, parca"
+acabou_finalmente
+
+# POST mandando um corpo
+bota envio = busca("https://httpbin.org/post", {
+    "metodo": "POST",
+    "corpo": "salve do gambiarra"
+})
+mostra "post status: " + texto(envio["status"])
+```
+
+Mais detalhes em [HTTP (cliente)](/docs/http).
+
+## Servidor HTTP (ola mundo)
+
+```gambiarrascript
+# rode: gs roda servidor.gs
+# abra: http://localhost:8080
+
+gambiarra inicio(pedido)
+    funciona "Salve! Voce pediu " + pedido["caminho"]
+acabou_finalmente
+
+gambiarra eco(pedido)
+    funciona {"status": 201, "corpo": "voce mandou: " + pedido["corpo"]}
+acabou_finalmente
+
+gambiarra ola(pedido)
+    bota nome = pedido["query"]["nome"]
+    se_colar nome == nada
+        bota nome = "estranho"
+    acabou_finalmente
+    funciona "e ai, " + nome + "!"
+acabou_finalmente
+
+rota("GET", "/", inicio)
+rota("POST", "/eco", eco)
+rota("GET", "/ola", ola)
+
+mostra "servidor de pe na porta 8080 (ctrl+c pra parar)"
+escuta(8080)
+```
+
+Atencao: `escuta` e **serial** (uma requisicao por vez), nao tem concorrencia.
+Veja [Servidor HTTP](/docs/servidor) pra todos os campos do `pedido`.
+
+## API REST com JSON
+
+```gambiarrascript
+gambiarra api(pedido)
+    se_colar pedido["metodo"] != "POST"
+        funciona {"status": 405, "corpo": "so POST, parca"}
+    acabou_finalmente
+
+    arruma
+        bota dados = de_json(pedido["corpo"])
+        bota resposta = {
+            "ok": deu_bom,
+            "recebido": dados,
+            "tamanho": tamanho(dados["corpo"])  # se voce mandou campo "corpo"
+        }
+        funciona pra_json(resposta)
+    quebrou erro
+        funciona {
+            "status": 400,
+            "corpo": "json zuado: " + erro,
+            "cabecalhos": {"Content-Type": "text/plain"}
+        }
+    acabou_finalmente
+acabou_finalmente
+
+rota("POST", "/api", api)
+escuta(8090)
+```
+
+## Ler e escrever arquivo
+
+```gambiarrascript
+bota caminho = "saida.gs"
+
+escreve_arquivo(caminho, `# arquivo gerado pela GambiarraScript
+mostra "ole"`)
+
+bota conteudo = le_arquivo(caminho)
+mostra "li do disco:"
+mostra conteudo
+```
+
+`escreve_arquivo` sempre sobrescreve (nao tem append). `le_arquivo` poe o
+conteudo num texto (basicamente bytes — sem tratamento binario separado).
+
+## Mapear e filtrar (functional)
+
+```gambiarrascript
+bota nums = [1, 2, 3, 4, 5]
+
+gambiarra quadrado(n)
+    funciona n * n
+acabou_finalmente
+mostra mapeia(nums, quadrado)              # [1, 4, 9, 16, 25]
+
+gambiarra par(n)
+    funciona n % 2 == 0
+acabou_finalmente
+mostra filtra(nums, par)                    # [2, 4]
+
+# reduce na unha (nao tem builtin)
+gambiarra soma_tudo(lista)
+    bota total = 0
+    pra_cada x em lista
+        bota total = total + x
+    acabou_finalmente
+    funciona total
+acabou_finalmente
+mostra soma_tudo(nums)                      # 15
+```
+
+## Ordenar por criterio (sort by field)
+
+```gambiarrascript
+bota pessoas = [
+    {"nome": "Erik", "idade": 25},
+    {"nome": "Ana", "idade": 30},
+    {"nome": "Bia", "idade": 22}
+]
+
+# cria lista so com idades, ordena, e reconstroi? nao — faz so com mapeia:
+bota idades = mapeia(pessoas, gambiarra(p)
+    funciona p["idade"]
+acabou_finalmente)
+ordena(idades)
+mostra idades                              # [22, 25, 30]
+
+# pra ordenar o dicionario pela idade, sem sortby, faz bubble na unha
+gambiarra ordena_por_idade(lista)
+    bota n = tamanho(lista)
+    pra_cada i de 0 ate n - 2
+        pra_cada j de 0 ate n - i - 2
+            se_colar lista[j]["idade"] > lista[j + 1]["idade"]
+                bota tmp = lista[j]
+                bota lista[j] = lista[j + 1]
+                bota lista[j + 1] = tmp
+            acabou_finalmente
+        acabou_finalmente
+    acabou_finalmente
+    funciona lista
+acabou_finalmente
+
+bota ordenada = ordena_por_idade(pessoas)
+pra_cada p em ordenada
+    mostra p["nome"] + " (" + texto(p["idade"]) + ")"
+acabou_finalmente
+```
+
+## Adivinhacao (jogo)
+
+```gambiarrascript
+bota secreto = arredonda(aleatorio(100))
+bota tentativas = 0
+bota acertou = deu_ruim
+
+mostra "pensei num numero de 0 a 99. chuta."
+
+enquanto nao acertou
+    bota palpite = numero(pergunta("chuta: "))
+    bota tentativas = tentativas + 1
+
+    se_colar palpite == secreto
+        bota acertou = deu_bom
+        mostra "acertou em " + texto(tentativas) + " tentativas!"
+    se_nao_colar se_colar palpite < secreto
+        mostra "e maior"
+    se_nao_colar
+        mostra "e menor"
+    acabou_finalmente
+acabou_finalmente
+```
+
+## Repetir string N vezes
+
+```gambiarrascript
+gambiarra repete(s, n)
+    bota out = ""
+    pra_cada i de 1 ate n
+        bota out = out + s
+    acabou_finalmente
+    funciona out
+acabou_finalmente
+
+mostra repete("ba", 3)     # "bababa"
+mostra repete("-", 20)     # "--------------------"
+```
+
+## Inverter texto (sem builtin)
+
+```gambiarrascript
+gambiarra inverte_texto(s)
+    bota chars = separa(s, "")
+    inverte(chars)
+    funciona junta(chars, "")
+acabou_finalmente
+
+mostra inverte_texto("gambiarra")          # "arraibmag"
+```
+
+## Potencia (sem `**`)
+
+```gambiarrascript
+gambiarra potencia(base, expoente)
+    bota out = 1
+    pra_cada i de 1 ate expoente
+        bota out = out * base
+    acabou_finalmente
+    funciona out
+acabou_finalmente
+
+mostra potencia(2, 10)     # 1024
+mostra potencia(5, 3)     # 125
+```
+
+Suporta so expoente inteiro positivo. Pra raiz de outra ordem usa `raiz()`
+que e so raiz quadrada; nao tem `pow()` geral.
+
+## Tabuada com `adiciona` e `junta`
+
+```gambiarrascript
+bota linhas = []
+pra_cada i de 1 ate 10
+    adiciona(linhas, "7 x " + texto(i) + " = " + texto(7 * i))
+acabou_finalmente
+mostra junta(linhas, "\n")
+```
+
+## Receba sua propria receita
+
+Abre um PR no
+[github.com/erik-martins/gambiarrascript](https://github.com/erik-martins/gambiarrascript)
+com outro exemplo e a gente publica aqui tambem.

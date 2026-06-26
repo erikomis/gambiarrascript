@@ -1,0 +1,195 @@
+---
+title: Biblioteca padrao
+description: Referencia completa dos builtins do GambiarraScript por categoria.
+---
+
+Esta pagina lista **todos** os builtins disponiveis. Cada um e uma funcao
+global (nao precisa `importa`). Builtins que ainda nao existem tambem estao
+marcados — pra voce nao gastar tempo procurando.
+
+<Callout title="Builtins sao funcoes, `mostra` nao e">
+  `mostra` e um **statement** (palavra-chave), nao um builtin. Os builtins
+  abaixo sao chamados como funcao: `tamanho(x)`, `mapeia(...)`, etc.
+</Callout>
+
+## Texto
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `texto(v)` | `(qualquer)` | `texto` — `v.Inspect()` (conversao universal) |
+| `tamanho(t)` | `(texto)` | `numero` (rune count; respeita UTF-8) |
+| `maiusculo(t)` | `(texto)` | `texto` (`ToUpper`) |
+| `minusculo(t)` | `(texto)` | `texto` (`ToLower`) |
+| `tira_espaco(t)` | `(texto)` | `texto` (`TrimSpace`) |
+| `substitui(t, antigo, novo)` | `(texto, texto, texto)` | `texto` — troca **todas** as ocorrencias |
+| `separa(t, sep)` | `(texto, texto)` | `lista` de textos |
+| `junta(lista, sep)` | `(lista, texto)` | `texto` (cada elem via `Inspect`) |
+| `fatia(t, inicio, [fim])` | `(texto, numero, [numero])` | `texto` (`runes[i:j]`, clampa limites) |
+| `contem(t, sub)` | `(texto, texto)` | `booleano` |
+| `comeca_com(t, prefixo)` | `(texto, texto)` | `booleano` |
+| `termina_com(t, sufixo)` | `(texto, texto)` | `booleano` |
+| `numero(t)` | `(texto)` | `numero` (`ParseFloat`, trim; nao-numerico vira `NaN`) |
+
+## Lista
+
+| Builtin | Assinatura | Devolve | Muta? |
+| --- | --- | --- | --- |
+| `tamanho(lista)` | `(lista)` | `numero` | nao |
+| `adiciona(lista, item)` | `(lista, valor)` | `nada` | **sim** (push back) |
+| `remove(lista, item)` | `(lista, valor)` | `nada` | **sim** (primeira ocorrencia) |
+| `ordena(lista)` | `(lista)` | `nada` | **sim** (estavel; mix Numero+Texto erro) |
+| `inverte(lista)` | `(lista)` | `nada` | **sim** |
+| `mapeia(lista, fn)` | `(lista, gambiarra)` | `lista` nova | nao |
+| `filtra(lista, fn)` | `(lista, gambiarra)` | `lista` nova | nao |
+
+## Dicionario
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `tamanho(dic)` | `(dicionario)` | `numero` |
+| `chaves(dic)` | `(dicionario)` | `lista` de chaves |
+| `tem(dic, chave)` | `(dicionario, valor)` | `booleano` |
+
+## Numeros e matematica
+
+| Builtin | Assinatura | Devolve | Notas |
+| --- | --- | --- | --- |
+| `raiz(n)` | `(numero)` | `numero` | `math.Sqrt` |
+| `abs(n)` | `(numero)` | `numero` | valor absoluto |
+| `arredonda(n)` | `(numero)` | `numero` | `math.Round` |
+| `teto(n)` | `(numero)` | `numero` | `math.Ceil` |
+| `chao(n)` | `(numero)` | `numero` | `math.Floor` |
+| `min(n1, n2, ...)` | `(numero...)` variadico | `numero` | requer >= 1 argumento |
+| `max(n1, n2, ...)` | `(numero...)` variadico | `numero` | requer >= 1 argumento |
+| `aleatorio([max])` | `([numero])` | `numero` | `0 args`: `rand.Float64()`. `1 arg`: `rand.Float64() * max`. Use com `arredonda` pra inteiro. |
+
+### O que **nao** tem
+
+Sem `potencia`/`**`, `log`, `sin`/`cos`, `pi`, `e`, `formato` (printf-style),
+`aleatorio_int(max)`, `dorme`. Pra potencia usa multiplicacao numa `gambiarra`,
+pra tempo/dorme voce precisa embutir ou chamar binario via `busca`/OS shell —
+nao existe builtin de sistema ainda.
+
+### Exemplo
+
+```gambiarrascript
+mostra raiz(144)         # 12
+mostra abs(-42)          # 42
+mostra teto(3.14)        # 4
+mostra chao(3.99)        # 3
+mostra arredonda(3.5)    # 4
+mostra min(7, 2, 9, 1)   # 1
+mostra max(7, 2, 9, 1)   # 9
+
+bota n = aleatorio(100)              # 0 a 99.99...
+mostra "numero do dia: " + arredonda(n)
+
+gambiarra potencia(base, expoente)
+    bota out = 1
+    pra_cada i de 1 ate expoente
+        bota out = out * base
+    acabou_finalmente
+    funciona out
+acabou_finalmente
+mostra potencia(2, 10)             # 1024
+```
+
+## JSON
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `de_json(texto)` | `(texto)` | valor (dicionario / lista / texto / numero / booleano / `nada`) |
+| `pra_json(valor)` | `(valor)` | `texto` (saida compacta, sem espacos) |
+
+Chaves viram sempre **texto** no `de_json` — um JSON `{"1": 1}` vira um
+dicionario com chave Numero `"1"` (texto), nao Numero `1`. Veja [JSON](/docs/json).
+
+## Arquivo
+
+| Builtin | Assinatura | Devolve | Notas |
+| --- | --- | --- | --- |
+| `le_arquivo(caminho)` | `(texto)` | `texto` ou `Erro` | `os.ReadFile`, path relativo ao **CWD do processo** (nao ao script) |
+| `escreve_arquivo(caminho, texto)` | `(texto, texto)` | `nada` ou `Erro` | `os.WriteFile` modo `0644`; sempre sobrescreve (sem append) |
+
+```gambiarrascript
+escreve_arquivo("saida.gs", `# gerado pela GambiarraScript
+mostra "ola"`)
+mostra le_arquivo("saida.gs")
+```
+
+## HTTP cliente
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `busca(url, [opcoes])` | `(texto, [dicionario])` | `dicionario` `{status, ok, corpo, cabecalhos}` |
+
+Detalhes das `opcoes` (`metodo`, `corpo`, `cabecalhos`, `timeout`) e formato
+da resposta em [HTTP (cliente)](/docs/http).
+
+## Servidor HTTP
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `rota(metodo, caminho, handler)` | `(texto, texto, gambiarra)` | `nada` |
+| `escuta(porta)` | `(numero)` | bloqueia servindo (serial) |
+
+Handler recebe um dicionario `pedido` e devolve `texto`, `nada` ou
+dicionario `{status, corpo, cabecalhos}`. Veja [Servidor HTTP](/docs/servidor).
+
+## Console e CLI
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `pergunta([prompt])` | `([texto])` | `texto` — le uma linha do stdin (trim `\r\n`) |
+| `argumentos()` | `()` | `lista` de textos — args passados apos o script |
+| `escreve(texto)` | `(texto)` | `nada` — escreve no stdout sem newline |
+| `escreve_erro(texto)` | `(texto)` | `nada` — escreve no stderr |
+| `env(nome)` | `(texto)` | `texto` ou `nada` — variavel de ambiente |
+| `le_tudo()` | `()` | `texto` — le todo stdin ate EOF |
+| `le_linhas()` | `()` | `lista` de textos — stdin uma linha por item |
+
+```gambiarrascript
+bota nome = pergunta("como voce se chama? ")
+mostra "salve, " + nome
+
+pra_cada arg em argumentos()
+    mostra "arg: " + arg
+acabou_finalmente
+```
+
+Rode `gs roda script.gs primeiro segundo terceiro` — `argumentos()` retorna
+`["primeiro", "segundo", "terceiro"]`.
+
+## Concorrencia
+
+| Builtin | Assinatura | Devolve | Notas |
+| --- | --- | --- | --- |
+| `cano([cap])` | `() ou (numero)` | `Cano` | canal (Go channel); `0` ou sem arg = sincrono |
+| `envia(cano, v)` | `(Cano, valor)` | `nada` ou `Erro` | bloqueia ate ter espaco ou receptor |
+| `recebe(cano)` | `(Cano)` | `valor` ou `nada` | bloqueia ate ter algo; `nada` se fechado e vazio |
+| `fecha(cano ou conexao)` | `(Cano ou Nativo)` | `nada` | idempotente; tambem fecha conexao de banco |
+| `espera(futuro ou lista)` | `(Futuro ou lista de Futuros)` | `valor` ou `lista` | bloqueia ate resolver (wait) |
+| `espera(recebido, esperado)` | `(valor, valor)` | `nada` | **assert de teste** (ambiguidade resolvivel por arity) |
+| `paralelo(lista, fn)` | `(lista, gambiarra)` | `lista` | aplica fn em paralelo (ate 256 goroutines) |
+| `afirma(cond, [msg])` | `(valor, [texto])` | `nada` | assert de teste |
+
+A keyword `bora fn(args)` (nao builtin — statement/prefix) dispara `fn`
+em paralelo e devolve `Futuro`. Detalhes em [Concorrencia](/docs/concorrencia).
+
+## O que nao existe ainda
+
+Builfins ausente mas usual em linguagens dinamicas:
+
+- Ambiente/`ambiente()` / env vars
+- Tempo: `agora()`, `dorme(segundos)`
+- Aleatorio inteiro, semente manual
+- Sistema: `sai()`, `exec(cmd)`
+- Regex (sem `match`, `substitui_regex`, etc. — `substitui` so faz string fixa)
+- Tipo: `tipo(x)` / `typeof`, `e_lista`, `e_dic`
+- Lista: `insere`, `fatia_lista`, `acha`, `acha_indice`, `cada`/`para_cada` ja existe pra lista mas nao `reduce`
+- Numero: potencia, log, trigonometria
+- Arquivo: append, binario, listagem de dir
+
+Quando algo aqui em cima fizer falta, a saida e escrever numa `gambiarra` em
+GambiarraScript — a maior parte do que falta da pra fazer com os builtins
+existem combinados. Veja [Receitas](/docs/exemplos) pra ideias.

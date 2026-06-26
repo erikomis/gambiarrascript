@@ -1,0 +1,30 @@
+---
+title: Modulos
+description: importa "caminho.gs" pra reaproveitar codigo entre arquivos.
+---
+
+```gambiarrascript
+importa "util.gs"
+
+mostra dobra(5)        # definido em util.gs
+```
+
+`importa "caminho"` resolve o caminho relativo ao **diretorio base** do script
+que importa. Cada import carrega o modulo de novo; o resultado e mesclado no
+escopo do importador: tudo que o modulo definiu (variaveis, funcoes) fica
+visivel como se fosse parte do mesmo arquivo.
+
+Veja `examples/modulos/` no repo pra um exemplo completo (`principal.gs`
+importa `util.gs`).
+
+## Resolucao de caminho
+
+- Relativo -> relativo ao dir base (setado pelo runner; via CLI e o dir do
+  arquivo `.gs` principal).
+- Absoluto -> usado direto.
+
+## Notas
+
+- Importa e **execucao literal** do modulo; nao existe `export`/`nao-export`.
+  tudo vaza.
+- Ciclos de importacao viram recursao (cuidado com stack).

@@ -1,0 +1,136 @@
+---
+title: Textos
+description: Aspas duplas com escape, crase pra string crua e a familia de builtins de texto.
+---
+
+Texto em GambiarraScript tem dois literais e uma familia de builtins.
+
+## Literais
+
+### Aspas duplas `"..."`
+
+Aceitam escapes: `\n` (newline), `\t` (tab), `\"` (aspas), `\\` (barra). Qualquer
+outro `\x` (tipo `\j`, `\m`) e mantido literal — barra e tudo — para servir
+de regex, caminho Windows, etc.
+
+```gambiarrascript
+mostra "linha1\nlinha2"
+mostra "aspas: \"gota\""
+mostra "regex: \\d+          (literal, nao escapa)"
+```
+
+### Crase `` `...` `` (string crua)
+
+Nao processa escape nenhum, aceita multiline e nao precisa escapar aspas
+duplas. Perfeita pra JSON, regex, Windows path:
+
+```gambiarrascript
+bota j = `{"nome": "Erik", "tags": ["go", "gs"]}`
+mostra de_json(j)["nome"]                    # Erik
+mostra `c:\Users\erik\arquivo.txt`           # Windows path literal
+mostra `linha1
+linha2
+linha3`                                      # multiline
+```
+
+Dentro de crases, `\n` e barra + n literal. Pra escape real, use aspas duplas.
+
+## Concatenacao
+
+`+` concatena se **qualquer** lado for texto (usa `Inspect()` no lado
+nao-texto):
+
+```gambiarrascript
+mostra "saldo: " + 100          # "saldo: 100"
+mostra "1" + 2                  # "12"
+mostra 1 + 2 + "x"              # "3x" (soma primeiro, depois concatena)
+mostra "dev " + deu_bom         # "dev deu_bom"
+```
+
+Precedencia: `+` aritmetico faz conta primeiro, so concatena quando chega no
+`+` que tem texto de um lado. Por isso `1 + 2 + "x"` vira `"3x"`, nao `"12x"`.
+
+## Comparacao e igualdade
+
+`==` e `!=` comparam textos caractere a caractere. `< > <= >=` **nao** estao
+definidos pra texto (so pra numero) — use `ordena(lista)` ou converta com
+`numero()` pra comparar.
+
+## Builtins de texto
+
+| Builtin | Assinatura | Devolve | Notas |
+| --- | --- | --- | --- |
+| `tamanho(t)` | `(texto)` | `numero` | conta runes (nao bytes) — suporta acento |
+| `maiusculo(t)` | `(texto)` | `texto` | `ToUpper` |
+| `minusculo(t)` | `(texto)` | `texto` | `ToLower` |
+| `tira_espaco(t)` | `(texto)` | `texto` | `TrimSpace` (tira espacos, tabs, newlines das pontas) |
+| `substitui(t, antigo, novo)` | `(texto, texto, texto)` | `texto` | troca **todas** as ocorrencias (`ReplaceAll`) |
+| `separa(t, sep)` | `(texto, texto)` | `lista` | quebra por separador (`strings.Split`) |
+| `junta(lista, sep)` | `(lista, texto)` | `texto` | cola com separador (cada elem via `Inspect`) |
+| `fatia(t, inicio, [fim])` | `(texto, numero, [numero])` | `texto` | rune-slice; clampa `i>=0` e `j<=len`; sem `fim` vai ate o fim |
+| `contem(t, sub)` | `(texto, texto)` | `booleano` | `strings.Contains` |
+| `comeca_com(t, prefixo)` | `(texto, texto)` | `booleano` | `HasPrefix` |
+| `termina_com(t, sufixo)` | `(texto, texto)` | `booleano` | `HasSuffix` |
+| `numero(t)` | `(texto)` | `numero` | `ParseFloat` (trim espacos); texto nao-numerico vira `NaN` |
+| `texto(v)` | `(qualquer)` | `texto` | `v.Inspect()` — conversao universal |
+
+### Exemplo completo
+
+```gambiarrascript
+bota frase = "  GambiarraScript e 10/10  "
+bota limpa = tira_espaco(frase)
+
+mostra limpa                              # "GambiarraScript e 10/10"
+mostra maiusculo(limpa)                   # "GAMBIARRASCRIPT E 10/10"
+mostra minusculo(limpa)                   # "gambiarrascript e 10/10"
+mostra contem(limpa, "10/10")             # deu_bom
+mostra comeca_com(limpa, "Gambiarra")     # deu_bom
+mostra termina_com(limpa, "10/10")        # deu_bom
+
+bota partes = separa("salve,tropa,da,gambiarra", ",")
+mostra partes                             # ["salve", "tropa", "da", "gambiarra"]
+mostra junta(partes, " | ")               # "salve | tropa | da | gambiarra"
+
+mostra substitui("banana", "a", "o")      # "bonono" (todas as ocorrencias)
+mostra fatia("gambiarra", 0, 4)            # "gamb"
+mostra fatia("gambiarra", 4)              # "iarra"
+mostra tamanho("caju")                    # 4
+```
+
+## UTF-8
+
+Como `tamanho` e `fatia` operam em **runes**, acentos contam como 1 caractere:
+
+```gambiarrascript
+mostra tamanho("caju")        # 4
+mostra tamanho("cajú")        # 4 (nao 5)
+mostra fatia("gambiárra", 0, 4)  # "gamb"
+```
+
+## Receitas rapidas
+
+```gambiarrascript
+# inverter uma string (nao tem builtin; faz na unha)
+gambiarra inverte_texto(s)
+    bota chars = separa(s, "")
+    inverte(chars)
+    funciona junta(chars, "")
+acabou_finalmente
+mostra inverte_texto("gambiarra")         # "arraibmag"
+
+# repetir uma string N vezes
+gambiarra repete(s, n)
+    bota out = ""
+    pra_cada i de 1 ate n
+        bota out = out + s
+    acabou_finalmente
+    funciona out
+acabou_finalmente
+mostra repete("ba", 3)                    # "bababa"
+
+# parse CSV simples
+bota linha = "Erik;25;Sao Paulo"
+mostra separa(linha, ";")                 # ["Erik", "25", "Sao Paulo"]
+```
+
+Mais em [Biblioteca padrao](/docs/biblioteca) e [Receitas](/docs/exemplos).
