@@ -1,0 +1,43 @@
+services:
+  build:
+    image: gambiarrascript
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./examples:/work/examples
+    command: ["--help"]
+
+  test:
+    image: gambiarrascript-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["go", "test", "./..."]
+
+  vet:
+    image: gambiarrascript-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["go", "vet", "./..."]
+
+  roda:
+    image: gambiarrascript
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./examples:/work/examples
+    entrypoint: ["gs", "roda"]
+    command: ["examples/salve.gs"]
+
+  formata:
+    image: gambiarrascript
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./examples:/work/examples
+    entrypoint: ["gs", "formata"]
+    command: ["examples/gambiarra.gs"]
