@@ -28,6 +28,37 @@ const (
 	OpMinus
 	OpNao
 	OpMostra
+	// --- fase 6b ---
+	OpGetGlobal
+	OpSetGlobal
+	OpJump
+	OpJumpIfFalse
+	OpJumpIfTrue
+	OpVaza
+	OpContinua
+	OpMenor
+	OpMenorEqual
+	// --- fase 6c: colecoes ---
+	OpArray     // numElems (2 bytes): cria lista dos ultimos N do stack
+	OpHash      // numPares (2 bytes): 2*N valores na pilha -> Dicionario
+	OpIndex     // pop idx, pop container, push container[idx]
+	OpIndexSet  // pop val, pop idx, pop container, atribui
+	// --- fase 6d: funcoes ---
+	OpClosure      // constIdx (2): cria closure apontando pra CompiledFunction + freevars
+	OpCall          // argc (1): chama funcao na pilha
+	OpReturn        // retorna valor (pop frame)
+	OpReturnNada    // retorna nada
+	OpGetLocal      // idx (1): push locals[bp+idx]
+	OpSetLocal      // idx (1): pop -> locals[bp+idx]
+	OpGetBuiltin    // idx (2): push builtin registrado
+	OpCallBuiltin   // idx (2) + argc (1)
+	OpGetFree       // idx (1): variavel capturada
+	// --- fase 6e: erros ---
+	OpThrow     // pop erro, unwinding
+	OpTry       // catchAddr (2): registra handler em catchStack
+	OpTryEnd    // desempilha handler atual
+	// misc
+	OpHalt // para execucao
 )
 
 type Definition struct {
@@ -36,23 +67,54 @@ type Definition struct {
 }
 
 var definitions = map[Opcode]*Definition{
-	OpConstant:     {"OpConstant", []int{2}},
-	OpPop:          {"OpPop", []int{}},
-	OpAdd:          {"OpAdd", []int{}},
-	OpSub:          {"OpSub", []int{}},
-	OpMul:          {"OpMul", []int{}},
-	OpDiv:          {"OpDiv", []int{}},
-	OpMod:          {"OpMod", []int{}},
-	OpTrue:         {"OpTrue", []int{}},
-	OpFalse:        {"OpFalse", []int{}},
-	OpNada:         {"OpNada", []int{}},
-	OpEqual:        {"OpEqual", []int{}},
-	OpNotEqual:     {"OpNotEqual", []int{}},
-	OpGreaterThan:  {"OpGreaterThan", []int{}},
+	OpConstant:      {"OpConstant", []int{2}},
+	OpPop:           {"OpPop", []int{}},
+	OpAdd:           {"OpAdd", []int{}},
+	OpSub:           {"OpSub", []int{}},
+	OpMul:           {"OpMul", []int{}},
+	OpDiv:           {"OpDiv", []int{}},
+	OpMod:           {"OpMod", []int{}},
+	OpTrue:          {"OpTrue", []int{}},
+	OpFalse:         {"OpFalse", []int{}},
+	OpNada:          {"OpNada", []int{}},
+	OpEqual:         {"OpEqual", []int{}},
+	OpNotEqual:      {"OpNotEqual", []int{}},
+	OpGreaterThan:   {"OpGreaterThan", []int{}},
 	OpGreaterEqual: {"OpGreaterEqual", []int{}},
-	OpMinus:        {"OpMinus", []int{}},
-	OpNao:          {"OpNao", []int{}},
-	OpMostra:       {"OpMostra", []int{}},
+	OpMinus:         {"OpMinus", []int{}},
+	OpNao:           {"OpNao", []int{}},
+	OpMostra:        {"OpMostra", []int{}},
+	// fase 6b
+	OpGetGlobal:     {"OpGetGlobal", []int{2}},
+	OpSetGlobal:     {"OpSetGlobal", []int{2}},
+	OpJump:          {"OpJump", []int{2}},
+	OpJumpIfFalse:   {"OpJumpIfFalse", []int{2}},
+	OpJumpIfTrue:    {"OpJumpIfTrue", []int{2}},
+	OpVaza:          {"OpVaza", []int{}},
+	OpContinua:      {"OpContinua", []int{}},
+	OpMenor:         {"OpMenor", []int{}},
+	OpMenorEqual:    {"OpMenorEqual", []int{}},
+	// fase 6c
+	OpArray:         {"OpArray", []int{2}},
+	OpHash:          {"OpHash", []int{2}},
+	OpIndex:         {"OpIndex", []int{}},
+	OpIndexSet:      {"OpIndexSet", []int{}},
+	// fase 6d
+	OpClosure:       {"OpClosure", []int{2}},
+	OpCall:          {"OpCall", []int{1}},
+	OpReturn:        {"OpReturn", []int{}},
+	OpReturnNada:    {"OpReturnNada", []int{}},
+	OpGetLocal:      {"OpGetLocal", []int{1}},
+	OpSetLocal:      {"OpSetLocal", []int{1}},
+	OpGetBuiltin:    {"OpGetBuiltin", []int{2}},
+	OpCallBuiltin:   {"OpCallBuiltin", []int{3}},
+	OpGetFree:       {"OpGetFree", []int{1}},
+	// fase 6e
+	OpThrow:         {"OpThrow", []int{}},
+	OpTry:           {"OpTry", []int{2}},
+	OpTryEnd:        {"OpTryEnd", []int{}},
+	// misc
+	OpHalt:          {"OpHalt", []int{}},
 }
 
 func Lookup(op byte) (*Definition, error) {
@@ -78,6 +140,8 @@ func Make(op Opcode, operands ...int) []byte {
 	for i, o := range operands {
 		w := def.OperandWidths[i]
 		switch w {
+		case 1:
+			instrucao[offset] = byte(o)
 		case 2:
 			binary.BigEndian.PutUint16(instrucao[offset:], uint16(o))
 		}
@@ -91,6 +155,8 @@ func ReadOperands(def *Definition, ins Instructions) ([]int, int) {
 	offset := 0
 	for i, w := range def.OperandWidths {
 		switch w {
+		case 1:
+			operands[i] = int(ReadUint8(ins[offset:]))
 		case 2:
 			operands[i] = int(ReadUint16(ins[offset:]))
 		}
@@ -99,9 +165,8 @@ func ReadOperands(def *Definition, ins Instructions) ([]int, int) {
 	return operands, offset
 }
 
-func ReadUint16(ins Instructions) uint16 {
-	return binary.BigEndian.Uint16(ins)
-}
+func ReadUint8(ins Instructions) uint8  { return ins[0] }
+func ReadUint16(ins Instructions) uint16 { return binary.BigEndian.Uint16(ins) }
 
 func (ins Instructions) String() string {
 	var out bytes.Buffer
@@ -130,6 +195,8 @@ func (ins Instructions) fmtInstrucao(def *Definition, operands []int) string {
 		return def.Name
 	case 1:
 		return fmt.Sprintf("%s %d", def.Name, operands[0])
+	case 2:
+		return fmt.Sprintf("%s %d %d", def.Name, operands[0], operands[1])
 	}
 	return fmt.Sprintf("ERRO: fmtInstrucao nao trata %d operandos", n)
 }

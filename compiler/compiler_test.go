@@ -36,9 +36,15 @@ func roda(t *testing.T, casos []casoComp) {
 			t.Fatalf("Compile(%q): %v", c.input, err)
 		}
 		bc := comp.Bytecode()
+		// O op.OpHalt é emitido no fim de cada Program — necessario pra VM
+		// parar. Sera desconsiderado nas comparacos de teste.
+		ins := bc.Instructions
+		if len(ins) > 0 && ins[len(ins)-1] == byte(code.OpHalt) {
+			ins = ins[:len(ins)-1]
+		}
 		esp := concat(c.instrucoes)
-		if bc.Instructions.String() != esp.String() {
-			t.Fatalf("input %q instrucoes:\ngot:\n%s\nesperado:\n%s", c.input, bc.Instructions.String(), esp.String())
+		if ins.String() != esp.String() {
+			t.Fatalf("input %q instrucoes:\ngot:\n%s\nesperado:\n%s", c.input, ins.String(), esp.String())
 		}
 		if len(bc.Constants) != len(c.constantes) {
 			t.Fatalf("input %q: %d constantes, esperado %d", c.input, len(bc.Constants), len(c.constantes))
@@ -87,15 +93,43 @@ func TestCompilaMostraEAritmetica(t *testing.T) {
 	})
 }
 
-func TestCompilaMenorTrocaOperandos(t *testing.T) {
+func TestCompilaMenor(t *testing.T) {
 	roda(t, []casoComp{
 		{
 			input:      "1 < 2",
-			constantes: []interface{}{2.0, 1.0}, // 2 e compilado ANTES de 1 (swap)
+			constantes: []interface{}{1.0, 2.0},
 			instrucoes: []code.Instructions{
 				code.Make(code.OpConstant, 0),
 				code.Make(code.OpConstant, 1),
-				code.Make(code.OpGreaterThan),
+				code.Make(code.OpMenor),
+				code.Make(code.OpPop),
+			},
+		},
+	})
+}
+
+func TestCompilaEComShortCircuit(t *testing.T) {
+	// Novo layout do `e` na VM (cada jump condicional ja popa):
+	//   0000 OpTrue                 ; left
+	//   0001 OpJumpIfFalse 12      ; se left false -> 12 (OpFalse)
+	//   0004 OpTrue                 ; right
+	//   0005 OpJumpIfFalse 12       ; se right false -> 12
+	//   0008 OpTrue                 ; ambos truthy
+	//   0009 OpJump 13              ; pula o OpFalse
+	//   0012 OpFalse                ; label falso
+	//   0013 OpPop                  ; ExpressionStatement
+	roda(t, []casoComp{
+		{
+			input:      "deu_bom e deu_bom",
+			constantes: []interface{}{},
+			instrucoes: []code.Instructions{
+				code.Make(code.OpTrue),
+				code.Make(code.OpJumpIfFalse, 12),
+				code.Make(code.OpTrue),
+				code.Make(code.OpJumpIfFalse, 12),
+				code.Make(code.OpTrue),
+				code.Make(code.OpJump, 13),
+				code.Make(code.OpFalse),
 				code.Make(code.OpPop),
 			},
 		},
@@ -134,12 +168,18 @@ func TestCompilaPrefixoELiterais(t *testing.T) {
 }
 
 func TestCompilaNaoSuportadoDaErro(t *testing.T) {
+	// Fase 6d concluida: gambiarra/bota/etc compilam. Hoje so `importa`
+	// continua nao suportado pela VM.
 	comp := New()
-	if err := comp.Compile(parse("deu_bom e deu_bom")); err == nil {
-		t.Fatal("'e' ainda nao e suportado na 6a, deveria dar erro de compilacao")
+	if err := comp.Compile(parse("importa \"nao_existe.gs\"")); err == nil {
+		t.Fatal("'importa' nao e suportado na VM, deveria dar erro de compilacao")
 	}
 	comp2 := New()
-	if err := comp2.Compile(parse("bota x = 1")); err == nil {
-		t.Fatal("'bota' ainda nao e suportado na 6a, deveria dar erro de compilacao")
+	if err := comp2.Compile(parse("bota x = 1")); err != nil {
+		t.Fatalf("'bota' deveria compilar agora: %v", err)
+	}
+	comp3 := New()
+	if err := comp3.Compile(parse("gambiarra f()\n    funciona 1\nacabou_finalmente")); err != nil {
+		t.Fatalf("'gambiarra' deveria compilar agora (fase 6d): %v", err)
 	}
 }
