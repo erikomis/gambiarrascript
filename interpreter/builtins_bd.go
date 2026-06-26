@@ -1,3 +1,9 @@
+//go:build !js
+
+// Acesso a banco de dados (conecta/fecha). Fica de fora do build wasm (js)
+// porque os drivers (modernc.org/sqlite via libc) nao compilam para
+// GOOS=js/GOARCH=wasm. No navegador o stub em builtins_bd_js.go assume o lugar.
+
 package interpreter
 
 import (
