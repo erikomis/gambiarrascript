@@ -27,6 +27,10 @@ const (
 	DICIONARIO_OBJ = "DICIONARIO"
 
 	NATIVO_OBJ = "NATIVO"
+
+	// concorrencia
+	FUTURO_OBJ = "FUTURO"
+	CANO_OBJ   = "CANO"
 )
 
 type Object interface {
@@ -112,6 +116,24 @@ func (f *Funcao) Inspect() string {
 	return "gambiarra(" + strings.Join(nomes, ", ") + ")"
 }
 
+// CompiledFunction e a representacao de uma funcao na VM: bytecode + numArgs +
+// numLocals (slots pra params e locals no frame) + freeVars capturadas.
+// Reaproveita o mesmo FUNCAO_OBJ pra nao ter que adicionar outro ObjectType e
+// quebrar scripts que checam Inspect/Type. Na arvore (tree-walker) o campo
+// Compiled e nil; na VM usamos so os campos Bytecode/NumArgs/NumLocals/Free.
+type CompiledFunction struct {
+	Name      string
+	NumArgs   int
+	NumLocals int
+	Bytecode  []byte
+	Free      []Object
+}
+
+func (f *CompiledFunction) Type() ObjectType { return FUNCAO_OBJ }
+func (f *CompiledFunction) Inspect() string {
+	return "gambiarra<" + f.Name + ">(vm)"
+}
+
 type Retorno struct{ Value Object }
 
 func (r *Retorno) Type() ObjectType { return RETORNO_OBJ }
@@ -132,6 +154,9 @@ type Erro struct {
 	Kind    string       // "runtime", "builtin", "io", "rede", "parse", "usuario"
 	Stack   []StackFrame // traço de pilha, do mais externo pro mais interno
 	Cause   *Erro        // erro original (para encadeamento / wrap)
+	Handled bool         // true depois que um `arruma ... quebrou` capturou;
+	                     // significa "ja foi tratado", nao deve voltar a
+	                     // propagar — deixa o usuario logar/inspecionar.
 }
 
 func (e *Erro) Type() ObjectType { return ERRO_OBJ }
@@ -222,6 +247,107 @@ type Nativo struct {
 
 func (n *Nativo) Type() ObjectType { return NATIVO_OBJ }
 func (n *Nativo) Inspect() string  { return "<nativo: " + n.Rotulo + ">" }
+
+// Futuro e o valor devolvido por `bora fn(args)`: representa uma chamada
+// concorrente em andamento. `Valor` so e preenchido quando a goroutine termina;
+// ate la `Pronto` e falso. Usa-se `espera(futuro)` pra bloquear ate resolver.
+type Futuro struct {
+	// pronto e fechado quando a goroutine termina; apos isso Valor e estavel.
+	pronto chan struct{}
+	val    Object // valor devolvido pela fn (pode ser *Erro)
+	once   Once
+}
+
+// Once e uma casca leve em cima de sync.Once pra evitar importar sync aqui
+// (mantem o pacote object independente).
+type Once struct {
+	done chan struct{}
+}
+
+func NovaOnce() Once {
+	return Once{done: make(chan struct{})}
+}
+
+func (o *Once) Do(f func()) {
+	select {
+	case <-o.done:
+		// ja rodou — ignora
+		return
+	default:
+		f()
+		close(o.done)
+	}
+}
+
+// Aguarda bloqueia a goroutine ate o futuro resolver e devolve o valor.
+// Multiplas chamadas concorrentes sao seguras.
+func (f *Futuro) Aguarda() Object {
+	<-f.pronto
+	return f.val
+}
+
+// Resolve completa o futuro com o valor. So a primeira chamada tem efeito;
+// as demais sao silenciadas (defensive contra goroutine que chama duas vezes).
+func (f *Futuro) Resolve(v Object) {
+	f.once.Do(func() {
+		f.val = v
+		close(f.pronto)
+	})
+}
+
+// NovoFuturo cria um Futuro vazio (nao resolvido).
+func NovoFuturo() *Futuro {
+	return &Futuro{
+		pronto: make(chan struct{}),
+		once:   NovaOnce(),
+	}
+}
+
+func (f *Futuro) Type() ObjectType { return FUTURO_OBJ }
+func (f *Futuro) Inspect() string {
+	select {
+	case <-f.pronto:
+		return "<futuro resolvido: " + f.val.Inspect() + ">"
+	default:
+		return "<futuro em andamento>"
+	}
+}
+
+// Cano e o canal de mensagens (estilo Go channel) da linguagem. Permite
+// producer/consumer entre goroutines. Pode ser bufferizado (capacidade > 0)
+// ou sincrono (capacidade 0 — envia bloqueia ate ter receptor).
+type Cano struct {
+	Ch    chan Object
+	Cap   int // capacidade pedida (0 = unbuffered)
+	fecha Once
+}
+
+// NovoCano cria um canal com a capacidade dada.
+func NovoCano(capacidade int) *Cano {
+	if capacidade < 0 {
+		capacidade = 0
+	}
+	return &Cano{
+		Ch:    make(chan Object, capacidade),
+		Cap:   capacidade,
+		fecha: NovaOnce(),
+	}
+}
+
+// Fecha o canal (idempotente).
+func (c *Cano) Fechar() {
+	c.fecha.Do(func() {
+		close(c.Ch)
+	})
+}
+
+func (c *Cano) Type() ObjectType { return CANO_OBJ }
+func (c *Cano) Inspect() string {
+	if c.Cap == 0 {
+		return "<cano sincrono>"
+	}
+	return "<cano buffer=" + strconv.Itoa(c.Cap) + ">"
+}
 
 // inspectComAspas envolve textos em aspas (estilo JSON) e usa Inspect no resto.
 func inspectComAspas(o Object) string {

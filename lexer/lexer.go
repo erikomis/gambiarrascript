@@ -130,6 +130,16 @@ func (l *Lexer) skipWhitespaceAndComments() {
 			for l.ch != '\n' && l.ch != 0 {
 				l.readChar()
 			}
+		case l.ch == '/' && l.peekChar() == '*':
+			l.readChar() // consome '/'
+			l.readChar() // consome '*'
+			for !(l.ch == '*' && l.peekChar() == '/') && l.ch != 0 {
+				l.readChar()
+			}
+			if l.ch == '*' {
+				l.readChar() // consome '*'
+				l.readChar() // consome '/'
+			}
 		default:
 			return
 		}

@@ -226,6 +226,19 @@ func (s *ArrumaStatement) String() string {
 	return "arruma " + s.Try.String() + "quebrou " + s.ErrName.String() + " " + s.Catch.String() + "acabou_finalmente"
 }
 
+// ImportaStatement carrega e executa outro arquivo .gs, trazendo suas
+// definicoes (bota/gambiarra) para o escopo atual.
+type ImportaStatement struct {
+	Token token.Token
+	Path  Expression
+}
+
+func (s *ImportaStatement) statementNode()       {}
+func (s *ImportaStatement) TokenLiteral() string { return s.Token.Literal }
+func (s *ImportaStatement) String() string {
+	return "importa " + s.Path.String()
+}
+
 // ---- Expressions ----
 
 type Identifier struct {
@@ -240,6 +253,8 @@ func (e *Identifier) String() string       { return e.Value }
 type NumeroLiteral struct {
 	Token token.Token
 	Value float64
+	Int   int64 // valor exato quando EhInt
+	EhInt bool  // true se o literal nao tem ponto/expoente (inteiro)
 }
 
 func (e *NumeroLiteral) expressionNode()      {}
@@ -356,4 +371,22 @@ func (e *DicionarioLiteral) String() string {
 		partes[i] = par.Chave.String() + ": " + par.Valor.String()
 	}
 	return "{" + strings.Join(partes, ", ") + "}"
+}
+
+// BoraExpression e a prefix-expression `bora fn(args)`: dispara a chamada
+// de `fn` numa goroutine e devolve imediatamente um Futuro. O Call interno
+// e a expressao que seria avaliada de forma sincrona; o `bora` so envelopa
+// pra rodar em paralelo.
+type BoraExpression struct {
+	Token token.Token
+	Call  *CallExpression // chamada que sera despachada em paralelo
+}
+
+func (e *BoraExpression) expressionNode()      {}
+func (e *BoraExpression) TokenLiteral() string { return e.Token.Literal }
+func (e *BoraExpression) String() string {
+	if e.Call != nil {
+		return "bora " + e.Call.String()
+	}
+	return "bora"
 }

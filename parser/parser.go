@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"gambiarrascript/ast"
 	"gambiarrascript/lexer"
@@ -79,6 +80,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.LPAREN, p.parseGrouped)
 	p.registerPrefix(token.LBRACKET, p.parseLista)
 	p.registerPrefix(token.LBRACE, p.parseDicionario)
+	p.registerPrefix(token.BORA, p.parseBora) // bora fn(args) -> Futuro
 
 	p.infixParseFns = map[token.TokenType]infixParseFn{}
 	for _, tt := range []token.TokenType{
@@ -172,9 +174,16 @@ func (p *Parser) parseIdentifier() ast.Expression {
 }
 
 func (p *Parser) parseNumero() ast.Expression {
-	val, err := strconv.ParseFloat(p.curToken.Literal, 64)
+	lit := p.curToken.Literal
+	// Sem ponto nem expoente => inteiro exato (se couber em int64).
+	if !strings.ContainsAny(lit, ".eE") {
+		if iv, err := strconv.ParseInt(lit, 10, 64); err == nil {
+			return &ast.NumeroLiteral{Token: p.curToken, Value: float64(iv), Int: iv, EhInt: true}
+		}
+	}
+	val, err := strconv.ParseFloat(lit, 64)
 	if err != nil {
-		p.addErro(p.curToken.Line, p.curToken.Coluna, "numero estranho %q", p.curToken.Literal)
+		p.addErro(p.curToken.Line, p.curToken.Coluna, "numero estranho %q", lit)
 		return nil
 	}
 	return &ast.NumeroLiteral{Token: p.curToken, Value: val}
@@ -197,6 +206,22 @@ func (p *Parser) parsePrefix() ast.Expression {
 	p.nextToken()
 	exp.Right = p.parseExpression(PREFIX)
 	return exp
+}
+
+// parseBora trata `bora fn(args)`: le a expressao a direita (que tem que
+// ser uma chamada de funcao) e envelopa como BoraExpression. Permite usos
+// como `bora fib(40)` como statement ou `bota f = bora fib(40)`.
+func (p *Parser) parseBora() ast.Expression {
+	tok := p.curToken
+	p.nextToken() // consome `bora`
+	exp := p.parseExpression(PREFIX) // PRECISA vir uma chamada `fn(...)`
+	call, ok := exp.(*ast.CallExpression)
+	if !ok {
+		p.addErro(tok.Line, tok.Coluna,
+			"depois do `bora` tem que vir uma chamada de gambiarra tipo f(args), veio outra coisa")
+		return nil
+	}
+	return &ast.BoraExpression{Token: tok, Call: call}
 }
 
 func (p *Parser) parseInfix(left ast.Expression) ast.Expression {
@@ -311,6 +336,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseGambiarra()
 	case token.ARRUMA:
 		return p.parseArruma()
+	case token.IMPORTA:
+		return p.parseImporta()
 	default:
 		return p.parseExpressionStatement()
 	}
@@ -480,6 +507,13 @@ func (p *Parser) parseFunctionParameters() []*ast.Identifier {
 	}
 	p.nextToken() // curToken = )
 	return params
+}
+
+func (p *Parser) parseImporta() ast.Statement {
+	stmt := &ast.ImportaStatement{Token: p.curToken}
+	p.nextToken()
+	stmt.Path = p.parseExpression(LOWEST)
+	return stmt
 }
 
 func (p *Parser) parseArruma() ast.Statement {

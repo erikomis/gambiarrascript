@@ -62,6 +62,10 @@ const (
 	E            = "E"
 	OU           = "OU"
 	NAO          = "NAO"
+	IMPORTA      = "IMPORTA"
+
+	// concorrencia
+	BORA = "BORA" // bora fn(args) -> Futuro
 )
 
 var keywords = map[string]TokenType{
@@ -87,6 +91,8 @@ var keywords = map[string]TokenType{
 	"e":                 E,
 	"ou":                OU,
 	"nao":               NAO,
+	"importa":           IMPORTA,
+	"bora":              BORA,
 }
 
 // LookupIdent devolve o TokenType de uma keyword, ou IDENT se for um nome comum.
