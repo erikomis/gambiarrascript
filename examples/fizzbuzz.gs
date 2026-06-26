@@ -13,3 +13,13 @@ gambiarra fizzbuzz(n)
 acabou_finalmente
 
 fizzbuzz(20)
+
+bota a = 0
+
+pra_cada i de 1 ate 1000000000
+    bota a = a + i
+acabou_finalmente
+
+mostra "a = " + a
+
+
