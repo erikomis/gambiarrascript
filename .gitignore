@@ -13,3 +13,15 @@ docs/superpowers/
 editors/vscode/node_modules/
 editors/vscode/out/
 *.vsix
+
+# saida gerada / artefatos
+saida.gs
+/package-lock.json
+
+# site de docs (web/) - artefatos gerados
+web/node_modules/
+web/.next/
+web/.source/
+web/out/
+web/next-env.d.ts
+web/*.tsbuildinfo
