@@ -48,5 +48,50 @@
     "prefix": "escuta",
     "body": ["escuta(${1:8080})"],
     "description": "Sobe o servidor HTTP na porta"
+  },
+  "Importa (modulo)": {
+    "prefix": "importa",
+    "body": ["importa \"${1:outro.gs}\""],
+    "description": "Importa outro arquivo .gs"
+  },
+  "Mapeia (lista)": {
+    "prefix": "mapeia",
+    "body": ["mapeia(${1:lista}, ${2:gambiarra})"],
+    "description": "Aplica uma gambiarra em cada item da lista"
+  },
+  "Filtra (lista)": {
+    "prefix": "filtra",
+    "body": ["filtra(${1:lista}, ${2:gambiarra})"],
+    "description": "Filtra itens da lista"
+  },
+  "Pergunta (stdin)": {
+    "prefix": "pergunta",
+    "body": ["bota ${1:nome} = pergunta(\"${2:teu nome: }\")"],
+    "description": "Le uma linha do teclado"
+  },
+  "Le arquivo": {
+    "prefix": "le_arquivo",
+    "body": ["bota ${1:txt} = le_arquivo(\"${2:caminho}\")"],
+    "description": "Le o conteudo de um arquivo"
+  },
+  "Escreve arquivo": {
+    "prefix": "escreve_arquivo",
+    "body": ["escreve_arquivo(\"${1:caminho}\", ${2:txt})"],
+    "description": "Escreve texto num arquivo"
+  },
+  "Bora (paralelo)": {
+    "prefix": "bora",
+    "body": ["bora ${1:fn}(${2:args})"],
+    "description": "Dispara uma gambiarra em paralelo (devolve Futuro)"
+  },
+  "Cano (channel)": {
+    "prefix": "cano",
+    "body": ["bota ${1:c} = cano(${2:0})"],
+    "description": "Cria um canal de mensagens (channel)"
+  },
+  "Espera (futuro)": {
+    "prefix": "espera",
+    "body": ["espera(${1:futuro})"],
+    "description": "Aguarda um Futuro e devolve o valor"
   }
 }

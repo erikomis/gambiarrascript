@@ -13,8 +13,17 @@
   ],
   "repository": {
     "comments": {
-      "match": "#.*$",
-      "name": "comment.line.number-sign.gambiarrascript"
+      "patterns": [
+        {
+          "name": "comment.block.gambiarrascript",
+          "begin": "/\\*",
+          "end": "\\*/"
+        },
+        {
+          "match": "#.*$",
+          "name": "comment.line.number-sign.gambiarrascript"
+        }
+      ]
     },
     "strings": {
       "name": "string.quoted.double.gambiarrascript",
@@ -37,13 +46,13 @@
       }
     },
     "builtins": {
-      "match": "\\b(tamanho|chaves|tem|texto|numero|busca|rota|escuta)\\b",
+      "match": "\\b(tamanho|chaves|tem|texto|numero|busca|rota|escuta|de_json|pra_json|separa|junta|maiusculo|minusculo|substitui|fatia|contem|comeca_com|termina_com|tira_espaco|adiciona|remove|ordena|inverte|mapeia|filtra|raiz|aleatorio|arredonda|teto|chao|abs|min|max|le_arquivo|escreve_arquivo|pergunta|argumentos)\\b",
       "name": "support.function.builtin.gambiarrascript"
     },
     "keywords": {
       "patterns": [
         {
-          "match": "\\b(se_colar|se_nao_colar|enquanto|pra_cada|de|ate|em|vaza|continua|arruma|quebrou|acabou_finalmente|funciona)\\b",
+          "match": "\\b(se_colar|se_nao_colar|enquanto|pra_cada|de|ate|em|vaza|continua|arruma|quebrou|acabou_finalmente|funciona|importa)\\b",
           "name": "keyword.control.gambiarrascript"
         },
         {
