@@ -1,12 +1,18 @@
 package interpreter
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"math"
+	"os"
+	"path/filepath"
+	"sync"
 
 	"gambiarrascript/ast"
+	"gambiarrascript/lexer"
 	"gambiarrascript/object"
+	"gambiarrascript/parser"
 )
 
 var (
@@ -17,19 +23,87 @@ var (
 
 type Interpreter struct {
 	out               io.Writer
+	erroOut           io.Writer // saída de diagnóstico (espera/afirma); default = os.Stderr
+	in                io.Reader
+	inBuf             *bufio.Reader
+	argumentos        []string
+	dirBase           string
 	servidor          *servidorEstado
 	builtinsInstancia map[string]*object.Builtin
+
+	// estado de testes (gs testa): contagem de asserts passa/falha no arquivo
+	// rodando agora. Zerado em resetting no rodarArquivo.
+	totalEspera    int
+	totalEsperaOk  int
+
+	// muOut protege i.out e i.erroOut — varias goroutines podem chamar
+	// mostra/escreve/escreve_erro/espera/afirma concorrentemente. Sem o lock
+	// a saida fica intercalada e podem vir pedaços pela metade.
+	muOut sync.Mutex
 }
 
 func New(out io.Writer) *Interpreter {
-	i := &Interpreter{out: out}
+	i := &Interpreter{out: out, erroOut: os.Stderr, in: os.Stdin}
 	i.servidor = &servidorEstado{rotas: map[string]*object.Funcao{}, i: i}
 	i.builtinsInstancia = map[string]*object.Builtin{
-		"rota":   {Nome: "rota", Fn: i.servidor.builtinRota},
-		"escuta": {Nome: "escuta", Fn: i.servidor.builtinEscuta},
+		"rota":        {Nome: "rota", Fn: i.servidor.builtinRota},
+		"escuta":      {Nome: "escuta", Fn: i.servidor.builtinEscuta},
+		"mapeia":      {Nome: "mapeia", Fn: i.builtinMapeia},
+		"filtra":      {Nome: "filtra", Fn: i.builtinFiltra},
+		"pergunta":    {Nome: "pergunta", Fn: i.builtinPergunta},
+		"argumentos":  {Nome: "argumentos", Fn: i.builtinArgumentos},
+		"le_tudo":     {Nome: "le_tudo", Fn: i.builtinLeTudo},
+		"le_linhas":   {Nome: "le_linhas", Fn: i.builtinLeLinhas},
+		"escreve":     {Nome: "escreve", Fn: i.builtinEscreve},
+		"escreve_erro": {Nome: "escreve_erro", Fn: i.builtinEscreveErro},
+		"env":         {Nome: "env", Fn: i.builtinEnv},
+		"paralelo":    {Nome: "paralelo", Fn: i.builtinParalelo},
+		"espera":      {Nome: "espera", Fn: i.builtinEspera},
+		"afirma":      {Nome: "afirma", Fn: i.builtinAfirma},
+		// concorrencia: canais (cano) e wait de Futuro
+		"cano":   {Nome: "cano", Fn: i.builtinCano},
+		"envia":  {Nome: "envia", Fn: i.builtinEnvia},
+		"recebe": {Nome: "recebe", Fn: i.builtinRecebe},
+		"fecha":  {Nome: "fecha", Fn: i.builtinFecha},
 	}
 	return i
 }
+
+// BuiltinsVisiveis devolve o merge das builtins globais com as instanciadas
+// (rota/escuta/pergunta/etc.). Usado pela VM pra reaproveitar as mesmas
+// implementacoes das builtins (incluindo estado de servidor HTTP).
+func (i *Interpreter) BuiltinsVisiveis() map[string]*object.Builtin {
+	out := map[string]*object.Builtin{}
+	for k, v := range builtins {
+		out[k] = v
+	}
+	for k, v := range i.builtinsInstancia {
+		out[k] = v
+	}
+	return out
+}
+
+// DefinirStderr troca o escritor de diagnóstico usado por espera()/afirma().
+// Util pra gs testa capturar o resultado dos asserts sem misturar com o out
+// normal do script.
+func (i *Interpreter) DefinirStderr(w io.Writer) { i.erroOut = w }
+
+// TotaisTeste devolve (total, ok) — quantos asserts espera()/afirma() rodaram
+// e quantos passaram. Usado pelo gs testa pra emitir o relatorio no fim.
+func (i *Interpreter) TotaisTeste() (int, int) { return i.totalEspera, i.totalEsperaOk }
+
+// ResetTeste reinicia os contadores de teste entre arquivos.
+func (i *Interpreter) ResetTeste() { i.totalEspera = 0; i.totalEsperaOk = 0 }
+
+// DefinirStdin troca o leitor de entrada usado por pergunta().
+func (i *Interpreter) DefinirStdin(r io.Reader) { i.in = r; i.inBuf = nil }
+
+// DefinirArgumentos configura os argumentos de linha de comando visiveis no
+// script via a builtin argumentos().
+func (i *Interpreter) DefinirArgumentos(args []string) { i.argumentos = args }
+
+// DefinirDirBase configura o diretorio base pra resolver importa "caminho.gs".
+func (i *Interpreter) DefinirDirBase(dir string) { i.dirBase = dir }
 
 func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
@@ -42,12 +116,17 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		if isError(val) {
 			return val
 		}
+		i.muOut.Lock()
 		fmt.Fprintln(i.out, val.Inspect())
+		i.muOut.Unlock()
 		return val
 
 	// --- literais ---
 	case *ast.NumeroLiteral:
-		return &object.Numero{Value: node.Value}
+		if node.EhInt {
+			return object.NumInt(node.Int)
+		}
+		return object.NumFloat(node.Value)
 	case *ast.TextoLiteral:
 		return &object.Texto{Value: node.Value}
 	case *ast.BooleanoLiteral:
@@ -121,6 +200,8 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		return NADA
 	case *ast.ArrumaStatement:
 		return i.evalArruma(node, env)
+	case *ast.ImportaStatement:
+		return i.evalImporta(node, env)
 	case *ast.CallExpression:
 		fn := i.Eval(node.Function, env)
 		if isError(fn) {
@@ -130,9 +211,44 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		if len(args) == 1 && isError(args[0]) {
 			return args[0]
 		}
-		return i.applyFunction(fn, args, node.Token.Line)
+		return i.applyFunction(fn, args, node.Token.Line, nomeDaChamada(node))
+	case *ast.BoraExpression:
+		return i.evalBora(node, env)
 	}
 	return NADA
+}
+
+// evalBora dispara a chamada em `node.Call` numa goroutine e devolve um
+// Futuro imediatamente. A goroutine roda i.applyFunction (mesma funcao que
+// uma chamada normal, so que em paralelo), captura o resultado (erro inclusive)
+// e resolve o Futuro. Panic dentro da fn vira *Erro (Nao deixa o processo cair).
+func (i *Interpreter) evalBora(node *ast.BoraExpression, env *object.Environment) object.Object {
+	call := node.Call
+	if call == nil {
+		return newError(node.Token.Line, "bora sem chamada — isso nao devia acontecer")
+	}
+	fn := i.Eval(call.Function, env)
+	if isError(fn) {
+		return fn
+	}
+	args := i.evalExpressions(call.Arguments, env)
+	if len(args) == 1 && isError(args[0]) {
+		return args[0]
+	}
+	linha := call.Token.Line
+	nome := nomeDaChamada(call)
+
+	fut := object.NovoFuturo()
+	go func(f *object.Futuro, fnv object.Object, argv []object.Object, lh int, nm string) {
+		defer func() {
+			if r := recover(); r != nil {
+				f.Resolve(newError(lh, "panico dentro do `bora %s`: %v", nm, r))
+			}
+		}()
+		res := i.applyFunction(fnv, argv, lh, "<bora:"+nm+">")
+		f.Resolve(res)
+	}(fut, fn, args, linha, nome)
+	return fut
 }
 
 func (i *Interpreter) evalProgram(prog *ast.Program, env *object.Environment) object.Object {
@@ -187,7 +303,10 @@ func (i *Interpreter) evalPrefix(op string, right object.Object, linha int) obje
 		if !ok {
 			return newError(linha, "nao da pra colocar - na frente de %s", right.Type())
 		}
-		return &object.Numero{Value: -num.Value}
+		if num.EhInt {
+			return object.NumInt(-num.Int)
+		}
+		return object.NumFloat(-num.Value)
 	}
 	return newError(linha, "operador prefixo desconhecido: %s", op)
 }
@@ -224,7 +343,7 @@ func (i *Interpreter) evalInfix(node *ast.InfixExpression, env *object.Environme
 	ln, lok := left.(*object.Numero)
 	rn, rok := right.(*object.Numero)
 	if lok && rok {
-		return i.evalInfixNumero(node.Operator, ln.Value, rn.Value, node.Token.Line)
+		return i.evalInfixNumero(node.Operator, ln, rn, node.Token.Line)
 	}
 
 	if node.Operator == "+" && (left.Type() == object.TEXTO_OBJ || right.Type() == object.TEXTO_OBJ) {
@@ -241,35 +360,73 @@ func (i *Interpreter) evalInfix(node *ast.InfixExpression, env *object.Environme
 	return newError(node.Token.Line, "nao da pra fazer %s %s %s", left.Type(), node.Operator, right.Type())
 }
 
-func (i *Interpreter) evalInfixNumero(op string, l, r float64, linha int) object.Object {
+func (i *Interpreter) evalInfixNumero(op string, lo, ro *object.Numero, linha int) object.Object {
+	// Caminho inteiro exato: so quando os dois lados sao inteiros. Mantem
+	// precisao acima de 2^53 (somas, contagens, multiplicacoes gigantes).
+	bothInt := lo.EhInt && ro.EhInt
+	l, r := lo.Value, ro.Value
 	switch op {
 	case "+":
-		return &object.Numero{Value: l + r}
+		if bothInt {
+			return object.NumInt(lo.Int + ro.Int)
+		}
+		return object.NumFloat(l + r)
 	case "-":
-		return &object.Numero{Value: l - r}
+		if bothInt {
+			return object.NumInt(lo.Int - ro.Int)
+		}
+		return object.NumFloat(l - r)
 	case "*":
-		return &object.Numero{Value: l * r}
+		if bothInt {
+			return object.NumInt(lo.Int * ro.Int)
+		}
+		return object.NumFloat(l * r)
 	case "/":
 		if r == 0 {
 			return newError(linha, "nao da pra dividir por zero, parca — nem na gambiarra")
 		}
-		return &object.Numero{Value: l / r}
+		// divisao exata entre inteiros continua inteiro; senao vira float.
+		if bothInt && lo.Int%ro.Int == 0 {
+			return object.NumInt(lo.Int / ro.Int)
+		}
+		return object.NumFloat(l / r)
 	case "%":
 		if r == 0 {
 			return newError(linha, "resto de divisao por zero? ai voce quer demais")
 		}
-		return &object.Numero{Value: math.Mod(l, r)}
+		if bothInt {
+			return object.NumInt(lo.Int % ro.Int)
+		}
+		return object.NumFloat(math.Mod(l, r))
 	case "<":
+		if bothInt {
+			return boolDoNativo(lo.Int < ro.Int)
+		}
 		return boolDoNativo(l < r)
 	case ">":
+		if bothInt {
+			return boolDoNativo(lo.Int > ro.Int)
+		}
 		return boolDoNativo(l > r)
 	case "<=":
+		if bothInt {
+			return boolDoNativo(lo.Int <= ro.Int)
+		}
 		return boolDoNativo(l <= r)
 	case ">=":
+		if bothInt {
+			return boolDoNativo(lo.Int >= ro.Int)
+		}
 		return boolDoNativo(l >= r)
 	case "==":
+		if bothInt {
+			return boolDoNativo(lo.Int == ro.Int)
+		}
 		return boolDoNativo(l == r)
 	case "!=":
+		if bothInt {
+			return boolDoNativo(lo.Int != ro.Int)
+		}
 		return boolDoNativo(l != r)
 	}
 	return newError(linha, "operador desconhecido pra numeros: %s", op)
@@ -384,7 +541,11 @@ func iguais(a, b object.Object) bool {
 	case *object.Booleano:
 		return av.Value == b.(*object.Booleano).Value
 	case *object.Numero:
-		return av.Value == b.(*object.Numero).Value
+		bn := b.(*object.Numero)
+		if av.EhInt && bn.EhInt {
+			return av.Int == bn.Int
+		}
+		return av.Value == bn.Value
 	case *object.Nada:
 		return true
 	case *object.Lista:
@@ -484,18 +645,37 @@ func (i *Interpreter) evalPraCadaNum(node *ast.PraCadaNumStatement, env *object.
 	if !ok1 || !ok2 {
 		return newError(node.Token.Line, "no pra_cada de..ate eu preciso de numeros, parca")
 	}
-	for v := ni.Value; v <= nf.Value; v++ {
-		env.Set(node.Var.Value, &object.Numero{Value: v})
+
+	// corpo roda o bloco com a variavel = val. Devolve (resultado, parar): se
+	// parar for true o loop aborta devolvendo resultado (erro/retorno) ou NADA
+	// (vaza). continua simplesmente cai pra proxima iteracao.
+	corpo := func(val *object.Numero) (object.Object, bool) {
+		env.Set(node.Var.Value, val)
 		res := i.evalBlock(node.Body, env)
 		if res != nil {
 			switch res.Type() {
 			case object.ERRO_OBJ, object.RETORNO_OBJ:
-				return res
+				return res, true
 			case object.VAZA_OBJ:
-				return NADA
-			case object.CONTINUA_OBJ:
-				continue
+				return NADA, true
 			}
+		}
+		return nil, false
+	}
+
+	// Caminho inteiro exato quando os dois limites sao inteiros — evita a perda
+	// de precisao do float64 em contadores gigantes.
+	if ni.EhInt && nf.EhInt {
+		for v := ni.Int; v <= nf.Int; v++ {
+			if res, parar := corpo(object.NumInt(v)); parar {
+				return res
+			}
+		}
+		return NADA
+	}
+	for v := ni.Value; v <= nf.Value; v++ {
+		if res, parar := corpo(object.NumFloat(v)); parar {
+			return res
 		}
 	}
 	return NADA
@@ -536,11 +716,58 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 	return NADA
 }
 
+func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Environment) object.Object {
+	caminhoVal := i.Eval(node.Path, env)
+	if isError(caminhoVal) {
+		return caminhoVal
+	}
+	caminho, ok := caminhoVal.(*object.Texto)
+	if !ok {
+		return newError(node.Token.Line, "importa quer um texto (caminho), veio %s", caminhoVal.Type())
+	}
+	resolvido := caminho.Value
+	if !filepath.IsAbs(resolvido) && i.dirBase != "" {
+		resolvido = filepath.Join(i.dirBase, resolvido)
+	}
+	fonte, err := os.ReadFile(resolvido)
+	if err != nil {
+		return newError(node.Token.Line, "nao consegui importar %q: %v", caminho.Value, err)
+	}
+	p := parser.New(lexer.New(string(fonte)))
+	prog := p.ParseProgram()
+	if errs := p.Errors(); len(errs) != 0 {
+		return newError(node.Token.Line, "o modulo %q ta com perrengue: %s", caminho.Value, errs[0])
+	}
+
+	dirAntes := i.dirBase
+	i.DefinirDirBase(filepath.Dir(resolvido))
+	modEnv := object.NewEnclosedEnvironment(env)
+	res := i.evalProgram(prog, modEnv)
+	i.DefinirDirBase(dirAntes)
+	if isError(res) {
+		return res
+	}
+
+	// mescla as definicoes do modulo no escopo importador
+	for _, nome := range modEnv.Locais() {
+		if v, ok := modEnv.Get(nome); ok {
+			env.Set(nome, v)
+		}
+	}
+	return NADA
+}
+
 func (i *Interpreter) evalArruma(node *ast.ArrumaStatement, env *object.Environment) object.Object {
 	res := i.evalBlock(node.Try, env)
 	if res != nil && res.Type() == object.ERRO_OBJ {
 		erro := res.(*object.Erro)
-		env.Set(node.ErrName.Value, &object.Texto{Value: erro.Message})
+		// Marca Handled: a partir daqui o erro NAO deve voltar a propagar
+		// automaticamente — o usuario iterage com ele como valor (pode
+		// concatenar, logar, inspecionar via erro_tipo/erro_pilha). Scripts
+		// antigos que faziam "erro + 'x'" seguem funcionando porque Inspect
+		// devolve Message e isError agora respeita o flag.
+		erro.Handled = true
+		env.Set(node.ErrName.Value, erro)
 		return i.evalBlock(node.Catch, env)
 	}
 	if res != nil {
@@ -552,9 +779,20 @@ func (i *Interpreter) evalArruma(node *ast.ArrumaStatement, env *object.Environm
 	return NADA
 }
 
-func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linha int) object.Object {
+func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linha int, nome string) object.Object {
 	if b, ok := fn.(*object.Builtin); ok {
-		return b.Fn(args)
+		res := b.Fn(args)
+		// Builtins nao tem call-site no AST; registra so o nome da builtin
+		// como frame, na linha onde foi chamada.
+		if err, ok := res.(*object.Erro); ok && err != nil {
+			empilhaFrame(err, b.Nome, linha)
+			kind := err.Kind
+			if kind == "" {
+				kind = KindBuiltin
+			}
+			err.Kind = kind
+		}
+		return res
 	}
 	funcao, ok := fn.(*object.Funcao)
 	if !ok {
@@ -572,6 +810,12 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 		return ret.Value
 	}
 	if isError(avaliado) {
+		// Empilha o frame desta chamada no erro que bubble up. Cada nivel de
+		// applyFunction prepended o seu proprio frame, mantendo ordem externo->
+		// interno.
+		if err, ok := avaliado.(*object.Erro); ok && err != nil {
+			empilhaFrame(err, nome, linha)
+		}
 		return avaliado
 	}
 	if v, ok := avaliado.(*object.Vaza); ok {
@@ -581,4 +825,13 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 		return newError(c.Line, "deu `continua` fora de um loop, parca")
 	}
 	return NADA
+}
+
+// nomeDaChamada extrai o nome "amigavel" de uma chamada pra usar no traço de
+// pilha. Se for `foo(...)` devolve "foo", otherwise "<anonima>".
+func nomeDaChamada(node *ast.CallExpression) string {
+	if ident, ok := node.Function.(*ast.Identifier); ok {
+		return ident.Value
+	}
+	return "<anonima>"
 }

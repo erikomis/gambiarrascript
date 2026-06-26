@@ -63,14 +63,13 @@ func (i *Interpreter) ServidorHandler() http.Handler {
 
 func (s *servidorEstado) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// O lock serializa TODA interação com o estado compartilhado: não só
-		// s.rotas, mas também o Environment global do programa, que os handlers
-		// leem e escrevem. Não remova este lock sem antes tornar o Environment
-		// thread-safe.
+		// So travamos o mapa de rotas no lookup — bem rapido. O handler em si
+		// roda sem o lock: cada request ganha sua goroutine (hand-off abaixo)
+		// e o Environment global agora e thread-safe (object.Environment).
 		s.mu.Lock()
-		defer s.mu.Unlock()
-
 		handler, existe := s.rotas[chaveRota(r.Method, r.URL.Path)]
+		s.mu.Unlock()
+
 		if !existe {
 			w.WriteHeader(http.StatusNotFound)
 			io.WriteString(w, "rota nao encontrada, parca")
@@ -83,9 +82,28 @@ func (s *servidorEstado) Handler() http.Handler {
 			io.WriteString(w, "nao consegui ler o corpo do pedido, parca")
 			return
 		}
-		resultado := s.i.applyFunction(handler, []object.Object{pedido}, 0)
-		s.escreveResposta(w, resultado)
+
+		// Copia o *object.Funcao (valor ponteiro) — handlers sao registrados
+		// imutaveis depois de `rota()`, entao compartilhar o ponteiro entre
+		// goroutines e seguro. Cada chamada cria seu proprio escopo filho.
+		s.atendeRequisicao(w, r, handler, pedido)
 	})
+}
+
+// atendeRequisicao roda o handler. Hoje chamado direto (sem goroutine) —
+// mantemos uma funcao separada porque o net/http ja entrega cada request numa
+// goroutine propia (Listener.Accept loop). Ou seja, desde que soltamos o
+// lock global, as requisicoes ja sao paralelas naturalmente: o servidor de
+// produção já spawn goroutine por conexão. Isso e o paralelismo real.
+func (s *servidorEstado) atendeRequisicao(w http.ResponseWriter, r *http.Request, handler *object.Funcao, pedido *object.Dicionario) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			io.WriteString(w, fmt.Sprintf("handler quebrou feio: %v", rec))
+		}
+	}()
+	resultado := s.i.applyFunction(handler, []object.Object{pedido}, 0, "<rota:"+chaveRota(r.Method, r.URL.Path)+">")
+	s.escreveResposta(w, resultado)
 }
 
 func (s *servidorEstado) montaPedido(r *http.Request) (*object.Dicionario, error) {
