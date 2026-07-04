@@ -1,0 +1,22 @@
+{
+  "index": "Home",
+  "instalacao": "Install",
+  "primeiros-passos": "Getting started",
+  "vocabulario": "Vocabulary",
+  "estruturas": "Control flow",
+  "funcoes": "Functions",
+  "tipos": "Types & operators",
+  "strings": "Strings",
+  "colecoes": "Lists & dicts",
+  "biblioteca": "Standard library",
+  "concorrencia": "Concurrency",
+  "erros": "try / catch",
+  "json": "JSON",
+  "http": "HTTP client",
+  "servidor": "HTTP server",
+  "modulos": "Modules",
+  "cli": "Command line",
+  "ferramentas": "Editor & format",
+  "exemplos": "Recipes",
+  "pegadinhas": "Gotchas"
+}

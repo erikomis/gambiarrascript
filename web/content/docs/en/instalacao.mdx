@@ -1,0 +1,68 @@
+---
+title: Install
+description: Get the gs binary on your machine — build, Docker, or native install.
+---
+
+You can run GambiarraScript three ways: build from source with Go, run inside
+Docker, or grab a prebuilt native binary.
+
+## Option 1 — Build from source (recommended)
+
+You need Go 1.23.12 or newer:
+
+```bash
+git clone https://github.com/erikomis/gambiarrascript
+cd gambiarrascript
+go build -o dist/gs ./cmd/gs
+./dist/gs --version
+```
+
+Put `dist/gs` somewhere in your `PATH` (e.g. `~/bin` or `/usr/local/bin`).
+
+## Option 2 — Docker (no Go needed)
+
+The helper `scripts/dgo` runs everything inside a container:
+
+```bash
+# run a file
+./scripts/dgo run ./cmd/gs roda examples/fizzbuzz.gs
+
+# open the interactive REPL
+docker run --rm -it -v "$PWD":/app -w /app golang:1.23 go run ./cmd/gs repl
+```
+
+## Option 3 — Native binary via Docker, then install
+
+Build once through Docker, install into your PATH — afterwards it runs without
+Docker:
+
+```bash
+./scripts/build            # produces dist/gs native for your OS
+./scripts/install          # copies to /usr/local/bin (use --user for ~/.local/bin)
+gs roda examples/fizzbuzz.gs
+```
+
+To build binaries for every supported platform: `./scripts/build --all`
+(output in `dist/`).
+
+## Verify
+
+```bash
+gs --version
+# gs (GambiarraScript) 0.1.0
+
+gs roda examples/salve.gs
+# Salve, tropa!
+```
+
+## Run the tests
+
+```bash
+go test ./...                 # native Go
+./scripts/dgo test ./...      # via Docker
+```
+
+## Next
+
+- [Getting started](/docs/en/primeiros-passos) — write your first script.
+- [Command line](/docs/en/cli) — every `gs` subcommand.

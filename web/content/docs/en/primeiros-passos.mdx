@@ -1,0 +1,125 @@
+---
+title: Getting started
+description: Write and run your first GambiarraScript script.
+---
+
+Don't have `gs` yet? See [Install](/docs/en/instalacao) first.
+
+The fastest way to feel the language is opening the
+[playground](/playground) in the browser — no install required.
+
+## Hello world
+
+Create a file `salve.gs`:
+
+```gambiarrascript
+mostra "Salve, tropa!"
+```
+
+Run it:
+
+```bash
+gs roda salve.gs
+# Salve, tropa!
+```
+
+`mostra` is the print **statement** (not a function — no parentheses). It
+evaluates the expression to its right and writes it to stdout.
+
+## Variables and basic math
+
+```gambiarrascript
+bota nome = "Erik"
+bota idade = 25
+
+mostra "salve, " + nome + "!"
+mostra "ano que vem faco " + (idade + 1) + " primaveras"
+```
+
+`bota` declares (and also re-assigns) a variable. Every assignment needs `bota`
+— a bare `x = 5` is a parse error. See [Types & operators](/docs/en/tipos).
+
+## Conditionals with `se_colar`
+
+```gambiarrascript
+bota nota = 7
+
+se_colar nota >= 7
+    mostra "passou direto"
+se_nao_colar se_colar nota >= 5
+    mostra "ficou de recuperacao"
+se_nao_colar
+    mostra "reprovou, parca"
+acabou_finalmente
+```
+
+`acabou_finalmente` closes the block. Always. More in
+[Control flow](/docs/en/estruturas).
+
+## Loops and functions
+
+```gambiarrascript
+gambiarra dobra(n)
+    funciona n * 2
+acabou_finalmente
+
+pra_cada i de 1 ate 3
+    mostra "dobro de " + i + " = " + dobra(i)
+acabou_finalmente
+```
+
+`gambiarra` declares a function, `funciona` returns. `pra_cada i de A ate B`
+iterates inclusively from A to B. See [Functions](/docs/en/funcoes).
+
+## Comments
+
+Two flavors:
+
+```gambiarrascript
+# line comment — from # to end of line
+
+/*
+  block comment
+  spans multiple lines, does not nest
+*/
+
+bota x = 1 /* inline */ + 2
+mostra x   # quick note on the same line
+```
+
+`#` is a line comment; `/* ... */` is a block comment (does not nest — it
+closes at the first `*/`). Comments are discarded by the lexer, so the
+formatter does not preserve them (see [Editor & format](/docs/en/ferramentas)).
+
+## REPL
+
+```bash
+gs repl
+gambiarra> bota x = 10
+gambiarra> mostra x * 2
+20
+gambiarra> <ctrl+d>
+```
+
+Only one line at a time. Declarations (`bota`, `gambiarra`) persist across
+lines. Expressions without `mostra` print nothing — emit `mostra X` to see a
+value. `ctrl+d` to exit.
+
+## Running the examples
+
+The repo ships `examples/` with ready scripts:
+
+```bash
+ls examples/                  # fizzbuzz.gs, servidor.gs, banco.gs, ...
+gs roda examples/fizzbuzz.gs
+gs roda examples/texto.gs
+```
+
+Good starting point to explore the [Standard library](/docs/en/biblioteca)
+and [Recipes](/docs/en/exemplos).
+
+## Next steps
+
+- [Vocabulary](/docs/en/vocabulario) — quick reference of all keywords.
+- [Standard library](/docs/en/biblioteca) — every builtin.
+- [Command line](/docs/en/cli) — `gs roda`, `gs formata`, `gs lsp`, ...

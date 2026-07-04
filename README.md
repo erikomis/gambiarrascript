@@ -109,9 +109,36 @@ quebrou erro
 acabou_finalmente
 ```
 
-## Como rodar (só precisa de Docker)
+## Instalação e uso
 
-Sem instalar Go. O helper `scripts/dgo` roda tudo num container.
+Dois caminhos, escolhe o que rolar na sua máquina:
+
+- **Tem Go?** roda direto, sem Docker.
+- **Não tem Go, mas tem Docker?** roda tudo num container, sem instalar nada.
+
+### Caminho A — com Go instalado (sem Docker)
+
+Precisa do **Go 1.23 ou mais novo** (`go version` pra conferir):
+
+```bash
+# rodar um arquivo direto (sem compilar nada)
+go run ./cmd/gs roda examples/fizzbuzz.gs
+
+# abrir o REPL interativo
+go run ./cmd/gs repl
+
+# instalar o binário `gs` no PATH e usar de qualquer lugar
+go install ./cmd/gs        # joga o `gs` em $(go env GOPATH)/bin
+gs roda examples/fizzbuzz.gs
+```
+
+Se depois do `go install` o `gs` não for encontrado, garanta que
+`$(go env GOPATH)/bin` está no seu `PATH`. Se preferir só gerar o binário sem
+instalar: `go build -o dist/gs ./cmd/gs`.
+
+### Caminho B — com Docker (sem instalar Go)
+
+O helper `scripts/dgo` roda tudo num container `golang:1.23`:
 
 ```bash
 # rodar um arquivo
@@ -121,28 +148,47 @@ Sem instalar Go. O helper `scripts/dgo` roda tudo num container.
 docker run --rm -it -v "$PWD":/app -w /app golang:1.23 go run ./cmd/gs repl
 ```
 
-## Rodando os testes
+Pra ter o binário nativo no PATH e rodar sem Docker daí pra frente:
 
 ```bash
-./scripts/dgo test ./...
-```
-
-Feito na gambiarra, com carinho. 🛠️
-
-## Instalando o `gs` (binário nativo)
-
-Compile uma vez via Docker e instale no PATH — depois roda sem Docker:
-
-```bash
-./scripts/build            # gera dist/gs nativo do seu sistema
+./scripts/build            # compila via Docker -> dist/gs nativo do seu sistema
 ./scripts/install          # copia pra /usr/local/bin (use --user p/ ~/.local/bin)
 gs roda examples/fizzbuzz.gs
 ```
 
-Pra gerar binários de todas as plataformas: `./scripts/build --all` (saída em `dist/`).
+`./scripts/build --all` gera binários de todas as plataformas (saída em `dist/`).
+No macOS (Apple Silicon) o `build`/`install` já reassinam o binário com
+`codesign` — o cross-compile via Docker sai sem assinatura e o macOS mata o
+binário com "Killed: 9".
+
+## Comandos do `gs`
+
+Além de `roda`, `repl` e `lsp`, o CLI tem:
+
+| Comando | O que faz |
+|---------|-----------|
+| `gs roda [--vm] [--cache] <arq.gs>` | executa o arquivo (`--vm` usa a máquina virtual, `--cache` reaproveita o bytecode `.gsc`) |
+| `gs check <arq.gs>...`   | parse + lint (erros e avisos) sem rodar |
+| `gs formata [-w] <arq.gs>...` | formata o código (`-w` sobrescreve no disco) |
+| `gs testa [<dir>]`       | roda os `*_test.gs` e soma os asserts |
+| `gs init [nome]`         | cria o esqueleto do projeto (`gambiarra.json` + `principal.gs`) |
+| `gs bench [--vm] <arq.gs> [n]` | mede o tempo de execução em `n` rodadas |
+| `gs get <url> [nome.gs]` | baixa um módulo `.gs` pra `gs_modulos/` |
+| `gs build <arq.gs> [-o saida]` | gera um binário standalone com o script embutido |
+
+Roda `gs` sem argumentos (ou `gs --help`) pra ver a ajuda completa.
+
+## Rodando os testes
+
+```bash
+go test ./...                 # com Go instalado
+./scripts/dgo test ./...      # via Docker
+```
 
 ## Extensão do VSCode
 
 Highlight, snippets, comando de rodar (F5) e language server com erros sublinhados.
 Veja [editors/vscode/README.md](editors/vscode/README.md) — em resumo:
 `./scripts/build-extension`, abra `editors/vscode` no VSCode e aperte F5.
+
+Feito na gambiarra, com carinho. 🛠️

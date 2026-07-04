@@ -1,0 +1,104 @@
+---
+title: Vocabulary
+description: The keywords of GambiarraScript — Brazilian slang, fixed, no alias.
+---
+
+GambiarraScript uses one pegada (footing) per concept — no competing aliases.
+Memorize this table and you know the language.
+
+## Keywords
+
+| Keyword             | Equivalent          | What it does |
+| ------------------- | ------------------ | ------------ |
+| `bota`              | `let` / `var`      | declares (or re-assigns) a variable |
+| `mostra`            | `print`            | prints to stdout (statement, not a function) |
+| `se_colar`          | `if`               | opens a conditional |
+| `se_nao_colar`      | `else` / `else if`  | clause of `se_colar`; takes a condition (else-if) or not (final else) |
+| `enquanto`          | `while`            | loops while the condition is true |
+| `pra_cada ... de A ate B` | `for i in range(A, B+1)` | inclusive numeric loop |
+| `pra_cada x em colecao`   | `for x in ...` | for-each over a list or dict (iterates **keys** of a dict) |
+| `gambiarra`         | `func` / `fn` / `def`| declares a function |
+| `funciona`          | `return`           | returns a value from a function |
+| `arruma`            | `try`              | opens a try block |
+| `quebrou <nome>`    | `catch <e>`        | catches an error into a text variable |
+| `vaza`              | `break`            | breaks out of a loop |
+| `continua`          | `continue`         | skips to the next iteration |
+| `importa`           | `import`           | imports a relative `.gs` module |
+| `deu_bom` / `deu_ruim` | `true` / `false`  | boolean singletons |
+| `nada`              | `null` / `None`    | the single null value |
+| `acabou_finalmente` | `}`                | closes **any** block (`se_colar`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`) |
+| `bora`              | `go` (goroutine)   | launches a function in parallel; returns a `Futuro` |
+| `e` / `ou` / `nao`  | `and` / `or` / `not` | logical operators (always return a boolean) |
+
+Keywords are fixed: there is no alias to pick your favorite. The only thing
+that exists is the feeling: `acabou_finalmente` closes any open block.
+
+## Operators
+
+| Category    | Symbols |
+| ----------- | ------- |
+| Arithmetic  | `+ - * / %` |
+| Comparison  | `== != < > <= >=` |
+| Logical     | `e` (and), `ou` (or), `nao` (not prefix) |
+| Assignment  | `=` (always preceded by `bota`) |
+| Indexing    | `expr[expr]` |
+| Call        | `expr(args)` |
+
+There is no exponentiation (`**`) and no compound assignment (`+=`, `-=`, ...).
+For powers, write a `gambiarra potencia(base, exp)` or multiply manually.
+
+### Precedence (weakest to strongest)
+
+1. `ou`
+2. `e`
+3. `== !=`
+4. `< > <= >=`
+5. `+ -`
+6. `* / %`
+7. prefix (`-`, `nao`)
+8. call `f(args)`
+9. indexing `x[i]`
+
+## Booleans and null
+
+`deu_bom` and `deu_ruim` are `true`/`false`. `nada` is the null singleton
+(null/None). The logical operators `e` and `ou` **always return a boolean**
+(they normalize the operand), unlike JS/Python. `nao` inverts.
+
+```gambiarrascript
+bota maior = 10 > 5          # deu_bom
+bota ativo = deu_bom e maior
+bota falso = nao maior
+mostra falso                 # deu_ruim
+mostra nada
+```
+
+## Truthiness
+
+Only `nada` and `deu_ruim` are **falsy**. Everything else is truthy: `0`, `""`,
+`[]`, `{}` all become true in a condition. To check emptiness, do it
+explicitly: `tamanho(x) == 0`, `x == ""`, etc. See [Gotchas](/docs/en/pegadinhas).
+
+## Builtins at a glance
+
+The [Standard library](/docs/en/biblioteca) has the full reference. Quick map:
+
+| Category | Functions |
+| -------- | --------- |
+| String | `tamanho` `maiusculo` `minusculo` `fatia` `contem` `comeca_com` `termina_com` `tira_espaco` `substitui` `separa` `junta` `texto` `numero` |
+| List | `tamanho` `adiciona` `remove` `ordena` `ordena_com` `inverte` `mapeia` `filtra` `reduz` `acha` `acha_indice` `unicos` `achatada` |
+| Dict | `chaves` `tem` |
+| Set | `conjunto` `contem_conjunto` `adiciona_conjunto` `remove_conjunto` `uniao` `intersecao` `diferenca` |
+| Number | `raiz` `abs` `arredonda` `teto` `chao` `min` `max` `aleatorio` |
+| Time | `agora` `agora_num` `agora_ns` `formata_tempo` `parse_tempo` `duracao` `espera_ms` |
+| Regex | `busca_regex` `acha_regex` `combina_regex` `substitui_regex` `separa_regex` |
+| Crypto | `md5` `sha1` `sha256` `sha512` `hmac_sha256` `base64_*` `base32_*` `hex_*` |
+| Filesystem | `le_arquivo` `escreve_arquivo` `anexa_arquivo` `existe` `eh_dir` `deleta` `cria_dir` `le_dir` `caminho_*` |
+| Database | `conecta` `fecha` `consulta` `executa` |
+| JSON | `de_json` `pra_json` |
+| HTTP | `busca` |
+| Server | `rota` `escuta` |
+| console/CLI | `pergunta` `argumentos` `escreve` `escreve_erro` `env` `le_tudo` `le_linhas` |
+| Errors | `quebra` `erro_msg` `erro_linha` `erro_tipo` `erro_pilha` `erro_causa` `envolve_erro` |
+| Concurrency | `bora` (keyword) `espera` `cano` `envia` `recebe` `fecha` `paralelo` |
+| Tests | `espera(a,b)` `afirma(cond, [msg])` |

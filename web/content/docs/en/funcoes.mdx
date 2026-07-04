@@ -1,0 +1,93 @@
+---
+title: Functions
+description: How to declare and call functions in GambiarraScript.
+---
+
+A function is a `gambiarra`. `gambiarra` declares it, `funciona` returns from
+it. The closing is the obvious `acabou_finalmente`.
+
+## Declaring and calling
+
+```gambiarrascript
+gambiarra saudacao(nome)
+    mostra "salve, " + nome
+acabou_finalmente
+
+saudacao("Erik")        # salve, Erik
+```
+
+## Return
+
+```gambiarrascript
+gambiarra dobra(n)
+    funciona n * 2
+acabou_finalmente
+
+mostra dobra(21)        # 42
+```
+
+`funciona` without an expression returns `nada`.
+
+## Arity
+
+The number of arguments must match. If a `gambiarra` takes 2 parameters and you
+pass 3, it's a runtime error.
+
+```gambiarrascript
+gambiarra soma(a, b)
+    funciona a + b
+acabou_finalmente
+
+mostra soma(2, 3)       # 5
+```
+
+## Functions as values
+
+Functions are first-class: they can live in lists and dicts and be passed as
+arguments (used by `mapeia`, `filtra`, `rota`, etc):
+
+```gambiarrascript
+bota ops = [gambiarra(x) funciona x + 1 acabou_finalmente,
+            gambiarra(x) funciona x * 2 acabou_finalmente]
+
+# inline lambdas — no name, call by indexing
+mostra ops[0](10)       # 11
+```
+
+## Closures and free variables
+
+Functions capture variables from the enclosing scope (freevars). The capture
+works identically in the tree-walker **and** the VM, including closures nested
+1, 2 or 3 levels deep:
+
+```gambiarrascript
+gambiarra contador(inicio)
+    bota счет = inicio
+    funciona gambiarra()
+        bota счет = счет + 1
+        funciona счет
+    acabou_finalmente
+acabou_finalmente
+
+bota c = contador(10)
+mostra c()   # 11
+mostra c()   # 12
+```
+
+<Callout type="warn" title="Scope of pra_cada and quebrou">
+  The loop variable of `pra_cada` and the variable of a `quebrou` clause
+  **leak** into the enclosing function scope — same style as Python. See
+  [Gotchas](/docs/en/pegadinhas).
+</Callout>
+
+## Calling in parallel — bora
+
+Prefix a call with `bora` to run it in a goroutine and get a `Futuro` back:
+
+```gambiarrascript
+bota f = bora dobra(21)
+mostra espera(f)   # 42 — blocks until the future resolves
+```
+
+See [Concurrency](/docs/en/concorrencia) for the full story (`bora`, `espera`,
+`cano`, `paralelo`).

@@ -1,0 +1,77 @@
+---
+title: Control flow
+description: se_colar, enquanto, pra_cada and closing blocks with acabou_finalmente.
+---
+
+Every opened block is closed with `acabou_finalmente`. Indentation is free
+(it's not significant like in Python) — what counts is the open/close pair.
+
+## se_colar / se_nao_colar
+
+```gambiarrascript
+bota nota = 7
+
+se_colar nota >= 7
+    mostra "passou direto"
+se_nao_colar se_colar nota >= 5
+    mostra "ficou de recuperacao"
+se_nao_colar
+    mostra "reprovou, parca"
+acabou_finalmente
+```
+
+`se_nao_colar` chains as `else if`. The last `se_nao_colar` without a condition
+is the final `else`.
+
+## enquanto (while)
+
+```gambiarrascript
+bota i = 0
+enquanto i < 3
+    mostra i
+    bota i = i + 1
+acabou_finalmente
+```
+
+## pra_cada numeric
+
+```gambiarrascript
+pra_cada i de 1 ate 10
+    mostra i
+acabou_finalmente
+```
+
+The range is inclusive on both ends (`de 1 ate 10` includes 10).
+
+## pra_cada em (for-each)
+
+Works with lists and dicts (iterates the **keys** of the dict):
+
+```gambiarrascript
+bota frutas = ["abacaxi", "goiaba", "caju"]
+pra_cada fruta em frutas
+    mostra "hoje tem: " + fruta
+acabou_finalmente
+
+bota dic = {"a": 1, "b": 2}
+pra_cada chave em dic
+    mostra chave + " = " + dic[chave]
+acabou_finalmente
+```
+
+## vaza and continua
+
+```gambiarrascript
+pra_cada i de 1 ate 10
+    se_colar i == 5
+        vaza
+    acabou_finalmente
+    se_colar i % 2 == 0
+        continua
+    acabou_finalmente
+    mostra i
+acabou_finalmente
+```
+
+`vaza` breaks out of the loop, `continua` skips to the next iteration. Outside
+a loop, both become a runtime error.
