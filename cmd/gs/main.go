@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gambiarrascript/compiler"
 	"gambiarrascript/formatter"
@@ -17,6 +18,10 @@ import (
 )
 
 func main() {
+	// binario gerado pelo `gs build`? roda o script embedado e pronto.
+	if rodarEmbedado() {
+		return
+	}
 	if len(os.Args) < 2 {
 		uso()
 		os.Exit(1)
@@ -25,12 +30,17 @@ func main() {
 	switch os.Args[1] {
 	case "roda":
 		usarVM := false
+		usarCache := false
 		arquivo := ""
 		var scriptArgs []string
 		proximoEArquivo := true
 		for _, a := range os.Args[2:] {
 			if a == "--vm" {
 				usarVM = true
+				continue
+			}
+			if a == "--cache" {
+				usarCache = true
 				continue
 			}
 			if proximoEArquivo && arquivo == "" {
@@ -41,16 +51,42 @@ func main() {
 			scriptArgs = append(scriptArgs, a)
 		}
 		if arquivo == "" {
-			fmt.Println("uso: gs roda [--vm] <arquivo.gs> [argumentos...]")
+			fmt.Println("uso: gs roda [--vm] [--cache] <arquivo.gs> [argumentos...]")
 			os.Exit(1)
 		}
-		rodarArquivo(arquivo, usarVM, scriptArgs)
+		if usarCache && !usarVM {
+			fmt.Println("--cache so faz sentido com --vm (bytecode); ignorando")
+			usarCache = false
+		}
+		rodarArquivoCache(arquivo, usarVM, usarCache, scriptArgs)
 	case "formata":
-		if len(os.Args) < 3 {
-			fmt.Println("uso: gs formata <arquivo.gs>")
+		args := os.Args[2:]
+		escreverFlag := false
+		var arquivos []string
+		for _, a := range args {
+			if a == "-w" || a == "--write" {
+				escreverFlag = true
+				continue
+			}
+			if a == "-h" || a == "--help" {
+				fmt.Println("uso: gs formata [-w|--write] <arquivo.gs>...")
+				fmt.Println("  sem flag: imprime no stdout ( FORMATADO).")
+				fmt.Println("  -w / --write: sobrescreve cada arquivo com a versao formatada.")
+				os.Exit(0)
+			}
+			arquivos = append(arquivos, a)
+		}
+		if len(arquivos) == 0 {
+			fmt.Println("uso: gs formata [-w|--write] <arquivo.gs>...")
 			os.Exit(1)
 		}
-		formatarArquivo(os.Args[2])
+		for _, arq := range arquivos {
+			if escreverFlag {
+				formatarArquivoEscrever(arq)
+			} else {
+				formatarArquivo(arq)
+			}
+		}
 	case "repl":
 		fmt.Println("GambiarraScript REPL — manda ver (ctrl+d pra vazar)")
 		repl.Start(os.Stdin, os.Stdout)
@@ -58,6 +94,16 @@ func main() {
 		rodarTestes(os.Args[2:])
 	case "disasm":
 		disassemblar(os.Args[2:])
+	case "check":
+		cmdCheck(os.Args[2:])
+	case "init":
+		cmdInit(os.Args[2:])
+	case "bench":
+		cmdBench(os.Args[2:])
+	case "get":
+		cmdGet(os.Args[2:])
+	case "build":
+		cmdBuild(os.Args[2:])
 	case "--version", "-v", "version":
 		fmt.Println("gs (GambiarraScript) " + Versao)
 	case "--help", "-h", "ajuda":
@@ -77,9 +123,15 @@ func uso() {
 	fmt.Println("GambiarraScript")
 	fmt.Println("uso:")
 	fmt.Println("  gs roda <arquivo.gs> [argumentos...]   # executa um arquivo")
-	fmt.Println("  gs roda --vm <arquivo.gs>              # executa na VM experimental")
+	fmt.Println("  gs roda --vm [--cache] <arquivo.gs>    # executa na VM (--cache grava/usa .gsc)")
 	fmt.Println("  gs formata <arquivo.gs>                # formata o arquivo e imprime")
-	fmt.Println("  gs repl                                # abre o modo interativo")
+	fmt.Println("  gs formata -w <arquivo.gs>...         # formata e sobrescreve no disco")
+	fmt.Println("  gs check <arquivo.gs>...               # parse + lint (erros e avisos)")
+	fmt.Println("  gs init [nome]                         # cria gambiarra.json + principal.gs")
+	fmt.Println("  gs bench [--vm] <arquivo.gs> [n]       # mede o tempo de execucao (n rodadas)")
+	fmt.Println("  gs get <url> [nome.gs]                 # baixa um modulo pra gs_modulos/")
+	fmt.Println("  gs build <arquivo.gs> [-o saida]       # gera binario standalone com o script")
+	fmt.Println("  gs repl                                # abre o modo interativo (multiline)")
 	fmt.Println("  gs testa [<dir>]                       # roda os testes (*_test.gs) e soma os asserts")
 	fmt.Println("  gs disasm <arquivo.gs>                 # disassembla o bytecode (VM)")
 	fmt.Println("  gs lsp                                 # inicia o language server (usado pela extensao do VSCode)")
@@ -87,11 +139,24 @@ func uso() {
 	fmt.Println("  gs --help                              # mostra esta ajuda")
 }
 
-func rodarArquivo(caminho string, usarVM bool, scriptArgs []string) {
+func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []string) {
 	fonte, err := os.ReadFile(caminho)
 	if err != nil {
 		fmt.Printf("nao consegui abrir %q: %v\n", caminho, err)
 		os.Exit(1)
+	}
+
+	// caminho rapido: cache de bytecode valido dispensa parse+compile
+	if usarVM && usarCache {
+		caminhoGSC := strings.TrimSuffix(caminho, ".gs") + ".gsc"
+		if bc := carregaCache(caminhoGSC, fonte); bc != nil {
+			maquina := vm.New(bc, os.Stdout)
+			if err := maquina.Run(); err != nil {
+				reportaErroVM(err)
+				os.Exit(1)
+			}
+			return
+		}
 	}
 
 	p := parser.New(lexer.New(string(fonte)))
@@ -106,13 +171,17 @@ func rodarArquivo(caminho string, usarVM bool, scriptArgs []string) {
 
 	if usarVM {
 		comp := compiler.New()
+		comp.DirBase = filepath.Dir(caminho)
 		if err := comp.Compile(prog); err != nil {
 			fmt.Println("eita, a VM nao compilou: " + err.Error())
 			os.Exit(1)
 		}
+		if usarCache {
+			gravaCache(strings.TrimSuffix(caminho, ".gs")+".gsc", fonte, comp.Bytecode())
+		}
 		maquina := vm.New(comp.Bytecode(), os.Stdout)
 		if err := maquina.Run(); err != nil {
-			fmt.Println("deu ruim na VM: " + err.Error())
+			reportaErroVM(err)
 			os.Exit(1)
 		}
 		return
@@ -128,6 +197,16 @@ func rodarArquivo(caminho string, usarVM bool, scriptArgs []string) {
 			fmt.Fprint(os.Stderr, "Traço de pilha:\n"+err.Traco())
 		}
 		os.Exit(1)
+	}
+}
+
+// reportaErroVM imprime o erro de runtime da VM no mesmo formato do
+// tree-walker: mensagem (ja com "deu ruim na linha N") no stdout + traço de
+// pilha no stderr quando houver.
+func reportaErroVM(err error) {
+	fmt.Println(err.Error())
+	if eo := vm.ErroDoRun(err); eo != nil && len(eo.Stack) > 0 {
+		fmt.Fprint(os.Stderr, "Traço de pilha:\n"+eo.Traco())
 	}
 }
 
@@ -242,4 +321,37 @@ func formatarArquivo(caminho string) {
 		os.Exit(1)
 	}
 	fmt.Print(formatter.Formata(prog))
+}
+
+// formatarArquivoEscrever formata o arquivo e sobrescreve no disco se (e
+// somente se) algo mudou. Informa no stdout a acao tomada.
+func formatarArquivoEscrever(caminho string) {
+	fonte, err := os.ReadFile(caminho)
+	if err != nil {
+		fmt.Printf("nao consegui abrir %q: %v\n", caminho, err)
+		os.Exit(1)
+	}
+	p := parser.New(lexer.New(string(fonte)))
+	prog := p.ParseProgram()
+	if errs := p.Errors(); len(errs) != 0 {
+		fmt.Println("eita, teu codigo tem uns perrengue:")
+		for _, e := range errs {
+			fmt.Println("  - " + e)
+		}
+		os.Exit(1)
+	}
+	formatado := formatter.Formata(prog)
+	// adiciona quebra de linha final se o original tinha (preserva)
+	if len(fonte) > 0 && fonte[len(fonte)-1] == '\n' && !strings.HasSuffix(formatado, "\n") {
+		formatado += "\n"
+	}
+	if formatado == string(fonte) {
+		fmt.Printf("  %s  (sem mudanca)\n", filepath.Base(caminho))
+		return
+	}
+	if err := os.WriteFile(caminho, []byte(formatado), 0644); err != nil {
+		fmt.Printf("nao consegui sobrescrever %q: %v\n", caminho, err)
+		os.Exit(1)
+	}
+	fmt.Printf("  %s  (formatado)\n", filepath.Base(caminho))
 }
