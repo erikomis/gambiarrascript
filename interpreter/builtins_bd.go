@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"gambiarrascript/object"
 
@@ -112,4 +113,147 @@ func pegaConexao(o object.Object) (*conexaoBD, *object.Erro) {
 		return nil, erroBuiltin("esse nativo nao e uma conexao de banco")
 	}
 	return con, nil
+}
+
+// builtinConsulta executa um SELECT e devolve uma Lista de Dicionarios (cada
+// par: nomeColuna -> valor). Params: podem ser passados como lista (3o arg)
+// ou como argumentos soltos apos o sql. O driver decide o placeholder (?, $1).
+func builtinConsulta(args []object.Object) object.Object {
+	if len(args) < 2 {
+		return erroBuiltin("consulta() quer conexao + sql (+params), veio %d", len(args))
+	}
+	con, e := pegaConexao(args[0])
+	if e != nil {
+		return e
+	}
+	sqlText, ok := args[1].(*object.Texto)
+	if !ok {
+		return erroBuiltin("consulta() espera o sql como texto, veio %s", args[1].Type())
+	}
+	goArgs, e := argParaGo(args[2:])
+	if e != nil {
+		return e
+	}
+	rows, err := con.db.Query(sqlText.Value, goArgs...)
+	if err != nil {
+		return erroBuiltin("consulta falhou: %v", err)
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		return erroBuiltin("nao peguei colunas: %v", err)
+	}
+	linhas := []object.Object{}
+	for rows.Next() {
+		valores := make([]interface{}, len(cols))
+		ptrs := make([]interface{}, len(cols))
+		for i := range valores {
+			ptrs[i] = &valores[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			return erroBuiltin("escanear linha: %v", err)
+		}
+		pares := map[object.HashKey]object.ParDic{}
+		for i, c := range cols {
+			chave := &object.Texto{Value: c}
+			pares[chave.ChaveHash()] = object.ParDic{Chave: chave, Valor: goParaObj(valores[i])}
+		}
+		linhas = append(linhas, &object.Dicionario{Pares: pares})
+	}
+	if err := rows.Err(); err != nil {
+		return erroBuiltin("iteracao: %v", err)
+	}
+	return &object.Lista{Elements: linhas}
+}
+
+// builtinExecuta roda INSERT/UPDATE/DELETE e devolve o numero de linhas
+// afetadas (ou nada se o driver nao suportar). Mesma regra de params.
+func builtinExecuta(args []object.Object) object.Object {
+	if len(args) < 2 {
+		return erroBuiltin("executa() quer conexao + sql (+params), veio %d", len(args))
+	}
+	con, e := pegaConexao(args[0])
+	if e != nil {
+		return e
+	}
+	sqlText, ok := args[1].(*object.Texto)
+	if !ok {
+		return erroBuiltin("executa() espera o sql como texto, veio %s", args[1].Type())
+	}
+	goArgs, e := argParaGo(args[2:])
+	if e != nil {
+		return e
+	}
+	res, err := con.db.Exec(sqlText.Value, goArgs...)
+	if err != nil {
+		return erroBuiltin("executa falhou: %v", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return NADA
+	}
+	return object.NumInt(n)
+}
+
+// argParaGo converte argumentos variaveis da chamada. Aceita dois formatos:
+//  1. lista unica专场 params = [valor1, valor2]  ->  v1, v2
+//  2. argumentos soltos 后面 params  ->  v1, v2
+func argParaGo(args []object.Object) ([]interface{}, *object.Erro) {
+	if len(args) == 0 {
+		return nil, nil
+	}
+	if len(args) == 1 {
+		if lst, ok := args[0].(*object.Lista); ok {
+			out := make([]interface{}, 0, len(lst.Elements))
+			for _, a := range lst.Elements {
+				out = append(out, objParaGo(a))
+			}
+			return out, nil
+		}
+	}
+	out := make([]interface{}, 0, len(args))
+	for _, a := range args {
+		out = append(out, objParaGo(a))
+	}
+	return out, nil
+}
+
+func objParaGo(o object.Object) interface{} {
+	switch v := o.(type) {
+	case *object.Numero:
+		if v.EhInt {
+			return v.Int
+		}
+		return v.Value
+	case *object.Texto:
+		return v.Value
+	case *object.Booleano:
+		return v.Value
+	case *object.Nada:
+		return nil
+	}
+	return o.Inspect()
+}
+
+func goParaObj(v interface{}) object.Object {
+	if v == nil {
+		return NADA
+	}
+	switch x := v.(type) {
+	case int64:
+		return object.NumInt(x)
+	case int:
+		return object.NumInt(int64(x))
+	case float64:
+		return &object.Numero{Value: x}
+	case bool:
+		return boolDoNativo(x)
+	case string:
+		return &object.Texto{Value: x}
+	case []byte:
+		return &object.Texto{Value: string(x)}
+	case time.Time:
+		return &object.Texto{Value: x.Format(time.RFC3339)}
+	}
+	return &object.Texto{Value: fmt.Sprintf("%v", v)}
 }

@@ -8,12 +8,12 @@ import (
 
 // Kinds de erro. Devem ser usados em object.Erro.Kind pra inspecao programatica.
 const (
-	KindRuntime  = "runtime"  // erro durante avaliacao (div por zero, tipo, indice)
-	KindBuiltin  = "builtin"  // erro dentro de uma builtin (sem linha do chamador)
-	KindIO       = "io"       // leitura/escrita de arquivo, stdin
-	KindRede     = "rede"     // HTTP/rede
-	KindParse    = "parse"    // erro importando modulo
-	KindUsuario  = "usuario"  // lancado via quebra()
+	KindRuntime = "runtime" // erro durante avaliacao (div por zero, tipo, indice)
+	KindBuiltin = "builtin" // erro dentro de uma builtin (sem linha do chamador)
+	KindIO      = "io"      // leitura/escrita de arquivo, stdin
+	KindRede    = "rede"    // HTTP/rede
+	KindParse   = "parse"   // erro importando modulo
+	KindUsuario = "usuario" // lancado via quebra()
 )
 
 // newError cria um erro de runtime carregando a linha de origem do AST.

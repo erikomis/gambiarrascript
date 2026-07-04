@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"gambiarrascript/object"
@@ -52,6 +53,49 @@ func (i *Interpreter) builtinFiltra(args []object.Object) object.Object {
 		}
 	}
 	return &object.Lista{Elements: out}
+}
+
+// builtinOrdenaCom ordena a lista usando uma funcao comparator custom
+// (gambiarra(a, b) que devolve numero: <0 se a<b, 0 empate, >0 se a>b).
+// A lista original e modificada in-place (igual ao ordena()).
+func (i *Interpreter) builtinOrdenaCom(args []object.Object) object.Object {
+	if len(args) != 2 {
+		return erroBuiltin("ordena_com() quer 2 argumentos (lista, gambiarra), veio %d", len(args))
+	}
+	l, ok := args[0].(*object.Lista)
+	if !ok {
+		return erroBuiltin("ordena_com() espera uma lista, veio %s", args[0].Type())
+	}
+	fn := args[1]
+	var primeiroErro *object.Erro
+	sort.SliceStable(l.Elements, func(a, b int) bool {
+		if primeiroErro != nil {
+			return false
+		}
+		ra := i.applyFunction(fn, []object.Object{l.Elements[a], l.Elements[b]}, 0, "<ordena_com>")
+		if isError(ra) {
+			primeiroErro = ra.(*object.Erro)
+			return false
+		}
+		// precisamos de "menor que" (bool). Aceitamos:
+		//  - booleano (true = a<b)
+		//  - numero (<0 = a<b, 0 = empate, >0 = a>b)
+		switch v := ra.(type) {
+		case *object.Booleano:
+			return v.Value
+		case *object.Numero:
+			if v.EhInt {
+				return v.Int < 0
+			}
+			return v.Value < 0
+		}
+		primeiroErro = erroBuiltin("ordena_com: comparator deve devolver numero ou booleano, veio %s", ra.Type())
+		return false
+	})
+	if primeiroErro != nil {
+		return primeiroErro
+	}
+	return NADA
 }
 
 // builtinPergunta mostra um prompt e le uma linha do stdin.

@@ -2,10 +2,16 @@ package compiler
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 
 	"gambiarrascript/ast"
 	"gambiarrascript/code"
+	"gambiarrascript/lexer"
 	"gambiarrascript/object"
+	"gambiarrascript/parser"
+	"gambiarrascript/token"
 )
 
 // SymbolScope marca onde um simbolo vive.
@@ -61,8 +67,11 @@ func (s *SymbolTable) DefineBuiltin(nome string, idx int) Symbol {
 }
 
 // Resolve caminha pela cadeia de escopos. Quando um nome existe num escopo
-// externo (nao global), marcamos como "free" no escopo atual — uma variavel
-// capturada que vira freevar na closure.
+// externo (nao global/builtin), marcamos como "free" no escopo atual — uma
+// variavel capturada que vira freevar na closure. FreeScope de niveis acima
+// tambem precisa ser re-exportado como freevar em cada nivel intermediario,
+// senao a OpGetFree num nivel interno nao encontra o slot populado (a OpClosure
+// so popula o Free do frame que ela cria — cada nivel tem que repassar).
 func (s *SymbolTable) Resolve(nome string) (Symbol, bool) {
 	sym, ok := s.symbols[nome]
 	if ok {
@@ -75,17 +84,15 @@ func (s *SymbolTable) Resolve(nome string) (Symbol, bool) {
 	if !ok {
 		return Symbol{}, false
 	}
-	// outer existe — vira freevar neste escopo
 	switch outer.Scope {
 	case GlobalScope, BuiltinScope:
 		// globals/builtins nao precisam ser freevars: alcançamos elas direto
 		// via OpGetGlobal/OpGetBuiltin no escopo interno.
 		return outer, true
-	case FreeScope:
-		// ja e freevar num nivel acima — continua freevar
-		return outer, true
 	default:
-		// Local do escopo externo -> vira freevar aqui
+		// Local ou Free de nivel acima -> vira freevar AQUI tambem, pra poder
+		// repassar pra dentro. Cada nivel cria seu proprio freevar e repassa
+		// o valor na hora de empilhar antes de OpClosure.
 		free := Symbol{Name: nome, Index: len(s.free), Scope: FreeScope}
 		s.free = append(s.free, free)
 		s.symbols[nome] = free
@@ -111,6 +118,19 @@ type Compiler struct {
 
 	// funcoes compiladas
 	compiledFns []compiledFn
+
+	// tabela pc->linha do buffer de instrucoes ATUAL (trocada junto com
+	// instructions ao compilar corpo de funcao) + linha do node sendo
+	// compilado agora. Vai parar em CompiledFunction.Linhas / Bytecode.Linhas
+	// pra VM reportar erro com posicao (igual o tree-walker).
+	linhas     []object.LinhaPC
+	linhaAtual int
+
+	// importa (VM): diretorio base pra resolver imports e mapa de caminhos
+	// absolutos ja importados (deteccao de ciclo). Quando dirBase e "" (REPL,
+	// disasm ad-hoc), `importa` devolve erro explicando.
+	DirBase    string
+	importados map[string]bool
 }
 
 type compiledFn struct {
@@ -137,16 +157,35 @@ func New() *Compiler {
 var nomesBuiltins = []string{
 	"tamanho", "chaves", "tem", "texto", "numero",
 	"de_json", "pra_json",
+	"formata",
 	"separa", "junta", "maiusculo", "minusculo",
 	"substitui", "fatia", "contem", "comeca_com", "termina_com", "tira_espaco",
 	"adiciona", "remove", "ordena", "inverte",
+	"reduz", "acha", "acha_indice", "unicos", "achatada",
 	"raiz", "aleatorio", "arredonda", "teto", "chao", "abs", "min", "max",
 	"le_arquivo", "escreve_arquivo", "anexa_arquivo",
+	"existe", "eh_dir", "deleta", "cria_dir", "le_dir",
+	"caminho_junta", "caminho_base", "caminho_dir", "caminho_ext", "caminho_abs",
 	"quebra", "erro_msg", "erro_linha", "erro_tipo", "erro_pilha", "erro_causa", "envolve_erro",
 	"mapeia", "filtra", "paralelo",
+	"ordena_com",
 	"pergunta", "argumentos", "le_tudo", "le_linhas", "escreve", "escreve_erro", "env",
 	"espera", "afirma",
 	"busca", "rota", "escuta",
+	"cano", "envia", "recebe", "fecha",
+	"conecta", "consulta", "executa",
+	// regex
+	"busca_regex", "acha_regex", "combina_regex", "substitui_regex", "separa_regex",
+	// tempo
+	"agora", "agora_num", "agora_ns", "formata_tempo", "parse_tempo", "duracao", "espera_ms",
+	// crypto
+	"md5", "sha1", "sha256", "sha512", "hmac_sha256",
+	"base64_codifica", "base64_decodifica",
+	"base32_codifica", "base32_decodifica",
+	"hex_codifica", "hex_decodifica",
+	// set
+	"conjunto", "contem_conjunto", "adiciona_conjunto", "remove_conjunto",
+	"uniao", "intersecao", "diferenca",
 }
 
 // BuiltinNomes expoe a lista canonica de nomes de builtins (em ordem -> idx).
@@ -158,6 +197,9 @@ type Bytecode struct {
 	Constants    []object.Object
 	// CompiledFns  — funcoes presentes no programa (a VM copia pro pool).
 	Functions []compiledFn
+	// Linhas e a tabela pc->linha do fluxo principal (funcoes carregam a
+	// propria tabela dentro da CompiledFunction).
+	Linhas []object.LinhaPC
 }
 
 func (c *Compiler) Bytecode() *Bytecode {
@@ -165,6 +207,7 @@ func (c *Compiler) Bytecode() *Bytecode {
 		Instructions: c.instructions,
 		Constants:    c.constants,
 		Functions:    c.compiledFns,
+		Linhas:       c.linhas,
 	}
 }
 
@@ -172,7 +215,33 @@ func (c *Compiler) Compile(node ast.Node) error {
 	return c.compile(node)
 }
 
+// linhaDe extrai a linha do token de qualquer node do AST. Todos os nodes
+// tem um campo `Token token.Token`; em vez de um type-switch com 30 casos
+// (que quebra silenciosamente quando nasce um node novo), usamos reflection —
+// isso so roda em compile time do script, nao no hot path da VM.
+func linhaDe(node ast.Node) int {
+	v := reflect.ValueOf(node)
+	if v.Kind() != reflect.Ptr || v.IsNil() {
+		return 0
+	}
+	v = v.Elem()
+	if v.Kind() != reflect.Struct {
+		return 0
+	}
+	f := v.FieldByName("Token")
+	if !f.IsValid() {
+		return 0
+	}
+	if tok, ok := f.Interface().(token.Token); ok {
+		return tok.Line
+	}
+	return 0
+}
+
 func (c *Compiler) compile(node ast.Node) error {
+	if l := linhaDe(node); l > 0 {
+		c.linhaAtual = l
+	}
 	switch node := node.(type) {
 	case *ast.Program:
 		for _, s := range node.Statements {
@@ -200,6 +269,21 @@ func (c *Compiler) compile(node ast.Node) error {
 	case *ast.TextoLiteral:
 		idx := c.addConstant(&object.Texto{Value: node.Value})
 		c.emit(code.OpConstant, idx)
+	case *ast.TextoInterpolado:
+		// empilha cada part; TextoLiteral => constante, expr => compilada.
+		// Concatena via OpAdd (string + string).
+		if len(node.Parts) == 0 {
+			c.emit(code.OpConstant, c.addConstant(&object.Texto{Value: ""}))
+			break
+		}
+		for i, p := range node.Parts {
+			if err := c.compile(p); err != nil {
+				return err
+			}
+			if i > 0 {
+				c.emit(code.OpAdd)
+			}
+		}
 	case *ast.BooleanoLiteral:
 		if node.Value {
 			c.emit(code.OpTrue)
@@ -209,19 +293,23 @@ func (c *Compiler) compile(node ast.Node) error {
 	case *ast.NadaLiteral:
 		c.emit(code.OpNada)
 	case *ast.BotaStatement:
-		if err := c.compile(node.Value); err != nil {
-			return err
-		}
 		if node.Name != nil {
+			if err := c.compile(node.Value); err != nil {
+				return err
+			}
 			sym := c.defineVar(node.Name.Value)
 			c.emitVarSet(sym)
 			return nil
 		}
-		// atribuicao por indice: bota lista[i] = v -> eval left, idx, val, OpIndexSet
+		// atribuicao por indice: empilha cont, idx, val nessa ordem (a VM faz
+		// val=pop, idx=pop, cont=pop) e emite OpIndexSet.
 		if err := c.compile(node.Indice.Left); err != nil {
 			return err
 		}
 		if err := c.compile(node.Indice.Index); err != nil {
+			return err
+		}
+		if err := c.compile(node.Value); err != nil {
 			return err
 		}
 		c.emit(code.OpIndexSet)
@@ -237,6 +325,8 @@ func (c *Compiler) compile(node ast.Node) error {
 			c.emit(code.OpMinus)
 		case "nao":
 			c.emit(code.OpNao)
+		case "~":
+			c.emit(code.OpBNot)
 		default:
 			return fmt.Errorf("operador prefixo desconhecido na VM: %s", node.Operator)
 		}
@@ -297,10 +387,25 @@ func (c *Compiler) compile(node ast.Node) error {
 			return err
 		}
 		c.emit(code.OpIndex)
+	case *ast.FuncaoLiteral:
+		// lambda anonima: closure fica na pilha como valor de expressao.
+		return c.compileFuncaoValor("<anonima>", node.Parameters, node.Body)
+	case *ast.DesestruturaStatement:
+		return c.compileDesestrutura(node)
+	case *ast.EscolheStatement:
+		return c.compileEscolhe(node)
+	case *ast.RangeExpression:
+		if err := c.compile(node.Start); err != nil {
+			return err
+		}
+		if err := c.compile(node.End); err != nil {
+			return err
+		}
+		c.emit(code.OpRange)
 	case *ast.ImportaStatement:
-		// importa na VM: hoje totalmente禁ado — dependemos do tree-walker
-		// pra imports. A VM nao enxerga o sistema de arquivos.
-		return fmt.Errorf("a VM ainda nao faz `importa` (use sem --vm)")
+		return c.compileImporta(node)
+	case *ast.BoraExpression:
+		return c.compileBora(node)
 	default:
 		return fmt.Errorf("a VM ainda nao sabe compilar %T", node)
 	}
@@ -423,6 +528,16 @@ func (c *Compiler) compileInfix(node *ast.InfixExpression) error {
 		c.emit(code.OpEqual)
 	case "!=":
 		c.emit(code.OpNotEqual)
+	case "&":
+		c.emit(code.OpBAnd)
+	case "|":
+		c.emit(code.OpBOr)
+	case "^":
+		c.emit(code.OpBXor)
+	case "<<":
+		c.emit(code.OpLShift)
+	case ">>":
+		c.emit(code.OpRShift)
 	default:
 		return fmt.Errorf("operador infixo desconhecido: %s", node.Operator)
 	}
@@ -526,31 +641,36 @@ func (c *Compiler) compilePraCadaNum(node *ast.PraCadaNumStatement) error {
 
 // compilePraCadaList compila `pra_cada x em lista ... ` gerando um iterador:
 // transforma no equivalente:
-//   bota __it = 0
-//   bota __len = tamanho(iter)
-//   enquanto __it < __len
-//     bota x = iter[__it]
-//     <body>
-//     bota __it = __it + 1
-//   acabou_finalmente
+//
+//	bota __it = 0
+//	bota __len = tamanho(iter)
+//	enquanto __it < __len
+//	  bota x = iter[__it]
+//	  <body>
+//	  bota __it = __it + 1
+//	acabou_finalmente
 func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
-	// empilha iteravel
+	// nomes unicos (nao podem colidir com user)
+	const seqNome = "__seq_gs"
+	const itNome = "__it_gs"
+	const lenNome = "__len_gs"
+
+	// __seq = sequencia de iteracao: elementos (lista) ou chaves (dicionario).
+	// Avaliamos o iteravel UMA vez (evita reexecutar efeito colateral por
+	// iteracao) e normalizamos com OpIterSeq.
 	if err := c.compile(node.Iterable); err != nil {
 		return err
 	}
-	// __iter e __len: nomes unicos (nao podem colidir com user)
-	const itNome = "__it_gs"
-	const lenNome = "__len_gs"
-	// __iter = 0
+	c.emit(code.OpIterSeq)
+	seqSym := c.defineVar(seqNome)
+	c.emitVarSet(seqSym)
+
+	// __it = 0
 	c.emit(code.OpConstant, c.addConstant(&object.Numero{Value: 0}))
 	itSym := c.defineVar(itNome)
 	c.emitVarSet(itSym)
-	// __len = tamanho(iteravel)  --> chama builtin tamanho
-	// (mais simples: empilha o iteravel de novo e OpCallBuiltin tamanho idx)
-	if err := c.compile(node.Iterable); err != nil {
-		return err
-	}
-	// builtin tamanho — qual idx?
+	// __len = tamanho(__seq)
+	c.emitVarGet(seqSym)
 	tamanhoSym, _ := c.scope.Resolve("tamanho")
 	c.emit(code.OpCallBuiltin, tamanhoSym.Index, 1)
 	lenSym := c.defineVar(lenNome)
@@ -562,10 +682,8 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 	c.emit(code.OpMenor)
 	jmpFim := c.emit(code.OpJumpIfFalse, 9999)
 
-	// x = iteravel[__it]
-	if err := c.compile(node.Iterable); err != nil {
-		return err
-	}
+	// x = __seq[__it]
+	c.emitVarGet(seqSym)
 	c.emitVarGet(itSym)
 	c.emit(code.OpIndex)
 	xSym := c.defineVar(node.Var.Value)
@@ -598,56 +716,157 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 	return nil
 }
 
+// compileEscolhe vira uma cadeia if-else com jumps:
+//
+//	<subject> -> __esc_gs
+//	caso N: pra cada valor { get tmp; <valor>; OpEqual; JumpIfTrue corpoN }
+//	        Jump proximoCaso
+//	corpoN: <corpo>; Jump fim
+//	default (se_nao_colar): <corpo>
+//	fim:
+func (c *Compiler) compileEscolhe(node *ast.EscolheStatement) error {
+	if err := c.compile(node.Subject); err != nil {
+		return err
+	}
+	tmp := c.defineVar("__esc_gs")
+	c.emitVarSet(tmp)
+
+	var jmpsFim []int
+	for _, braco := range node.Casos {
+		var jmpsCorpo []int
+		for _, v := range braco.Values {
+			c.emitVarGet(tmp)
+			if err := c.compile(v); err != nil {
+				return err
+			}
+			c.emit(code.OpEqual)
+			jmpsCorpo = append(jmpsCorpo, c.emit(code.OpJumpIfTrue, 9999))
+		}
+		jmpProximo := c.emit(code.OpJump, 9999)
+		corpoAddr := len(c.instructions)
+		for _, j := range jmpsCorpo {
+			c.backpatch(j, corpoAddr)
+		}
+		if err := c.compile(braco.Body); err != nil {
+			return err
+		}
+		jmpsFim = append(jmpsFim, c.emit(code.OpJump, 9999))
+		c.backpatch(jmpProximo, len(c.instructions))
+	}
+	if node.Default != nil {
+		if err := c.compile(node.Default); err != nil {
+			return err
+		}
+	}
+	fim := len(c.instructions)
+	for _, j := range jmpsFim {
+		c.backpatch(j, fim)
+	}
+	return nil
+}
+
+// compileDesestrutura: avalia o valor UMA vez num temp e amarra cada nome via
+// OpIndexOuNada (indice/chave ausente vira nada — mesma semantica lenient do
+// tree-walker).
+func (c *Compiler) compileDesestrutura(node *ast.DesestruturaStatement) error {
+	if err := c.compile(node.Value); err != nil {
+		return err
+	}
+	tmp := c.defineVar("__des_gs")
+	c.emitVarSet(tmp)
+	for idx, n := range node.Names {
+		c.emitVarGet(tmp)
+		if node.DeDict {
+			c.emit(code.OpConstant, c.addConstant(&object.Texto{Value: n.Value}))
+		} else {
+			c.emit(code.OpConstant, c.addConstant(object.NumInt(int64(idx))))
+		}
+		c.emit(code.OpIndexOuNada)
+		sym := c.defineVar(n.Value)
+		c.emitVarSet(sym)
+	}
+	return nil
+}
+
 func (c *Compiler) compileGambiarra(node *ast.GambiarraStatement) error {
 	// Reserva o simbolo da funcao ANTES de compilar o body (permite recursao).
 	fnSym := c.defineVar(node.Name.Value)
+	if err := c.compileFuncaoValor(node.Name.Value, node.Parameters, node.Body); err != nil {
+		return err
+	}
+	c.emitVarSet(fnSym)
+	return nil
+}
 
+// compileFuncaoValor compila params+corpo e deixa a CLOSURE no topo da pilha.
+// Usado pela gambiarra nomeada (que em seguida amarra num simbolo) e pela
+// lambda anonima (que usa o valor direto como expressao).
+func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Identifier, body *ast.BlockStatement) error {
 	// Empurra um novo escopo (novo symbol table) — params viram locals.
 	outer := c.scope
 	newScope := NewEnclosedSymbolTable(outer)
 	c.scope = newScope
-	for _, p := range node.Parameters {
+	for _, p := range params {
 		newScope.Define(p.Value)
 	}
 
-	// SALVA o bytecode do fluxo principal e troca por um buffer vazio so
-	// pra compilar o body da funcao. Isso garante que os opcodes do corpo
-	// NAO sejam executados como parte do programa principal.
+	// SALVA o bytecode (e a tabela de linhas) do fluxo principal e troca por
+	// buffers vazios so pra compilar o body da funcao. Isso garante que os
+	// opcodes do corpo NAO sejam executados como parte do programa principal.
 	savedInst := c.instructions
+	savedLinhas := c.linhas
 	c.instructions = code.Instructions{}
+	c.linhas = nil
 
-	if err := c.compile(node.Body); err != nil {
+	if err := c.compile(body); err != nil {
 		c.instructions = savedInst
+		c.linhas = savedLinhas
 		c.scope = outer
 		return err
 	}
 	c.emit(code.OpReturnNada)
 
-	bc := c.instructions               // body bytecode isolado
-	c.instructions = savedInst         // restaura fluxo principal
+	bc := c.instructions       // body bytecode isolado
+	fnLinhas := c.linhas       // tabela pc->linha do corpo
+	c.instructions = savedInst // restaura fluxo principal
+	c.linhas = savedLinhas
 	free := newScope.Free()
 	c.scope = outer
 
 	cf := compiledFn{
-		name:      node.Name.Value,
-		numArgs:   len(node.Parameters),
+		name:      nome,
+		numArgs:   len(params),
 		numLocals: newScope.count,
 		bytecode:  bc,
 		free:      free,
 	}
 	c.compiledFns = append(c.compiledFns, cf)
 
-	// empilha a CompiledFunction como constante; emite OpClosure pro
-	// fluxo principal e atribui à variável global.
+	// empilha a CompiledFunction na pool de constantes (sem free ainda —
+	// a VM vai popular `Free` em runtime quando executar OpClosure).
 	fnIdx := c.addConstant(&object.CompiledFunction{
 		Name:      cf.name,
 		NumArgs:   cf.numArgs,
 		NumLocals: cf.numLocals,
 		Bytecode:  cf.bytecode,
 		Free:      nil,
+		Linhas:    fnLinhas,
 	})
-	c.emit(code.OpClosure, fnIdx)
-	c.emitVarSet(fnSym)
+	// pra cada freevar, empilhamos o valor capturado ANTES do OpClosure.
+	// o `free[i]` e um Symbol com scope=FreeScope que Resolve devolveu
+	// pra esse escopo-filho; precisamos achar o simbolo "original" do
+	// outer pega o valor agora. Cada free guarda o .Name original —
+	// pedimos pro escopo atual (c.scope, que e o outer) resolver de novo.
+	for _, fv := range free {
+		// refaz o lookup no escopo externo: o freevar veio daqui (ou de
+		// cima). Resolve deve devolver o mesmo Symbol do escopo externo.
+		orig, ok := outer.Resolve(fv.Name)
+		if !ok {
+			return fmt.Errorf("freevar %q sumiu do escopo externo", fv.Name)
+		}
+		c.emitVarGet(orig)
+	}
+	c.emit(code.OpClosure, fnIdx, len(free))
 	return nil
 }
 
@@ -667,38 +886,99 @@ func (c *Compiler) compileCall(node *ast.CallExpression) error {
 	return nil
 }
 
+// compileBora: `bora fn(args)` dispara a chamada em paralelo e devolve Futuro.
+// Mesmo empilhamento de OpCall (args primeiro, depois a fn), mas emite OpBoraCall.
+func (c *Compiler) compileBora(node *ast.BoraExpression) error {
+	call := node.Call
+	if call == nil {
+		return fmt.Errorf("bora sem chamada — isso nao devia acontecer")
+	}
+	for _, a := range call.Arguments {
+		if err := c.compile(a); err != nil {
+			return err
+		}
+	}
+	if err := c.compile(call.Function); err != nil {
+		return err
+	}
+	c.emit(code.OpBoraCall, len(call.Arguments))
+	return nil
+}
+
 func (c *Compiler) compileArruma(node *ast.ArrumaStatement) error {
-	// errSym tem que aparecer no escopo do catch
-	// compilacao:
+	// Layout com finally + catch opcional:
 	//   OpTry <catchAddr>
 	//   <try>
 	//   OpTryEnd
-	//   OpJump <end>
-	//   <catch>   (ErrName como local 0 deste escopo filho)
+	//   OpJump <finallyAddr>
+	//   <catch>     (se houver; ErrName amarrado)
+	//   OpJump <finallyAddr>
+	//   finallyAddr: <finally>
 	//   end:
-	catchScope := NewEnclosedSymbolTable(c.scope)
-	errSym := catchScope.Define(node.ErrName.Value)
-	c.scope = catchScope
+	///
+	// ErrName: no top-level (c.scope.outer == nil) amarramos a GLOBAL
+	// (frame principal nao tem locals alocados na VM). Em funcoes, vira
+	// local de um enclosed scope (igual antes).
+	var catchScope *SymbolTable
+	var errSym Symbol
+	if node.Catch != nil {
+		if c.scope.outer == nil {
+			// top-level: amarra no proprio scope global
+			if node.ErrName != nil {
+				errSym = c.scope.Define(node.ErrName.Value)
+			}
+			catchScope = nil
+		} else {
+			catchScope = NewEnclosedSymbolTable(c.scope)
+			if node.ErrName != nil {
+				errSym = catchScope.Define(node.ErrName.Value)
+			}
+			c.scope = catchScope
+		}
+	}
 
 	tryOp := c.emit(code.OpTry, 9999)
 	if err := c.compile(node.Try); err != nil {
-		c.scope = catchScope.outer
+		if catchScope != nil {
+			c.scope = catchScope.outer
+		}
 		return err
 	}
 	c.emit(code.OpTryEnd)
-	jmpFim := c.emit(code.OpJump, 9999)
+	jmpAposTry := c.emit(code.OpJump, 9999) // pula catch quando try OK
+
 	catchAddr := len(c.instructions)
 	c.backpatch(tryOp, catchAddr)
-	// binding do erro capturado: a VM empurra o erro na pilha antes de saltar
-	// pra catchAddr. Salvamos em local.
-	c.emitVarSet(errSym)
-	if err := c.compile(node.Catch); err != nil {
-		c.scope = catchScope.outer
-		return err
+	if node.Catch != nil {
+		// a VM empurra o erro na pilha antes de saltar pra catchAddr.
+		if node.ErrName != nil {
+			c.emitVarSet(errSym)
+		} else {
+			c.emit(code.OpPop) // descarta erro sem nome
+		}
+		if err := c.compile(node.Catch); err != nil {
+			if catchScope != nil {
+				c.scope = catchScope.outer
+			}
+			return err
+		}
 	}
-	end := len(c.instructions)
-	c.backpatch(jmpFim, end)
-	c.scope = catchScope.outer
+	jmpAposCatch := c.emit(code.OpJump, 9999) // pula finally daqui (catch OK)
+	c.backpatch(jmpAposTry, len(c.instructions))
+
+	if catchScope != nil {
+		c.scope = catchScope.outer
+	}
+
+	// finally
+	if node.Finally != nil {
+		c.backpatch(jmpAposCatch, len(c.instructions))
+		if err := c.compile(node.Finally); err != nil {
+			return err
+		}
+	} else {
+		c.backpatch(jmpAposCatch, len(c.instructions))
+	}
 	return nil
 }
 
@@ -762,5 +1042,55 @@ func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 	ins := code.Make(op, operands...)
 	pos := len(c.instructions)
 	c.instructions = append(c.instructions, ins...)
+	// tabela pc->linha: so grava quando a linha muda (tabela esparsa)
+	if c.linhaAtual > 0 &&
+		(len(c.linhas) == 0 || c.linhas[len(c.linhas)-1].Linha != c.linhaAtual) {
+		c.linhas = append(c.linhas, object.LinhaPC{PC: pos, Linha: c.linhaAtual})
+	}
 	return pos
+}
+
+// compileImporta resolve o caminho relativo ao dirBase, le o arquivo, faz
+// parse e compila cada statement do modulo INLINE no mesmo Compiler. Assim
+// as globals definidas no modulo (`bota`, `gambiarra`) passam a existir no
+// programa principal e a VM as acessa via OpGetGlobal. Imports recursivos
+// sao detidos via mapa de caminhos ja visitados (ciclo vira no-op).
+// Suportamos somente caminho literal de texto (`importa "x.gs"`).
+func (c *Compiler) compileImporta(node *ast.ImportaStatement) error {
+	tx, ok := node.Path.(*ast.TextoLiteral)
+	if !ok {
+		return fmt.Errorf("importa na VM so aceita texto literal (veio %T)", node.Path)
+	}
+	resolvido := tx.Value
+	if !filepath.IsAbs(resolvido) && c.DirBase != "" {
+		resolvido = filepath.Join(c.DirBase, resolvido)
+	}
+	if c.importados == nil {
+		c.importados = map[string]bool{}
+	}
+	if c.importados[resolvido] {
+		return nil // ja importado — ciclo
+	}
+	c.importados[resolvido] = true
+
+	fonte, err := os.ReadFile(resolvido)
+	if err != nil {
+		return fmt.Errorf("importa: nao consegui ler %q: %v", tx.Value, err)
+	}
+	p := parser.New(lexer.New(string(fonte)))
+	prog := p.ParseProgram()
+	if errs := p.Errors(); len(errs) != 0 {
+		return fmt.Errorf("importa: modulo %q com perrengue: %s", tx.Value, errs[0])
+	}
+
+	dirAntes := c.DirBase
+	c.DirBase = filepath.Dir(resolvido)
+	for _, s := range prog.Statements {
+		if err := c.compile(s); err != nil {
+			c.DirBase = dirAntes
+			return err
+		}
+	}
+	c.DirBase = dirAntes
+	return nil
 }

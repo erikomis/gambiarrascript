@@ -24,12 +24,32 @@ const (
 	SLASH   = "/"
 	PERCENT = "%"
 
+	// atribuicao composta aritmetica
+	PLUSASSIGN    = "+="
+	MINUSASSIGN   = "-="
+	STARASSIGN    = "*="
+	SLASHASSIGN   = "/="
+	PERCENTASSIGN = "%="
+
 	EQ  = "=="
 	NEQ = "!="
 	LT  = "<"
 	GT  = ">"
 	LTE = "<="
 	GTE = ">="
+
+	// bitwise
+	BAND         = "&"  // and bitwise
+	BOR          = "|"  // or bitwise
+	BXOR         = "^"  // xor bitwise
+	BNOT         = "~"  // not bitwise (prefixo)
+	LSHIFT       = "<<" // shift esquerda
+	RSHIFT       = ">>" // shift direita
+	BANDASSIGN   = "&="
+	BORASSIGN    = "|="
+	BXORASSIGN   = "^="
+	LSHIFTASSIGN = "<<="
+	RSHIFTASSIGN = ">>="
 
 	COMMA    = ","
 	LPAREN   = "("
@@ -39,6 +59,9 @@ const (
 	LBRACE   = "{"
 	RBRACE   = "}"
 	COLON    = ":"
+
+	RANGE = ".."
+	DOT   = "." // acesso por ponto: obj.campo
 
 	BOTA         = "BOTA"
 	MOSTRA       = "MOSTRA"
@@ -59,6 +82,9 @@ const (
 	DEU_RUIM     = "DEU_RUIM"
 	NADA         = "NADA"
 	ACABOU       = "ACABOU_FINALMENTE"
+	FINALMENTE   = "FINALMENTE"
+	ESCOLHE      = "ESCOLHE" // switch
+	CASO         = "CASO"    // case
 	E            = "E"
 	OU           = "OU"
 	NAO          = "NAO"
@@ -88,6 +114,9 @@ var keywords = map[string]TokenType{
 	"deu_ruim":          DEU_RUIM,
 	"nada":              NADA,
 	"acabou_finalmente": ACABOU,
+	"finalmente":        FINALMENTE,
+	"escolhe":           ESCOLHE,
+	"caso":              CASO,
 	"e":                 E,
 	"ou":                OU,
 	"nao":               NAO,

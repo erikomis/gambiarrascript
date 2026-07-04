@@ -23,9 +23,9 @@ func concat(ins []code.Instructions) code.Instructions {
 }
 
 type casoComp struct {
-	input       string
-	constantes  []interface{}
-	instrucoes  []code.Instructions
+	input      string
+	constantes []interface{}
+	instrucoes []code.Instructions
 }
 
 func roda(t *testing.T, casos []casoComp) {
@@ -167,19 +167,21 @@ func TestCompilaPrefixoELiterais(t *testing.T) {
 	})
 }
 
-func TestCompilaNaoSuportadoDaErro(t *testing.T) {
-	// Fase 6d concluida: gambiarra/bota/etc compilam. Hoje so `importa`
-	// continua nao suportado pela VM.
+func TestImportaInexistenteDaErro(t *testing.T) {
+	// importa agora e suportado pela VM, mas modulo inexistente continua
+	// devolvendo erro na compilacao (alinha com tree-walker).
 	comp := New()
-	if err := comp.Compile(parse("importa \"nao_existe.gs\"")); err == nil {
-		t.Fatal("'importa' nao e suportado na VM, deveria dar erro de compilacao")
+	if err := comp.Compile(parse("importa \"nao_existe_gs__xxx.gs\"")); err == nil {
+		t.Fatal("'importa' de modulo inexistente deveria dar erro de compilacao")
 	}
 	comp2 := New()
 	if err := comp2.Compile(parse("bota x = 1")); err != nil {
-		t.Fatalf("'bota' deveria compilar agora: %v", err)
+		t.Fatalf("'bota' deveria compilar: %v", err)
 	}
 	comp3 := New()
 	if err := comp3.Compile(parse("gambiarra f()\n    funciona 1\nacabou_finalmente")); err != nil {
-		t.Fatalf("'gambiarra' deveria compilar agora (fase 6d): %v", err)
+		t.Fatalf("'gambiarra' deveria compilar: %v", err)
 	}
 }
+
+// TestImportaNaVMIncorporaModulo esta em vm/vm_test.go (import cycle).

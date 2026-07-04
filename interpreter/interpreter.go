@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"gambiarrascript/ast"
@@ -31,10 +32,16 @@ type Interpreter struct {
 	servidor          *servidorEstado
 	builtinsInstancia map[string]*object.Builtin
 
+	// ChamaCompilada e o gancho que a VM registra pra executar
+	// *object.CompiledFunction. Permite que builtins de ordem superior
+	// (mapeia, filtra, reduz, ordena_com, paralelo, handlers do rota...)
+	// chamem funcoes do usuario tambem quando o engine e a VM.
+	ChamaCompilada func(fn *object.CompiledFunction, args []object.Object) object.Object
+
 	// estado de testes (gs testa): contagem de asserts passa/falha no arquivo
 	// rodando agora. Zerado em resetting no rodarArquivo.
-	totalEspera    int
-	totalEsperaOk  int
+	totalEspera   int
+	totalEsperaOk int
 
 	// muOut protege i.out e i.erroOut — varias goroutines podem chamar
 	// mostra/escreve/escreve_erro/espera/afirma concorrentemente. Sem o lock
@@ -46,20 +53,24 @@ func New(out io.Writer) *Interpreter {
 	i := &Interpreter{out: out, erroOut: os.Stderr, in: os.Stdin}
 	i.servidor = &servidorEstado{rotas: map[string]*object.Funcao{}, i: i}
 	i.builtinsInstancia = map[string]*object.Builtin{
-		"rota":        {Nome: "rota", Fn: i.servidor.builtinRota},
-		"escuta":      {Nome: "escuta", Fn: i.servidor.builtinEscuta},
-		"mapeia":      {Nome: "mapeia", Fn: i.builtinMapeia},
-		"filtra":      {Nome: "filtra", Fn: i.builtinFiltra},
-		"pergunta":    {Nome: "pergunta", Fn: i.builtinPergunta},
-		"argumentos":  {Nome: "argumentos", Fn: i.builtinArgumentos},
-		"le_tudo":     {Nome: "le_tudo", Fn: i.builtinLeTudo},
-		"le_linhas":   {Nome: "le_linhas", Fn: i.builtinLeLinhas},
-		"escreve":     {Nome: "escreve", Fn: i.builtinEscreve},
+		"rota":         {Nome: "rota", Fn: i.servidor.builtinRota},
+		"escuta":       {Nome: "escuta", Fn: i.servidor.builtinEscuta},
+		"mapeia":       {Nome: "mapeia", Fn: i.builtinMapeia},
+		"filtra":       {Nome: "filtra", Fn: i.builtinFiltra},
+		"ordena_com":   {Nome: "ordena_com", Fn: i.builtinOrdenaCom},
+		"reduz":        {Nome: "reduz", Fn: i.builtinReduz},
+		"acha":         {Nome: "acha", Fn: i.builtinAcha},
+		"acha_indice":  {Nome: "acha_indice", Fn: i.builtinAchaIndice},
+		"pergunta":     {Nome: "pergunta", Fn: i.builtinPergunta},
+		"argumentos":   {Nome: "argumentos", Fn: i.builtinArgumentos},
+		"le_tudo":      {Nome: "le_tudo", Fn: i.builtinLeTudo},
+		"le_linhas":    {Nome: "le_linhas", Fn: i.builtinLeLinhas},
+		"escreve":      {Nome: "escreve", Fn: i.builtinEscreve},
 		"escreve_erro": {Nome: "escreve_erro", Fn: i.builtinEscreveErro},
-		"env":         {Nome: "env", Fn: i.builtinEnv},
-		"paralelo":    {Nome: "paralelo", Fn: i.builtinParalelo},
-		"espera":      {Nome: "espera", Fn: i.builtinEspera},
-		"afirma":      {Nome: "afirma", Fn: i.builtinAfirma},
+		"env":          {Nome: "env", Fn: i.builtinEnv},
+		"paralelo":     {Nome: "paralelo", Fn: i.builtinParalelo},
+		"espera":       {Nome: "espera", Fn: i.builtinEspera},
+		"afirma":       {Nome: "afirma", Fn: i.builtinAfirma},
 		// concorrencia: canais (cano) e wait de Futuro
 		"cano":   {Nome: "cano", Fn: i.builtinCano},
 		"envia":  {Nome: "envia", Fn: i.builtinEnvia},
@@ -129,6 +140,16 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		return object.NumFloat(node.Value)
 	case *ast.TextoLiteral:
 		return &object.Texto{Value: node.Value}
+	case *ast.TextoInterpolado:
+		var sb strings.Builder
+		for _, p := range node.Parts {
+			v := i.Eval(p, env)
+			if isError(v) {
+				return v
+			}
+			sb.WriteString(v.Inspect())
+		}
+		return &object.Texto{Value: sb.String()}
 	case *ast.BooleanoLiteral:
 		return boolDoNativo(node.Value)
 	case *ast.NadaLiteral:
@@ -153,6 +174,23 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		return i.evalPrefix(node.Operator, right, node.Token.Line)
 	case *ast.InfixExpression:
 		return i.evalInfix(node, env)
+	case *ast.FuncaoLiteral:
+		// lambda anonima: closure sobre o env atual, igual gambiarra nomeada.
+		return &object.Funcao{Parameters: node.Parameters, Body: node.Body, Env: env}
+	case *ast.DesestruturaStatement:
+		return i.evalDesestrutura(node, env)
+	case *ast.EscolheStatement:
+		return i.evalEscolhe(node, env)
+	case *ast.RangeExpression:
+		start := i.Eval(node.Start, env)
+		if isError(start) {
+			return start
+		}
+		end := i.Eval(node.End, env)
+		if isError(end) {
+			return end
+		}
+		return evalRange(start, end, node.Token.Line)
 	case *ast.IndexExpression:
 		left := i.Eval(node.Left, env)
 		if isError(left) {
@@ -294,6 +332,86 @@ func (i *Interpreter) evalIdentifier(node *ast.Identifier, env *object.Environme
 	return newError(node.Token.Line, "cade o `%s`? voce nao botou isso ainda", node.Value)
 }
 
+// evalEscolhe: casa o subject contra cada `caso` (semantica do ==, via
+// iguais) e roda o primeiro corpo que bater. Sem fallthrough. Se nada casar,
+// roda o se_nao_colar (se existir).
+func (i *Interpreter) evalEscolhe(node *ast.EscolheStatement, env *object.Environment) object.Object {
+	subject := i.Eval(node.Subject, env)
+	if isError(subject) {
+		return subject
+	}
+	for _, braco := range node.Casos {
+		for _, vexpr := range braco.Values {
+			v := i.Eval(vexpr, env)
+			if isError(v) {
+				return v
+			}
+			if iguais(subject, v) {
+				return i.evalBlock(braco.Body, env)
+			}
+		}
+	}
+	if node.Default != nil {
+		return i.evalBlock(node.Default, env)
+	}
+	return NADA
+}
+
+// evalDesestrutura amarra os nomes do padrao aos valores correspondentes.
+// Lista: por posicao; dicionario: por chave (nome da variavel). Nome sem
+// valor correspondente vira nada (lenient).
+func (i *Interpreter) evalDesestrutura(node *ast.DesestruturaStatement, env *object.Environment) object.Object {
+	val := i.Eval(node.Value, env)
+	if isError(val) {
+		return val
+	}
+	if node.DeDict {
+		d, ok := val.(*object.Dicionario)
+		if !ok {
+			return newError(node.Token.Line, "pra desestruturar com {} eu quero um dicionario, veio %s", val.Type())
+		}
+		for _, n := range node.Names {
+			chave := (&object.Texto{Value: n.Value}).ChaveHash()
+			if par, ok := d.Pares[chave]; ok {
+				env.Set(n.Value, par.Valor)
+			} else {
+				env.Set(n.Value, NADA)
+			}
+		}
+		return NADA
+	}
+	l, ok := val.(*object.Lista)
+	if !ok {
+		return newError(node.Token.Line, "pra desestruturar com [] eu quero uma lista, veio %s", val.Type())
+	}
+	for idx, n := range node.Names {
+		if idx < len(l.Elements) {
+			env.Set(n.Value, l.Elements[idx])
+		} else {
+			env.Set(n.Value, NADA)
+		}
+	}
+	return NADA
+}
+
+// evalRange monta a lista [inicio, ..., fim] inclusive. So com inteiros.
+// Se inicio > fim, gera decrescente (10..1 => [10, 9, ..., 1]).
+func evalRange(start, end object.Object, linha int) object.Object {
+	lo, ok := start.(*object.Numero)
+	if !ok || !lo.EhInt {
+		return newError(linha, "range .. quer inteiro na esquerda, veio %s", start.Type())
+	}
+	hi, ok := end.(*object.Numero)
+	if !ok || !hi.EhInt {
+		return newError(linha, "range .. quer inteiro na direita, veio %s", end.Type())
+	}
+	elems, ok := object.RangeInts(lo.Int, hi.Int)
+	if !ok {
+		return newError(linha, "range .. de %d..%d e gigante demais, vai estourar a memoria", lo.Int, hi.Int)
+	}
+	return &object.Lista{Elements: elems}
+}
+
 func (i *Interpreter) evalPrefix(op string, right object.Object, linha int) object.Object {
 	switch op {
 	case "nao":
@@ -307,6 +425,16 @@ func (i *Interpreter) evalPrefix(op string, right object.Object, linha int) obje
 			return object.NumInt(-num.Int)
 		}
 		return object.NumFloat(-num.Value)
+	case "~":
+		// NOT bitwise: so pra inteiros (^int em Go = complemento)
+		num, ok := right.(*object.Numero)
+		if !ok {
+			return newError(linha, "~ espera inteiro, veio %s", right.Type())
+		}
+		if !num.EhInt {
+			return newError(linha, "~ so funciona com inteiro (nao com ponto flutuante)")
+		}
+		return object.NumInt(^num.Int)
 	}
 	return newError(linha, "operador prefixo desconhecido: %s", op)
 }
@@ -428,6 +556,37 @@ func (i *Interpreter) evalInfixNumero(op string, lo, ro *object.Numero, linha in
 			return boolDoNativo(lo.Int != ro.Int)
 		}
 		return boolDoNativo(l != r)
+	case "&":
+		if bothInt {
+			return object.NumInt(lo.Int & ro.Int)
+		}
+		return newError(linha, "& bitwise so faz sentido com inteiros")
+	case "|":
+		if bothInt {
+			return object.NumInt(lo.Int | ro.Int)
+		}
+		return newError(linha, "| bitwise so faz sentido com inteiros")
+	case "^":
+		if bothInt {
+			return object.NumInt(lo.Int ^ ro.Int)
+		}
+		return newError(linha, "^ bitwise so faz sentido com inteiros")
+	case "<<":
+		if bothInt {
+			if ro.Int < 0 {
+				return newError(linha, "<< por valor negativo? naoiedade")
+			}
+			return object.NumInt(lo.Int << uint(ro.Int))
+		}
+		return newError(linha, "shift so faz sentido com inteiros")
+	case ">>":
+		if bothInt {
+			if ro.Int < 0 {
+				return newError(linha, ">> por valor negativo? naoiedade")
+			}
+			return object.NumInt(lo.Int >> uint(ro.Int))
+		}
+		return newError(linha, "shift so faz sentido com inteiros")
 	}
 	return newError(linha, "operador desconhecido pra numeros: %s", op)
 }
@@ -759,24 +918,30 @@ func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Enviro
 
 func (i *Interpreter) evalArruma(node *ast.ArrumaStatement, env *object.Environment) object.Object {
 	res := i.evalBlock(node.Try, env)
-	if res != nil && res.Type() == object.ERRO_OBJ {
+
+	// se houve erro e existe catch: captura e amarra ao ErrName.
+	if res != nil && res.Type() == object.ERRO_OBJ && node.Catch != nil {
 		erro := res.(*object.Erro)
-		// Marca Handled: a partir daqui o erro NAO deve voltar a propagar
-		// automaticamente — o usuario iterage com ele como valor (pode
-		// concatenar, logar, inspecionar via erro_tipo/erro_pilha). Scripts
-		// antigos que faziam "erro + 'x'" seguem funcionando porque Inspect
-		// devolve Message e isError agora respeita o flag.
 		erro.Handled = true
-		env.Set(node.ErrName.Value, erro)
-		return i.evalBlock(node.Catch, env)
+		if node.ErrName != nil {
+			env.Set(node.ErrName.Value, erro)
+		}
+		res = i.evalBlock(node.Catch, env)
 	}
-	if res != nil {
-		switch res.Type() {
-		case object.RETORNO_OBJ, object.VAZA_OBJ, object.CONTINUA_OBJ:
-			return res
+
+	// finally sempre roda, com erro/return/vaza/continua pendente. O valor
+	// pendente (res) ainda sera propagado, a menos que o finally troque (retorn
+	// novo). Simplificacao: finally so roda *antes* de propagar; nao captura
+	// erro/return — deve apenas executar cleanup efeito colateral.
+	if node.Finally != nil {
+		fin := i.evalBlock(node.Finally, env)
+		// se finally devolveu algo (return/erro/vaza/continua) explicitamente,
+		// toma precedencia — sobrepoe o res do try/catch.
+		if fin != nil && fin.Type() != object.NADA_OBJ {
+			res = fin
 		}
 	}
-	return NADA
+	return res
 }
 
 func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linha int, nome string) object.Object {
@@ -793,6 +958,16 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 			err.Kind = kind
 		}
 		return res
+	}
+	// CompiledFunction (bytecode da VM): builtins de ordem superior (mapeia,
+	// filtra, reduz, ordena_com, paralelo...) recebem esse tipo quando o
+	// engine e a VM. A VM registra ChamaCompilada no boot; sem ela (tree-
+	// walker puro) e erro mesmo.
+	if cf, ok := fn.(*object.CompiledFunction); ok {
+		if i.ChamaCompilada != nil {
+			return i.ChamaCompilada(cf, args)
+		}
+		return newError(linha, "essa gambiarra e compilada (VM) e o engine atual nao sabe rodar ela")
 	}
 	funcao, ok := fn.(*object.Funcao)
 	if !ok {

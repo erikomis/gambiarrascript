@@ -187,3 +187,45 @@ func TestTokensDicionario(t *testing.T) {
 		}
 	}
 }
+
+func TestUnicodeIdentifierETexto(t *testing.T) {
+	input := `bota ção = "café résumé 数値"`
+	l := New(input)
+	esperado := []struct {
+		tipo token.TokenType
+		lit  string
+	}{
+		{token.BOTA, "bota"},
+		{token.IDENT, "ção"},
+		{token.ASSIGN, "="},
+		{token.TEXTO, "café résumé 数値"},
+		{token.EOF, ""},
+	}
+	for i, esp := range esperado {
+		tok := l.NextToken()
+		if tok.Type != esp.tipo {
+			t.Fatalf("[%d] tipo: got %q, esperado %q", i, tok.Type, esp.tipo)
+		}
+		if tok.Literal != esp.lit {
+			t.Fatalf("[%d] literal: got %q, esperado %q", i, tok.Literal, esp.lit)
+		}
+	}
+}
+
+func TestUnicodeNumeroETextoLen(t *testing.T) {
+	l := New(`mostra tamanho("nação")`)
+	tok := l.NextToken() // MOSTRA
+	tok = l.NextToken()  // IDENT "tamanho"
+	tok = l.NextToken()  // LPAREN
+	tok = l.NextToken()  // TEXTO "nação"
+	if tok.Type != token.TEXTO {
+		t.Fatalf("TEXTO")
+	}
+	if tok.Literal != "nação" {
+		t.Fatalf("lit %q", tok.Literal)
+	}
+	tok = l.NextToken() // RPAREN
+	if tok.Type != token.RPAREN {
+		t.Fatalf("RPAREN")
+	}
+}

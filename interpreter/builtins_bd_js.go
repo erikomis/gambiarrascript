@@ -16,3 +16,11 @@ func builtinConecta(args []object.Object) object.Object {
 func builtinFecha(args []object.Object) object.Object {
 	return erroBuiltin("fecha() de banco nao funciona no navegador (wasm) — banco de dados so roda no gs nativo")
 }
+
+func builtinConsulta(args []object.Object) object.Object {
+	return erroBuiltin("consulta() nao funciona no navegador (wasm) — banco de dados so roda no gs nativo")
+}
+
+func builtinExecuta(args []object.Object) object.Object {
+	return erroBuiltin("executa() nao funciona no navegador (wasm) — banco de dados so roda no gs nativo")
+}

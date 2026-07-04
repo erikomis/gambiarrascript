@@ -155,7 +155,7 @@ func (i *Interpreter) builtinParalelo(args []object.Object) object.Object {
 
 // builtinEspera tem dois papeis, desambiguados por arity:
 //   - espera(futuro)            → 1 arg: bloqueia ate o Futuro resolver e devolve o valor.
-//                                 Se for uma lista de Futuros, devolve lista de valores.
+//     Se for uma lista de Futuros, devolve lista de valores.
 //   - espera(recebido, esperado) → 2 args: assert de teste (gs testa).
 func (i *Interpreter) builtinEspera(args []object.Object) object.Object {
 	if len(args) == 1 {

@@ -45,3 +45,31 @@ func TestConectaUrlInvalida(t *testing.T) {
 		t.Fatalf("fecha de nao-conexao deveria dar erro, got %s", got.Type())
 	}
 }
+
+func TestConsultaExecutaSqlite(t *testing.T) {
+	out := rodar(t, `bota c = conecta("sqlite::memory:")
+executa(c, "CREATE TABLE gente (id INTEGER PRIMARY KEY, nome TEXT, idade INTEGER)")
+bota n1 = executa(c, "INSERT INTO gente (nome, idade) VALUES (?, ?)", "Ze", 30)
+bota n2 = executa(c, "INSERT INTO gente (nome, idade) VALUES (?, ?)", "Rita", 25)
+mostra n1 + n2
+bota r = consulta(c, "SELECT nome, idade FROM gente ORDER BY idade")
+mostra tamanho(r)
+mostra r[0]["nome"]
+mostra r[1]["idade"]
+fecha(c)`)
+	esperado := "2\n2\nRita\n30\n"
+	if out != esperado {
+		t.Fatalf("saida: %q esperado %q", out, esperado)
+	}
+}
+
+func TestConsultaSemArg(t *testing.T) {
+	out := rodar(t, `bota c = conecta("sqlite::memory:")
+executa(c, "CREATE TABLE x (v INTEGER)")
+executa(c, "INSERT INTO x VALUES (42)")
+bota r = consulta(c, "SELECT v FROM x")
+mostra r[0]["v"]`)
+	if out != "42\n" {
+		t.Fatalf("saida %q", out)
+	}
+}

@@ -52,6 +52,10 @@ type BotaStatement struct {
 	Name   *Identifier      // setado quando o alvo e uma variavel simples
 	Indice *IndexExpression // setado quando o alvo e uma atribuicao por indice
 	Value  Expression
+	// OpComposto marca atribuicao composta (`x += 1`, sem `bota`): o parser
+	// desugara Value pra `x + 1`, e o formatter usa isso pra reimprimir a
+	// forma original. Engines tratam como BotaStatement normal.
+	OpComposto string
 }
 
 func (s *BotaStatement) statementNode()       {}
@@ -64,6 +68,74 @@ func (s *BotaStatement) String() string {
 		alvo = s.Indice.String()
 	}
 	return "bota " + alvo + " = " + s.Value.String()
+}
+
+// EscolheStatement e o switch/match:
+//
+//	escolhe x
+//	caso 1, 2
+//	    ...
+//	caso 3
+//	    ...
+//	se_nao_colar
+//	    ...
+//	acabou_finalmente
+//
+// Sem fallthrough: casa o primeiro caso igual (semantica do ==) e sai.
+type EscolheStatement struct {
+	Token   token.Token
+	Subject Expression
+	Casos   []CasoBraco
+	Default *BlockStatement // bloco do se_nao_colar (opcional)
+}
+
+// CasoBraco e um braco `caso v1, v2, ...` com o corpo.
+type CasoBraco struct {
+	Values []Expression
+	Body   *BlockStatement
+}
+
+func (s *EscolheStatement) statementNode()       {}
+func (s *EscolheStatement) TokenLiteral() string { return s.Token.Literal }
+func (s *EscolheStatement) String() string {
+	var sb strings.Builder
+	sb.WriteString("escolhe " + s.Subject.String() + " ")
+	for _, c := range s.Casos {
+		vals := make([]string, len(c.Values))
+		for i, v := range c.Values {
+			vals[i] = v.String()
+		}
+		sb.WriteString("caso " + strings.Join(vals, ", ") + " " + c.Body.String())
+	}
+	if s.Default != nil {
+		sb.WriteString("se_nao_colar " + s.Default.String())
+	}
+	sb.WriteString("acabou_finalmente")
+	return sb.String()
+}
+
+// DesestruturaStatement e `bota [a, b] = lista` (por posicao) ou
+// `bota {x, y} = dict` (por chave). Nome sem valor correspondente vira nada
+// (lenient — e gambiarra, nao pattern matching de Haskell).
+type DesestruturaStatement struct {
+	Token  token.Token // o 'bota'
+	Names  []*Identifier
+	DeDict bool // true: {x, y} por chave; false: [a, b] por posicao
+	Value  Expression
+}
+
+func (s *DesestruturaStatement) statementNode()       {}
+func (s *DesestruturaStatement) TokenLiteral() string { return s.Token.Literal }
+func (s *DesestruturaStatement) String() string {
+	nomes := make([]string, len(s.Names))
+	for i, n := range s.Names {
+		nomes[i] = n.Value
+	}
+	abre, fecha := "[", "]"
+	if s.DeDict {
+		abre, fecha = "{", "}"
+	}
+	return "bota " + abre + strings.Join(nomes, ", ") + fecha + " = " + s.Value.String()
 }
 
 type MostraStatement struct {
@@ -218,12 +290,18 @@ type ArrumaStatement struct {
 	Try     *BlockStatement
 	ErrName *Identifier
 	Catch   *BlockStatement
+	Finally *BlockStatement // opcional; bloco roda sempre (try+catch), com/sem erro
 }
 
 func (s *ArrumaStatement) statementNode()       {}
 func (s *ArrumaStatement) TokenLiteral() string { return s.Token.Literal }
 func (s *ArrumaStatement) String() string {
-	return "arruma " + s.Try.String() + "quebrou " + s.ErrName.String() + " " + s.Catch.String() + "acabou_finalmente"
+	out := "arruma " + s.Try.String() + "quebrou " + s.ErrName.String() + " " + s.Catch.String()
+	if s.Finally != nil {
+		out += "finalmente " + s.Finally.String()
+	}
+	out += "acabou_finalmente"
+	return out
 }
 
 // ImportaStatement carrega e executa outro arquivo .gs, trazendo suas
@@ -269,6 +347,26 @@ type TextoLiteral struct {
 func (e *TextoLiteral) expressionNode()      {}
 func (e *TextoLiteral) TokenLiteral() string { return e.Token.Literal }
 func (e *TextoLiteral) String() string       { return `"` + e.Value + `"` }
+
+// TextoInterpolado representa uma string com interpolação `${expr}`. Parts
+// alterna *TextoLiteral (pedaco literal fixo) e Expression (expressao a
+// avaliar e converter pra texto).
+type TextoInterpolado struct {
+	Token token.Token
+	Parts []Expression // *TextoLiteral (literal) ou Expression (interp)
+}
+
+func (e *TextoInterpolado) expressionNode()      {}
+func (e *TextoInterpolado) TokenLiteral() string { return e.Token.Literal }
+func (e *TextoInterpolado) String() string {
+	var sb strings.Builder
+	sb.WriteByte('"')
+	for _, p := range e.Parts {
+		sb.WriteString(p.String())
+	}
+	sb.WriteByte('"')
+	return sb.String()
+}
 
 type BooleanoLiteral struct {
 	Token token.Token
@@ -345,11 +443,19 @@ type IndexExpression struct {
 	Token token.Token
 	Left  Expression
 	Index Expression
+	// Dot marca acesso por ponto (`obj.campo`) — acucar sintatico pra
+	// `obj["campo"]`. Engines ignoram; o formatter reimprime com ponto.
+	Dot bool
 }
 
 func (e *IndexExpression) expressionNode()      {}
 func (e *IndexExpression) TokenLiteral() string { return e.Token.Literal }
 func (e *IndexExpression) String() string {
+	if e.Dot {
+		if t, ok := e.Index.(*TextoLiteral); ok {
+			return "(" + e.Left.String() + "." + t.Value + ")"
+		}
+	}
 	return "(" + e.Left.String() + "[" + e.Index.String() + "])"
 }
 
@@ -372,6 +478,37 @@ func (e *DicionarioLiteral) String() string {
 	}
 	return "{" + strings.Join(partes, ", ") + "}"
 }
+
+// FuncaoLiteral e uma gambiarra anonima usada como EXPRESSAO:
+// `gambiarra(x) ... acabou_finalmente`. Mesmo shape da GambiarraStatement,
+// so que sem nome — avalia pra um valor de funcao (closure).
+type FuncaoLiteral struct {
+	Token      token.Token
+	Parameters []*Identifier
+	Body       *BlockStatement
+}
+
+func (e *FuncaoLiteral) expressionNode()      {}
+func (e *FuncaoLiteral) TokenLiteral() string { return e.Token.Literal }
+func (e *FuncaoLiteral) String() string {
+	nomes := make([]string, len(e.Parameters))
+	for i, p := range e.Parameters {
+		nomes[i] = p.Value
+	}
+	return "gambiarra(" + strings.Join(nomes, ", ") + ") " + e.Body.String() + "acabou_finalmente"
+}
+
+// RangeExpression representa `inicio..fim` (inclusive). Devolve uma Lista
+// [inicio, inicio+1, ..., fim] quando avaliada. So com inteiros.
+type RangeExpression struct {
+	Token token.Token
+	Start Expression
+	End   Expression
+}
+
+func (e *RangeExpression) expressionNode()      {}
+func (e *RangeExpression) TokenLiteral() string { return e.Token.Literal }
+func (e *RangeExpression) String() string       { return e.Start.String() + ".." + e.End.String() }
 
 // BoraExpression e a prefix-expression `bora fn(args)`: dispara a chamada
 // de `fn` numa goroutine e devolve imediatamente um Futuro. O Call interno

@@ -1,10 +1,42 @@
 package interpreter
 
 import (
+	"fmt"
 	"strings"
 
 	"gambiarrascript/object"
 )
+
+// builtinFormata: o printf da gambiarra. Usa os verbos do Go (%v %s %d %f,
+// com padding/casas: %05d, %.2f, %-10s...). Numero inteiro vira int64, float
+// vira float64, texto vira string, booleano vira bool; o resto vai de Inspect.
+func builtinFormata(args []object.Object) object.Object {
+	if len(args) < 1 {
+		return erroBuiltin("formata() quer o modelo (+valores), veio nada")
+	}
+	modelo, ok := args[0].(*object.Texto)
+	if !ok {
+		return erroBuiltin("formata: o modelo tem que ser texto, veio %s", args[0].Type())
+	}
+	vals := make([]interface{}, len(args)-1)
+	for i, a := range args[1:] {
+		switch v := a.(type) {
+		case *object.Numero:
+			if v.EhInt {
+				vals[i] = v.Int
+			} else {
+				vals[i] = v.Value
+			}
+		case *object.Texto:
+			vals[i] = v.Value
+		default:
+			// booleano/nada/lista/dict: usa a cara da linguagem (deu_bom,
+			// nada, [1, 2]...) em vez da representacao do Go.
+			vals[i] = a.Inspect()
+		}
+	}
+	return &object.Texto{Value: fmt.Sprintf(modelo.Value, vals...)}
+}
 
 func builtinSepara(args []object.Object) object.Object {
 	if len(args) != 2 {

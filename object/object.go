@@ -31,6 +31,9 @@ const (
 	// concorrencia
 	FUTURO_OBJ = "FUTURO"
 	CANO_OBJ   = "CANO"
+
+	// colecoes extras
+	CONJUNTO_OBJ = "CONJUNTO" // Set: chaves unicas
 )
 
 type Object interface {
@@ -61,6 +64,33 @@ func NumInt(i int64) *Numero { return &Numero{Value: float64(i), Int: i, EhInt: 
 
 // NumFloat cria um numero de ponto flutuante.
 func NumFloat(f float64) *Numero { return &Numero{Value: f} }
+
+// RangeMax e o limite de elementos de um range `..` — evita estourar a memoria
+// com algo tipo `1..999999999999`.
+const RangeMax = 100_000_000
+
+// RangeInts monta os elementos de um range inteiro inclusivo lo..hi. Cresce
+// (lo<=hi) ou decresce (lo>hi). Devolve (nil, false) se passar de RangeMax.
+func RangeInts(lo, hi int64) ([]Object, bool) {
+	n := hi - lo
+	if n < 0 {
+		n = -n
+	}
+	if n+1 > RangeMax {
+		return nil, false
+	}
+	elems := make([]Object, 0, n+1)
+	if lo <= hi {
+		for v := lo; v <= hi; v++ {
+			elems = append(elems, NumInt(v))
+		}
+	} else {
+		for v := lo; v >= hi; v-- {
+			elems = append(elems, NumInt(v))
+		}
+	}
+	return elems, true
+}
 
 func (n *Numero) Type() ObjectType { return NUMERO_OBJ }
 func (n *Numero) Inspect() string {
@@ -116,6 +146,14 @@ func (f *Funcao) Inspect() string {
 	return "gambiarra(" + strings.Join(nomes, ", ") + ")"
 }
 
+// LinhaPC mapeia um offset do bytecode (PC) pra linha do codigo-fonte. A
+// tabela e esparsa: o compiler so grava uma entrada quando a linha muda; a
+// linha de um ip qualquer e a da ultima entrada com PC <= ip.
+type LinhaPC struct {
+	PC    int
+	Linha int
+}
+
 // CompiledFunction e a representacao de uma funcao na VM: bytecode + numArgs +
 // numLocals (slots pra params e locals no frame) + freeVars capturadas.
 // Reaproveita o mesmo FUNCAO_OBJ pra nao ter que adicionar outro ObjectType e
@@ -127,11 +165,25 @@ type CompiledFunction struct {
 	NumLocals int
 	Bytecode  []byte
 	Free      []Object
+	Linhas    []LinhaPC // tabela pc->linha pra erros com posicao
 }
 
 func (f *CompiledFunction) Type() ObjectType { return FUNCAO_OBJ }
 func (f *CompiledFunction) Inspect() string {
 	return "gambiarra<" + f.Name + ">(vm)"
+}
+
+// LinhaDoPC devolve a linha do fonte pro offset ip (0 = desconhecida).
+// Scan linear: a tabela e pequena e isso so roda em caminho de erro.
+func (f *CompiledFunction) LinhaDoPC(ip int) int {
+	linha := 0
+	for _, e := range f.Linhas {
+		if e.PC > ip {
+			break
+		}
+		linha = e.Linha
+	}
+	return linha
 }
 
 type Retorno struct{ Value Object }
@@ -155,8 +207,8 @@ type Erro struct {
 	Stack   []StackFrame // traço de pilha, do mais externo pro mais interno
 	Cause   *Erro        // erro original (para encadeamento / wrap)
 	Handled bool         // true depois que um `arruma ... quebrou` capturou;
-	                     // significa "ja foi tratado", nao deve voltar a
-	                     // propagar — deixa o usuario logar/inspecionar.
+	// significa "ja foi tratado", nao deve voltar a
+	// propagar — deixa o usuario logar/inspecionar.
 }
 
 func (e *Erro) Type() ObjectType { return ERRO_OBJ }
@@ -212,7 +264,7 @@ type Chaveavel interface {
 	ChaveHash() HashKey
 }
 
-func (t *Texto) ChaveHash() HashKey    { return HashKey{Tipo: TEXTO_OBJ, Valor: t.Value} }
+func (t *Texto) ChaveHash() HashKey { return HashKey{Tipo: TEXTO_OBJ, Valor: t.Value} }
 func (n *Numero) ChaveHash() HashKey {
 	if n.EhInt {
 		return HashKey{Tipo: NUMERO_OBJ, Valor: strconv.FormatInt(n.Int, 10)}
@@ -355,4 +407,63 @@ func inspectComAspas(o Object) string {
 		return `"` + t.Value + `"`
 	}
 	return o.Inspect()
+}
+
+// Conjunto implementa set com chaves do mesmo Dicionario (Chaveavel).
+type Conjunto struct {
+	Items map[HashKey]Object
+}
+
+func NovoConjunto() *Conjunto {
+	return &Conjunto{Items: map[HashKey]Object{}}
+}
+
+// Adiciona insere v no conjunto. Devolve true se era novo.
+func (c *Conjunto) Adiciona(v Object) bool {
+	ch, ok := v.(Chaveavel)
+	if !ok {
+		return false
+	}
+	k := ch.ChaveHash()
+	if _, existe := c.Items[k]; existe {
+		return false
+	}
+	c.Items[k] = v
+	return true
+}
+
+// Contem devolve true se v esta no conjunto.
+func (c *Conjunto) Contem(v Object) bool {
+	ch, ok := v.(Chaveavel)
+	if !ok {
+		return false
+	}
+	_, existe := c.Items[ch.ChaveHash()]
+	return existe
+}
+
+// Remove tira v do conjunto. Devolve true se existia.
+func (c *Conjunto) Remove(v Object) bool {
+	ch, ok := v.(Chaveavel)
+	if !ok {
+		return false
+	}
+	k := ch.ChaveHash()
+	if _, existe := c.Items[k]; !existe {
+		return false
+	}
+	delete(c.Items, k)
+	return true
+}
+
+func (c *Conjunto) Type() ObjectType { return CONJUNTO_OBJ }
+func (c *Conjunto) Inspect() string {
+	partes := make([]string, 0, len(c.Items))
+	for _, v := range c.Items {
+		partes = append(partes, inspectComAspas(v))
+	}
+	if len(partes) == 0 {
+		return "conjunto()"
+	}
+	return "{" + strings.Join(partes, ", ") + "}"
 }

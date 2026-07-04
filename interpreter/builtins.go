@@ -8,16 +8,17 @@ import (
 )
 
 var builtins = map[string]*object.Builtin{
-	"tamanho":   {Nome: "tamanho", Fn: builtinTamanho},
-	"chaves":    {Nome: "chaves", Fn: builtinChaves},
-	"tem":       {Nome: "tem", Fn: builtinTem},
-	"texto":     {Nome: "texto", Fn: builtinTexto},
-	"numero":    {Nome: "numero", Fn: builtinNumero},
-	"busca":     {Nome: "busca", Fn: builtinBusca},
-	"de_json":   {Nome: "de_json", Fn: builtinDeJson},
-	"pra_json":  {Nome: "pra_json", Fn: builtinPraJson},
+	"tamanho":  {Nome: "tamanho", Fn: builtinTamanho},
+	"chaves":   {Nome: "chaves", Fn: builtinChaves},
+	"tem":      {Nome: "tem", Fn: builtinTem},
+	"texto":    {Nome: "texto", Fn: builtinTexto},
+	"numero":   {Nome: "numero", Fn: builtinNumero},
+	"busca":    {Nome: "busca", Fn: builtinBusca},
+	"de_json":  {Nome: "de_json", Fn: builtinDeJson},
+	"pra_json": {Nome: "pra_json", Fn: builtinPraJson},
 
 	// texto
+	"formata":     {Nome: "formata", Fn: builtinFormata},
 	"separa":      {Nome: "separa", Fn: builtinSepara},
 	"junta":       {Nome: "junta", Fn: builtinJunta},
 	"maiusculo":   {Nome: "maiusculo", Fn: builtinMaiusculo},
@@ -31,9 +32,22 @@ var builtins = map[string]*object.Builtin{
 
 	// lista
 	"adiciona": {Nome: "adiciona", Fn: builtinAdiciona},
-	"remove":    {Nome: "remove", Fn: builtinRemove},
-	"ordena":    {Nome: "ordena", Fn: builtinOrdena},
-	"inverte":   {Nome: "inverte", Fn: builtinInverte},
+	"remove":   {Nome: "remove", Fn: builtinRemove},
+	"ordena":   {Nome: "ordena", Fn: builtinOrdena},
+	"inverte":  {Nome: "inverte", Fn: builtinInverte},
+	// (reduz/acha/acha_indice viraram metodos do Interpreter — precisam do
+	// applyFunction pra aceitar gambiarra do usuario; registrados no New.)
+	"unicos":   {Nome: "unicos", Fn: builtinUnicos},
+	"achatada": {Nome: "achatada", Fn: builtinAchatada},
+
+	// conjunto (Set)
+	"conjunto":          {Nome: "conjunto", Fn: builtinConjunto},
+	"contem_conjunto":   {Nome: "contem_conjunto", Fn: builtinContemConjunto},
+	"adiciona_conjunto": {Nome: "adiciona_conjunto", Fn: builtinAdicionaConjunto},
+	"remove_conjunto":   {Nome: "remove_conjunto", Fn: builtinRemoveConjunto},
+	"uniao":             {Nome: "uniao", Fn: builtinUniao},
+	"intersecao":        {Nome: "intersecao", Fn: builtinIntersecao},
+	"diferenca":         {Nome: "diferenca", Fn: builtinDiferenca},
 
 	// matematica
 	"raiz":      {Nome: "raiz", Fn: builtinRaiz},
@@ -46,13 +60,26 @@ var builtins = map[string]*object.Builtin{
 	"max":       {Nome: "max", Fn: builtinMax},
 
 	// arquivo
-	"le_arquivo":     {Nome: "le_arquivo", Fn: builtinLeArquivo},
+	"le_arquivo":      {Nome: "le_arquivo", Fn: builtinLeArquivo},
 	"escreve_arquivo": {Nome: "escreve_arquivo", Fn: builtinEscreveArquivo},
 	"anexa_arquivo":   {Nome: "anexa_arquivo", Fn: builtinAnexaArquivo},
+	// fs (sistema de arquivos)
+	"existe":        {Nome: "existe", Fn: builtinExiste},
+	"eh_dir":        {Nome: "eh_dir", Fn: builtinEhDir},
+	"deleta":        {Nome: "deleta", Fn: builtinDeleta},
+	"cria_dir":      {Nome: "cria_dir", Fn: builtinCriaDir},
+	"le_dir":        {Nome: "le_dir", Fn: builtinLeDir},
+	"caminho_junta": {Nome: "caminho_junta", Fn: builtinCaminhoJunta},
+	"caminho_base":  {Nome: "caminho_base", Fn: builtinCaminhoBase},
+	"caminho_dir":   {Nome: "caminho_dir", Fn: builtinCaminhoDir},
+	"caminho_ext":   {Nome: "caminho_ext", Fn: builtinCaminhoExt},
+	"caminho_abs":   {Nome: "caminho_abs", Fn: builtinCaminhoAbs},
 
 	// banco de dados
-	"conecta": {Nome: "conecta", Fn: builtinConecta},
-	"fecha":   {Nome: "fecha", Fn: builtinFecha},
+	"conecta":  {Nome: "conecta", Fn: builtinConecta},
+	"fecha":    {Nome: "fecha", Fn: builtinFecha},
+	"consulta": {Nome: "consulta", Fn: builtinConsulta},
+	"executa":  {Nome: "executa", Fn: builtinExecuta},
 
 	// erros
 	"quebra":       {Nome: "quebra", Fn: builtinQuebra},
@@ -62,6 +89,35 @@ var builtins = map[string]*object.Builtin{
 	"erro_pilha":   {Nome: "erro_pilha", Fn: builtinErroPilha},
 	"erro_causa":   {Nome: "erro_causa", Fn: builtinErroCausa},
 	"envolve_erro": {Nome: "envolve_erro", Fn: builtinEnvolveErro},
+
+	// regex
+	"busca_regex":     {Nome: "busca_regex", Fn: builtinBuscaRegex},
+	"acha_regex":      {Nome: "acha_regex", Fn: builtinAchaRegex},
+	"combina_regex":   {Nome: "combina_regex", Fn: builtinCombinaRegex},
+	"substitui_regex": {Nome: "substitui_regex", Fn: builtinSubstituiRegex},
+	"separa_regex":    {Nome: "separa_regex", Fn: builtinSeparaRegex},
+
+	// tempo/datetime
+	"agora":         {Nome: "agora", Fn: builtinAgora},
+	"agora_num":     {Nome: "agora_num", Fn: builtinAgoraNum},
+	"agora_ns":      {Nome: "agora_ns", Fn: builtinAgoraNs},
+	"formata_tempo": {Nome: "formata_tempo", Fn: builtinFormataTempo},
+	"parse_tempo":   {Nome: "parse_tempo", Fn: builtinParseTempo},
+	"duracao":       {Nome: "duracao", Fn: builtinDuracao},
+	"espera_ms":     {Nome: "espera_ms", Fn: builtinEsperaMs},
+
+	// crypto / codificacao
+	"md5":               {Nome: "md5", Fn: builtinMd5},
+	"sha1":              {Nome: "sha1", Fn: builtinSha1},
+	"sha256":            {Nome: "sha256", Fn: builtinSha256},
+	"sha512":            {Nome: "sha512", Fn: builtinSha512},
+	"hmac_sha256":       {Nome: "hmac_sha256", Fn: builtinHmacSha256},
+	"base64_codifica":   {Nome: "base64_codifica", Fn: builtinBase64Codifica},
+	"base64_decodifica": {Nome: "base64_decodifica", Fn: builtinBase64Decodifica},
+	"base32_codifica":   {Nome: "base32_codifica", Fn: builtinBase32Codifica},
+	"base32_decodifica": {Nome: "base32_decodifica", Fn: builtinBase32Decodifica},
+	"hex_codifica":      {Nome: "hex_codifica", Fn: builtinHexCodifica},
+	"hex_decodifica":    {Nome: "hex_decodifica", Fn: builtinHexDecodifica},
 }
 
 func builtinTamanho(args []object.Object) object.Object {
