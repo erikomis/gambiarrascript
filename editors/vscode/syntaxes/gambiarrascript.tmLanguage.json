@@ -28,10 +28,28 @@
     "strings": {
       "name": "string.quoted.double.gambiarrascript",
       "begin": "\"",
-      "end": "\""
+      "end": "\"",
+      "patterns": [
+        {
+          "match": "\\\\(\\$\\{|.)",
+          "name": "constant.character.escape.gambiarrascript"
+        },
+        {
+          "name": "meta.template.expression.gambiarrascript",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.template-expression.begin.gambiarrascript" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.template-expression.end.gambiarrascript" }
+          },
+          "patterns": [{ "include": "$self" }]
+        }
+      ]
     },
     "numbers": {
-      "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+      "match": "\\b(0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+|[0-9]+(\\.[0-9]+)?)\\b",
       "name": "constant.numeric.gambiarrascript"
     },
     "constants": {
@@ -46,13 +64,13 @@
       }
     },
     "builtins": {
-      "match": "\\b(tamanho|chaves|tem|texto|numero|busca|rota|escuta|de_json|pra_json|separa|junta|maiusculo|minusculo|substitui|fatia|contem|comeca_com|termina_com|tira_espaco|adiciona|remove|ordena|inverte|mapeia|filtra|raiz|aleatorio|arredonda|teto|chao|abs|min|max|le_arquivo|escreve_arquivo|pergunta|argumentos)\\b",
+      "match": "\\b(tamanho|chaves|tem|texto|numero|busca|rota|escuta|de_json|pra_json|formata|separa|junta|maiusculo|minusculo|substitui|fatia|contem|comeca_com|termina_com|tira_espaco|adiciona|remove|ordena|inverte|mapeia|filtra|reduz|acha|acha_indice|unicos|achatada|ordena_com|raiz|aleatorio|arredonda|teto|chao|abs|min|max|le_arquivo|escreve_arquivo|anexa_arquivo|existe|eh_dir|deleta|cria_dir|le_dir|caminho_junta|caminho_base|caminho_dir|caminho_ext|caminho_abs|pergunta|argumentos|le_tudo|le_linhas|escreve|escreve_erro|env|cano|envia|recebe|fecha|espera|afirma|paralelo|conecta|consulta|executa|busca_regex|acha_regex|combina_regex|substitui_regex|separa_regex|agora|agora_num|agora_ns|formata_tempo|parse_tempo|duracao|espera_ms|md5|sha1|sha256|sha512|hmac_sha256|base64_codifica|base64_decodifica|base32_codifica|base32_decodifica|hex_codifica|hex_decodifica|conjunto|contem_conjunto|adiciona_conjunto|remove_conjunto|uniao|intersecao|diferenca|quebra|erro_msg|erro_linha|erro_tipo|erro_pilha|erro_causa|envolve_erro)\\b",
       "name": "support.function.builtin.gambiarrascript"
     },
     "keywords": {
       "patterns": [
         {
-          "match": "\\b(se_colar|se_nao_colar|enquanto|pra_cada|de|ate|em|vaza|continua|arruma|quebrou|acabou_finalmente|funciona|importa)\\b",
+          "match": "\\b(se_colar|se_nao_colar|enquanto|pra_cada|de|ate|em|vaza|continua|arruma|quebrou|finalmente|acabou_finalmente|escolhe|caso|funciona|importa|bora)\\b",
           "name": "keyword.control.gambiarrascript"
         },
         {
