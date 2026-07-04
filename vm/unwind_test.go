@@ -3,6 +3,8 @@ package vm
 import (
 	"strings"
 	"testing"
+
+	"gambiarrascript/object"
 )
 
 // Cobre o unwinding de frames: arruma/quebrou capturando erro que estoura
@@ -118,7 +120,9 @@ mostra f()`
 }
 
 func TestVMErroPilhaBuiltin(t *testing.T) {
-	// erro_pilha(err) depois do quebrou devolve o traço na VM tambem
+	// erro_pilha(err) depois do quebrou devolve, na VM tambem, a lista de
+	// frames do traço — cada frame um dicionario {"funcao", "linha"} (dado
+	// estruturado, igual ao tree-walker; a string formatada e o Traco()).
 	src := `gambiarra f()
     funciona 1 / 0
 acabou_finalmente
@@ -130,7 +134,24 @@ quebrou err
 acabou_finalmente
 t`
 	got, _ := rodaVM(t, src)
-	if !strings.Contains(got.Inspect(), "em f (linha 6)") {
-		t.Fatalf("erro_pilha sem o frame de f: %q", got.Inspect())
+	lista, ok := got.(*object.Lista)
+	if !ok {
+		t.Fatalf("erro_pilha devia devolver lista de frames, veio %T (%s)", got, got.Inspect())
+	}
+	if len(lista.Elements) == 0 {
+		t.Fatalf("erro_pilha veio vazio, esperava o frame de f")
+	}
+	frame, ok := lista.Elements[0].(*object.Dicionario)
+	if !ok {
+		t.Fatalf("frame nao e dicionario, veio %T", lista.Elements[0])
+	}
+	funcao := frame.Pares[(&object.Texto{Value: "funcao"}).ChaveHash()].Valor
+	linha := frame.Pares[(&object.Texto{Value: "linha"}).ChaveHash()].Valor
+	if funcao == nil || funcao.Inspect() != "f" {
+		t.Fatalf("frame sem funcao=f: %s", lista.Inspect())
+	}
+	// f e chamado no `mostra f()`, linha 6 da fonte acima
+	if linha == nil || linha.Inspect() != "6" {
+		t.Fatalf("frame sem linha=6: %s", lista.Inspect())
 	}
 }
