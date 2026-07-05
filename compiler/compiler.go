@@ -46,7 +46,13 @@ func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
 }
 
 func (s *SymbolTable) Define(nome string) Symbol {
-	if sym, ok := s.symbols[nome]; ok {
+	// Reusa o slot so quando o nome ja e uma variavel DESTE escopo (redefinir
+	// `bota x` no mesmo bloco). Se o nome so existe como FREESCOPE (freevar
+	// capturada de um escopo externo, registrada por Resolve), um `bota` tem que
+	// criar um LOCAL novo que SOMBREIA a freevar — igual ao tree-walker. Sem
+	// isso, `bota n = n + 1` numa closure escrevia na freevar em vez de criar
+	// um local, e `funciona n` lia o valor errado.
+	if sym, ok := s.symbols[nome]; ok && sym.Scope != FreeScope {
 		return sym
 	}
 	sym := Symbol{Name: nome, Index: s.count, Scope: GlobalScope}
@@ -625,7 +631,10 @@ func (c *Compiler) compilePraCadaNum(node *ast.PraCadaNumStatement) error {
 	}
 
 	c.emitVarGet(sym)
-	c.emit(code.OpConstant, c.addConstant(&object.Numero{Value: 1}))
+	// incremento inteiro exato: NumInt (EhInt=true) mantem o contador em int64.
+	// Com object.Numero{Value:1} (float) o `i + 1` caia no caminho float da VM
+	// e o contador perdia exatidao acima de 2^53.
+	c.emit(code.OpConstant, c.addConstant(object.NumInt(1)))
 	c.emit(code.OpAdd)
 	c.emitVarSet(sym)
 	c.emit(code.OpJump, startPos)
@@ -665,8 +674,8 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 	seqSym := c.defineVar(seqNome)
 	c.emitVarSet(seqSym)
 
-	// __it = 0
-	c.emit(code.OpConstant, c.addConstant(&object.Numero{Value: 0}))
+	// __it = 0  (indice inteiro exato — ver nota no loop numerico)
+	c.emit(code.OpConstant, c.addConstant(object.NumInt(0)))
 	itSym := c.defineVar(itNome)
 	c.emitVarSet(itSym)
 	// __len = tamanho(__seq)
@@ -700,9 +709,9 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 	for _, j := range c.loopStack[idx].continueJumps {
 		c.backpatch(j, incrementoAddr)
 	}
-	// __it = __it + 1
+	// __it = __it + 1  (indice inteiro exato — ver nota no loop numerico)
 	c.emitVarGet(itSym)
-	c.emit(code.OpConstant, c.addConstant(&object.Numero{Value: 1}))
+	c.emit(code.OpConstant, c.addConstant(object.NumInt(1)))
 	c.emit(code.OpAdd)
 	c.emitVarSet(itSym)
 	c.emit(code.OpJump, startPos)

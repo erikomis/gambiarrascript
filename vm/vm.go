@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 
 	"gambiarrascript/code"
 	"gambiarrascript/compiler"
@@ -224,7 +225,15 @@ func (vm *VM) Run() error {
 	vm.frames[0] = &Frame{fn: main, ip: 0, basePointer: 0}
 	vm.framesIdx = 1
 
-	return vm.execFrame(vm.frames[0])
+	err := vm.execFrame(vm.frames[0])
+	// Programa que termina via `funciona` no top-level sai por OpReturn: o valor
+	// fica em stack[sp-1] (push) e o frame principal e desempilhado (framesIdx=0).
+	// O fim normal (fallthrough/OpPop) deixa o valor em stack[sp], onde
+	// LastPoppedStackElem le. Ajusta o sp pra os dois casos convergirem.
+	if err == nil && vm.framesIdx == 0 {
+		vm.sp--
+	}
+	return err
 }
 
 // erroNaoCapturado e o Go error devolvido quando um erro de runtime da VM
@@ -267,7 +276,11 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				// So pra erro cru de runtime: builtins ja vem formatados.
 				// `frame` e capturado por referencia: aponta pro frame que
 				// estava rodando na hora do panic (o loop reatribui a var).
-				if vme.err.Line == 0 && vme.err.Kind == "runtime" {
+				// Erro cru de runtime (sem linha e sem prefixo) ganha a linha e o
+				// prefixo aqui. Erros que ja vem formatados de um builtin (ex.:
+				// funcao chamada dentro de reduz/mapeia) comecam com "deu ruim"
+				// e NAO devem ser re-prefixados — senao vira "deu ruim ... deu ruim".
+				if vme.err.Line == 0 && vme.err.Kind == "runtime" && !strings.HasPrefix(vme.err.Message, "deu ruim") {
 					if l := frame.fn.LinhaDoPC(frame.ip); l > 0 {
 						vme.err.Line = l
 						vme.err.Message = fmt.Sprintf("deu ruim na linha %d: %s", l, vme.err.Message)
@@ -503,6 +516,9 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			ip += 2
 			callee := vm.stack[vm.sp-1]
 			if cf, ok := callee.(*object.CompiledFunction); ok {
+				if argc != cf.NumArgs {
+					panic(VMError{err: &object.Erro{Message: fmt.Sprintf("essa gambiarra quer %d parametro(s), voce mandou %d", cf.NumArgs, argc), Kind: "runtime"}})
+				}
 				// bp = endereco do arg0 (local 0). args em stack[sp-1-argc .. sp-2].
 				bp := vm.sp - 1 - argc
 				newFrame := &Frame{fn: cf, ip: 0, basePointer: bp, callPos: opPos}
@@ -533,7 +549,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				vm.push(res)
 				continue
 			}
-			panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra chamar %s", callee.Type()), Kind: "runtime"}})
+			panic(VMError{err: &object.Erro{Message: fmt.Sprintf("isso ai (%s) nao e gambiarra pra voce sair chamando", callee.Type()), Kind: "runtime"}})
 		case code.OpCallBuiltin:
 			idx := int(code.ReadUint16(fn.Bytecode[ip+1:]))
 			argc := int(fn.Bytecode[ip+3])
@@ -674,12 +690,19 @@ func (vm *VM) execBinario(op code.Opcode) {
 	rn, rok := right.(*object.Numero)
 	if lok && rok {
 		// bitwise so faz sentido com inteiros; tratamos antes do fast-path
-		// float pra nao contaminar caminho aritmetico.
-		if ln.EhInt && rn.EhInt {
-			if r, ok := vmExecBinarioBitwise(op, ln.Int, rn.Int); ok {
-				vm.push(r)
-				return
+		// float pra nao contaminar caminho aritmetico. Igual ao tree-walker,
+		// operando nao-inteiro num op bitwise e erro (nao cai no caminho float).
+		if ehBitwise(op) {
+			if !ln.EhInt || !rn.EhInt {
+				msg := simboloBinario(op) + " bitwise so faz sentido com inteiros"
+				if ehShift(op) {
+					msg = "shift so faz sentido com inteiros"
+				}
+				panic(VMError{err: &object.Erro{Message: msg, Kind: "runtime"}})
 			}
+			r, _ := vmExecBinarioBitwise(op, ln.Int, rn.Int)
+			vm.push(r)
+			return
 		}
 		// fast path inteiros exatos
 		if r, ok := vmExecBinarioIntShort(op, ln, rn); ok {
@@ -693,7 +716,59 @@ func (vm *VM) execBinario(op code.Opcode) {
 		vm.push(&object.Texto{Value: left.Inspect() + right.Inspect()})
 		return
 	}
-	panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra operar %s com %s", left.Type(), right.Type()), Kind: "runtime"}})
+	// mesma mensagem do tree-walker: "nao da pra fazer TEXTO - NUMERO"
+	panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra fazer %s %s %s", left.Type(), simboloBinario(op), right.Type()), Kind: "runtime"}})
+}
+
+// simboloBinario devolve o simbolo textual do operador aritmetico/bitwise, pra
+// que as mensagens de erro da VM fiquem identicas as do interpretador (que usa
+// node.Operator).
+func simboloBinario(op code.Opcode) string {
+	switch op {
+	case code.OpAdd:
+		return "+"
+	case code.OpSub:
+		return "-"
+	case code.OpMul:
+		return "*"
+	case code.OpDiv:
+		return "/"
+	case code.OpMod:
+		return "%"
+	case code.OpBAnd:
+		return "&"
+	case code.OpBOr:
+		return "|"
+	case code.OpBXor:
+		return "^"
+	case code.OpLShift:
+		return "<<"
+	case code.OpRShift:
+		return ">>"
+	case code.OpGreaterThan:
+		return ">"
+	case code.OpGreaterEqual:
+		return ">="
+	case code.OpMenor:
+		return "<"
+	case code.OpMenorEqual:
+		return "<="
+	}
+	return "?"
+}
+
+// ehBitwise diz se o opcode e uma operacao bitwise (&, |, ^, <<, >>).
+func ehBitwise(op code.Opcode) bool {
+	switch op {
+	case code.OpBAnd, code.OpBOr, code.OpBXor, code.OpLShift, code.OpRShift:
+		return true
+	}
+	return false
+}
+
+// ehShift diz se o opcode e um deslocamento (<< ou >>).
+func ehShift(op code.Opcode) bool {
+	return op == code.OpLShift || op == code.OpRShift
 }
 
 func vmExecBinarioNumero(op code.Opcode, l, r float64) object.Object {
@@ -783,14 +858,21 @@ func (vm *VM) execComparacao(op code.Opcode) {
 	case code.OpNotEqual:
 		vm.push(boolNativo(!iguais(left, right)))
 	default:
-		panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra comparar %s com %s", left.Type(), right.Type()), Kind: "runtime"}})
+		// mesma mensagem do tree-walker: "nao da pra fazer TEXTO > NUMERO"
+		panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra fazer %s %s %s", left.Type(), simboloBinario(op), right.Type()), Kind: "runtime"}})
 	}
 }
 
 func (vm *VM) execMinus() {
 	o := vm.pop()
 	if n, ok := o.(*object.Numero); ok {
-		vm.push(&object.Numero{Value: -n.Value})
+		// preserva a inteireza exata: -1 tem que continuar EhInt, senao vira
+		// float e escapa de checagens como o shift por valor negativo.
+		if n.EhInt {
+			vm.push(object.NumInt(-n.Int))
+		} else {
+			vm.push(&object.Numero{Value: -n.Value})
+		}
 		return
 	}
 	panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra colocar - na frente de %s", o.Type()), Kind: "runtime"}})
@@ -842,19 +924,9 @@ func vmIndex(cont, idx object.Object) (object.Object, error) {
 			return NADA, nil
 		}
 		return par.Valor, nil
-	case *object.Texto:
-		n, ok := idx.(*object.Numero)
-		if !ok {
-			return nil, fmt.Errorf("indice de texto tem que ser numero")
-		}
-		pos := int(n.Value)
-		runas := []rune(c.Value)
-		if pos < 0 || pos >= len(runas) {
-			return nil, fmt.Errorf("indice %d fora do texto", pos)
-		}
-		return &object.Texto{Value: string(runas[pos])}, nil
 	}
-	return nil, fmt.Errorf("nao da pra indexar %s", cont.Type())
+	// igual ao tree-walker: so lista e dicionario sao indexaveis (texto nao).
+	return nil, fmt.Errorf("so da pra indexar lista ou dicionario, e isso ai e %s", cont.Type())
 }
 
 func vmIndexSet(cont, idx, val object.Object) error {

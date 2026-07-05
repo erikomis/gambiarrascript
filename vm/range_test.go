@@ -17,6 +17,24 @@ func TestVMRange(t *testing.T) {
 	}
 }
 
+// TestVMLoopContadorInteiroExato cobre uma regressao: o incremento do loop
+// numerico (`pra_cada i de A ate B`) era compilado como object.Numero float
+// (EhInt=false), entao depois da primeira iteracao o contador `i` degradava
+// pra float64 e perdia exatidao acima de 2^53 (o tree-walker mantinha int64).
+// Aqui i chega a 3 e 2^53+3 (=9007199254740995, impar) NAO cabe em float64
+// (arredondaria pra ...996) — so o caminho inteiro exato acerta.
+func TestVMLoopContadorInteiroExato(t *testing.T) {
+	src := `bota r = 0
+pra_cada i de 1 ate 3
+    bota r = 9007199254740992 + i
+acabou_finalmente
+r`
+	got, _ := rodaVM(t, src)
+	if got.Inspect() != "9007199254740995" {
+		t.Errorf("contador do loop perdeu exatidao: got %s, esperado 9007199254740995", got.Inspect())
+	}
+}
+
 func TestVMIndexSet(t *testing.T) {
 	// dicionario: bota d[k] = v
 	dic := `bota d = {"a": 1}
