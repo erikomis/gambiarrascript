@@ -177,6 +177,7 @@ var nomesBuiltins = []string{
 	"semente", "embaralha", "escolhe_um", "uuid",
 	"le_arquivo", "escreve_arquivo", "anexa_arquivo",
 	"existe", "eh_dir", "deleta", "cria_dir", "le_dir",
+	"copia", "move", "tamanho_arquivo", "modificado_em", "glob",
 	"caminho_junta", "caminho_base", "caminho_dir", "caminho_ext", "caminho_abs",
 	"quebra", "erro_msg", "erro_linha", "erro_tipo", "erro_pilha", "erro_causa", "envolve_erro",
 	"mapeia", "filtra", "paralelo",

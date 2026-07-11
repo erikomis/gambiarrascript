@@ -53,6 +53,13 @@ var builtins = map[string]*object.Builtin{
 	"escolhe_um": {Nome: "escolhe_um", Fn: builtinEscolheUm},
 	"uuid":       {Nome: "uuid", Fn: builtinUuid},
 
+	// fs parte 2
+	"copia":           {Nome: "copia", Fn: builtinCopia},
+	"move":            {Nome: "move", Fn: builtinMove},
+	"tamanho_arquivo": {Nome: "tamanho_arquivo", Fn: builtinTamanhoArquivo},
+	"modificado_em":   {Nome: "modificado_em", Fn: builtinModificadoEm},
+	"glob":            {Nome: "glob", Fn: builtinGlob},
+
 	// conjunto (Set)
 	"conjunto":          {Nome: "conjunto", Fn: builtinConjunto},
 	"contem_conjunto":   {Nome: "contem_conjunto", Fn: builtinContemConjunto},

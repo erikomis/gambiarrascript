@@ -188,8 +188,10 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
       (Fisher-Yates, não muta), `escolhe_um(lista)`, `uuid()` (v4). Gerador
       compartilhado thread-safe (mutex); `semente` afeta `aleatorio` também.
       `examples/aleatorio.gs`.
-- [ ] **fs parte 2** — `copia(de, pra)`, `move(de, pra)`, `tamanho_arquivo`,
-      `modificado_em`, `glob("*.gs")`.
+- [x] **fs parte 2** — `copia(de, pra)`, `move(de, pra)`, `tamanho_arquivo`
+      (bytes), `modificado_em` (unix-segundos, encaixa no `formata_tempo`) e
+      `glob("*.gs")` (sem match = lista vazia). Builtins puros, tree-walker **e**
+      VM (teste de paridade); `examples/fs2.gs`.
 - [ ] **Datas parte 2** — soma/subtração de durações a instantes, timezone,
       `dia_da_semana`, diferença entre datas em dias/horas.
 - [ ] **CSV** — `le_csv` / `escreve_csv` (lista de dicts ↔ arquivo).
