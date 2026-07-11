@@ -52,7 +52,11 @@ func (s *SymbolTable) Define(nome string) Symbol {
 	// criar um LOCAL novo que SOMBREIA a freevar — igual ao tree-walker. Sem
 	// isso, `bota n = n + 1` numa closure escrevia na freevar em vez de criar
 	// um local, e `funciona n` lia o valor errado.
-	if sym, ok := s.symbols[nome]; ok && sym.Scope != FreeScope {
+	// BuiltinScope entra junto com FreeScope: um `bota`/param/`gambiarra` com
+	// nome de builtin cria um binding novo que SOMBREIA o builtin — igual ao
+	// tree-walker (evalIdentifier checa env antes dos builtins). Sem isso a VM
+	// resolvia pro builtin e `bota soma = 0`/`gambiarra soma(...)` quebravam.
+	if sym, ok := s.symbols[nome]; ok && sym.Scope != FreeScope && sym.Scope != BuiltinScope {
 		return sym
 	}
 	sym := Symbol{Name: nome, Index: s.count, Scope: GlobalScope}
@@ -168,6 +172,7 @@ var nomesBuiltins = []string{
 	"substitui", "fatia", "contem", "comeca_com", "termina_com", "tira_espaco",
 	"adiciona", "remove", "ordena", "inverte",
 	"reduz", "acha", "acha_indice", "unicos", "achatada",
+	"soma", "media", "zip", "enumera",
 	"raiz", "aleatorio", "arredonda", "teto", "chao", "abs", "min", "max",
 	"le_arquivo", "escreve_arquivo", "anexa_arquivo",
 	"existe", "eh_dir", "deleta", "cria_dir", "le_dir",

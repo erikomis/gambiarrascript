@@ -40,6 +40,12 @@ var builtins = map[string]*object.Builtin{
 	"unicos":   {Nome: "unicos", Fn: builtinUnicos},
 	"achatada": {Nome: "achatada", Fn: builtinAchatada},
 
+	// estatistica / munging de dados
+	"soma":    {Nome: "soma", Fn: builtinSoma},
+	"media":   {Nome: "media", Fn: builtinMedia},
+	"zip":     {Nome: "zip", Fn: builtinZip},
+	"enumera": {Nome: "enumera", Fn: builtinEnumera},
+
 	// conjunto (Set)
 	"conjunto":          {Nome: "conjunto", Fn: builtinConjunto},
 	"contem_conjunto":   {Nome: "contem_conjunto", Fn: builtinContemConjunto},

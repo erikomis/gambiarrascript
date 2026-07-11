@@ -233,3 +233,36 @@ f()`
 		t.Errorf("tracos divergem:\n  TW: %q\n  VM: %q", eTW.Traco(), eVM.Traco())
 	}
 }
+// TestParidadeStats garante que soma/media/zip/enumera rodam identico no
+// tree-walker e na VM (builtins puros compartilhados via BuiltinsVisiveis).
+func TestParidadeStats(t *testing.T) {
+	casos := []string{
+		`mostra soma([1, 2, 3, 4])`,
+		`mostra soma([1, 2, 0.5])`,
+		`mostra soma([])`,
+		`mostra media([1, 2, 3, 4])`,
+		`mostra zip([1, 2, 3], ["a", "b", "c"])`,
+		`mostra zip([1, 2, 3], [10, 20])`,
+		`mostra enumera(["a", "b", "c"])`,
+	}
+	for _, src := range casos {
+		comparaEngines(t, src)
+	}
+}
+
+// TestParidadeSombreiaBuiltin: o usuario pode declarar bota/gambiarra com o
+// mesmo nome de um builtin e o binding do usuario sombreia o builtin nos DOIS
+// engines (o tree-walker checa env antes; a VM tem que casar).
+func TestParidadeSombreiaBuiltin(t *testing.T) {
+	casos := []string{
+		`bota tamanho = 42
+mostra tamanho`,
+		`gambiarra soma(a, b)
+    funciona a + b
+acabou_finalmente
+mostra soma(2, 3)`,
+	}
+	for _, src := range casos {
+		comparaEngines(t, src)
+	}
+}

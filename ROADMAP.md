@@ -178,8 +178,12 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 - [ ] **Processos** — `roda_comando(cmd, [args])` devolvendo
       `{saida, erro, codigo}`, e `sai(codigo)` pra encerrar o script.
       Essencial pra scripts de automação (a praia da linguagem).
-- [ ] **Lista estatística/agrupamento** — `soma`, `media`, `ordena_por(lista,
-      "campo")`, `agrupa_por(lista, fn)`, `zip(a, b)`, `enumera(lista)`.
+- [~] **Lista estatística/agrupamento** — entregue: `soma`, `media`,
+      `zip(a, b)`, `enumera(lista)` (builtins puros, rodam no tree-walker **e**
+      na VM; `examples/stats.gs`). De quebra, corrigido bug de paridade: binding
+      do usuário (`bota`/`gambiarra`) agora sombreia builtin na VM igual ao
+      tree-walker. **Falta**: `ordena_por(lista, "campo")` e
+      `agrupa_por(lista, fn)` (higher-order — precisam da ponte `ChamaCompilada`).
 - [ ] **Aleatório de verdade** — `semente(n)` (reprodutível), `embaralha(lista)`,
       `escolhe_um(lista)`, `uuid()`.
 - [ ] **fs parte 2** — `copia(de, pra)`, `move(de, pra)`, `tamanho_arquivo`,
@@ -188,16 +192,17 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
       `dia_da_semana`, diferença entre datas em dias/horas.
 - [ ] **CSV** — `le_csv` / `escreve_csv` (lista de dicts ↔ arquivo).
 - [ ] **Compressão** — `gzip_comprime` / `gzip_descomprime` (e talvez zip).
-- [ ] **HTTP cliente turbinado** — `busca` com verbo custom (PUT/DELETE/PATCH),
-      headers, timeout e body binário. Hoje cobre o básico.
-- [ ] **Rede baixo nível** — TCP/UDP (`conecta_tcp`, `escuta_tcp`) e
-      WebSocket (cliente e servidor).
-- [ ] **Crypto parte 2** — AES (`encripta`/`decripta`) e hash de senha
-      (bcrypt/argon2) — md5/sha são pra checksum, não pra senha.
-- [ ] **Logging** — `log_info` / `log_aviso` / `log_erro` com timestamp,
-      nível configurável por env e saída em stderr.
-- [ ] **Parser de flags** — `opcoes({"porta": 8080, "verboso": deu_ruim})`
-      lendo `--porta 9090 --verboso` dos argumentos.
+      Deve libs para essa linguagem
+      - [ ] **HTTP cliente turbinado** — `busca` com verbo custom (PUT/DELETE/PATCH),
+            headers, timeout e body binário. Hoje cobre o básico.
+      - [ ] **Rede baixo nível** — TCP/UDP (`conecta_tcp`, `escuta_tcp`) e
+            WebSocket (cliente e servidor).
+      - [ ] **Crypto parte 2** — AES (`encripta`/`decripta`) e hash de senha
+            (bcrypt/argon2) — md5/sha são pra checksum, não pra senha.
+      - [ ] **Logging** — `log_info` / `log_aviso` / `log_erro` com timestamp,
+            nível configurável por env e saída em stderr.
+      - [ ] **Parser de flags** — `opcoes({"porta": 8080, "verboso": deu_ruim})`
+            lendo `--porta 9090 --verboso` dos argumentos.
 
 ### Tier 6 — Tooling / ecossistema
 
