@@ -96,8 +96,7 @@ ficaram pra levas próprias (DAP, FFI, multi-catch).
       versionamento/lockfile ainda.
 - [x] **Enums de `erro_tipo` padronizados** — constantes `runtime`, `builtin`,
       `io`, `rede`, `parse`, `usuario` (ver `interpreter/errors.go`).
-- [ ] Debug com breakpoints (DAP no LSP + `gs debug`) — grande; fica pra uma
-      leva própria.
+- [ ] Debug com breakpoints (DAP no LSP + `gs debug`) — grande; fica pra uma leva própria.
 - [ ] multi-catch (vários `quebrou` filtrando por `erro_tipo`) deixar para depois esse.
 
 ### Tier 3 — Maturidade
@@ -175,9 +174,12 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 
 ### Tier 5 — Stdlib que ainda falta
 
-- [ ] **Processos** — `roda_comando(cmd, [args])` devolvendo
-      `{saida, erro, codigo}`, e `sai(codigo)` pra encerrar o script.
-      Essencial pra scripts de automação (a praia da linguagem).
+- [x] **Processos** — `roda_comando(cmd, [args])` devolvendo
+      `{saida, erro, codigo}` (código != 0 é dado, não erro; só não-iniciar é
+      erro) e `sai([codigo])` pra encerrar o script. O `sai` é um objeto de
+      controle `object.Sair` que desenrola blocos/loops/funções nos DOIS engines
+      (tree-walker via propagação; VM via panic→`SaiRequisicao`), e o `cmd/gs`
+      traduz pra `os.Exit(codigo)`. `examples/processo.gs`.
 - [x] **Lista estatística/agrupamento** — `soma`, `media`, `zip(a, b)`,
       `enumera(lista)`, `ordena_por(lista, "campo")` (lista nova, não muta) e
       `agrupa_por(lista, fn)` (higher-order via `ChamaCompilada`). Tree-walker

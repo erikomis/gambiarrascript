@@ -183,6 +183,7 @@ var nomesBuiltins = []string{
 	"mapeia", "filtra", "paralelo",
 	"ordena_com",
 	"pergunta", "argumentos", "le_tudo", "le_linhas", "escreve", "escreve_erro", "env",
+	"roda_comando", "sai",
 	"espera", "afirma",
 	"busca", "rota", "escuta",
 	"cano", "envia", "recebe", "fecha",

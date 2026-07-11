@@ -299,6 +299,8 @@ func (i *Interpreter) evalProgram(prog *ast.Program, env *object.Environment) ob
 			return r.Value
 		case *object.Erro:
 			return r
+		case *object.Sair:
+			return r
 		case *object.Vaza:
 			return newError(r.Line, "deu `vaza` fora de um loop, parca — vaza pra onde?")
 		case *object.Continua:
@@ -743,7 +745,7 @@ func (i *Interpreter) evalBlock(block *ast.BlockStatement, env *object.Environme
 		result = i.Eval(stmt, env)
 		if result != nil {
 			switch result.Type() {
-			case object.RETORNO_OBJ, object.ERRO_OBJ, object.VAZA_OBJ, object.CONTINUA_OBJ:
+			case object.RETORNO_OBJ, object.ERRO_OBJ, object.VAZA_OBJ, object.CONTINUA_OBJ, object.SAIR_OBJ:
 				return result
 			}
 		}
@@ -779,7 +781,7 @@ func (i *Interpreter) evalEnquanto(node *ast.EnquantoStatement, env *object.Envi
 		res := i.evalBlock(node.Body, env)
 		if res != nil {
 			switch res.Type() {
-			case object.ERRO_OBJ, object.RETORNO_OBJ:
+			case object.ERRO_OBJ, object.RETORNO_OBJ, object.SAIR_OBJ:
 				return res
 			case object.VAZA_OBJ:
 				return NADA
@@ -814,7 +816,7 @@ func (i *Interpreter) evalPraCadaNum(node *ast.PraCadaNumStatement, env *object.
 		res := i.evalBlock(node.Body, env)
 		if res != nil {
 			switch res.Type() {
-			case object.ERRO_OBJ, object.RETORNO_OBJ:
+			case object.ERRO_OBJ, object.RETORNO_OBJ, object.SAIR_OBJ:
 				return res, true
 			case object.VAZA_OBJ:
 				return NADA, true
@@ -864,7 +866,7 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 		res := i.evalBlock(node.Body, env)
 		if res != nil {
 			switch res.Type() {
-			case object.ERRO_OBJ, object.RETORNO_OBJ:
+			case object.ERRO_OBJ, object.RETORNO_OBJ, object.SAIR_OBJ:
 				return res
 			case object.VAZA_OBJ:
 				return NADA
@@ -982,6 +984,9 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 		escopo.Set(p.Value, args[idx])
 	}
 	avaliado := i.evalBlock(funcao.Body, escopo)
+	if s, ok := avaliado.(*object.Sair); ok {
+		return s // sai() desenrola a funcao inteira ate o topo
+	}
 	if ret, ok := avaliado.(*object.Retorno); ok {
 		return ret.Value
 	}

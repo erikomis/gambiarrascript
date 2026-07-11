@@ -60,6 +60,10 @@ var builtins = map[string]*object.Builtin{
 	"modificado_em":   {Nome: "modificado_em", Fn: builtinModificadoEm},
 	"glob":            {Nome: "glob", Fn: builtinGlob},
 
+	// processos
+	"roda_comando": {Nome: "roda_comando", Fn: builtinRodaComando},
+	"sai":          {Nome: "sai", Fn: builtinSai},
+
 	// conjunto (Set)
 	"conjunto":          {Nome: "conjunto", Fn: builtinConjunto},
 	"contem_conjunto":   {Nome: "contem_conjunto", Fn: builtinContemConjunto},

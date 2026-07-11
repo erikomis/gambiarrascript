@@ -152,6 +152,7 @@ func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []stri
 		if bc := carregaCache(caminhoGSC, fonte); bc != nil {
 			maquina := vm.New(bc, os.Stdout)
 			if err := maquina.Run(); err != nil {
+				trataSaiVM(err)
 				reportaErroVM(err)
 				os.Exit(1)
 			}
@@ -181,6 +182,7 @@ func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []stri
 		}
 		maquina := vm.New(comp.Bytecode(), os.Stdout)
 		if err := maquina.Run(); err != nil {
+			trataSaiVM(err)
 			reportaErroVM(err)
 			os.Exit(1)
 		}
@@ -191,12 +193,23 @@ func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []stri
 	interp.DefinirArgumentos(scriptArgs)
 	interp.DefinirDirBase(filepath.Dir(caminho))
 	resultado := interp.Eval(prog, object.NewEnvironment())
+	if s, ok := resultado.(*object.Sair); ok {
+		os.Exit(s.Codigo) // sai(codigo) no tree-walker
+	}
 	if resultado != nil && resultado.Type() == object.ERRO_OBJ {
 		fmt.Println(resultado.Inspect())
 		if err, ok := resultado.(*object.Erro); ok && len(err.Stack) > 0 {
 			fmt.Fprint(os.Stderr, "Traço de pilha:\n"+err.Traco())
 		}
 		os.Exit(1)
+	}
+}
+
+// trataSaiVM: quando o Run da VM devolve um sai(codigo), encerra o processo
+// com esse codigo (nao e erro). Se nao for, nao faz nada.
+func trataSaiVM(err error) {
+	if sr, ok := err.(vm.SaiRequisicao); ok {
+		os.Exit(sr.Codigo)
 	}
 }
 

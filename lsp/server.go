@@ -66,6 +66,8 @@ var builtinsCompletion = []string{
 	"caminho_junta", "caminho_base", "caminho_dir", "caminho_ext", "caminho_abs",
 	"pergunta", "argumentos", "le_tudo", "le_linhas",
 	"escreve", "escreve_erro", "env",
+	// processos
+	"roda_comando", "sai",
 	// concorrencia
 	"cano", "envia", "recebe", "fecha", "espera", "afirma", "paralelo",
 	// banco
@@ -158,6 +160,8 @@ var docsBuiltin = map[string]string{
 	"tamanho_arquivo": "tamanho_arquivo(caminho) -> numero: tamanho do arquivo em bytes.",
 	"modificado_em":   "modificado_em(caminho) -> numero: ultima modificacao em unix-segundos (usavel no formata_tempo).",
 	"glob":            "glob(padrao) -> lista: caminhos que casam com o padrao (*, ?, [...]). Sem match = lista vazia.",
+	"roda_comando":    "roda_comando(cmd, [args]) -> {saida, erro, codigo}: roda um comando externo (codigo != 0 nao e erro).",
+	"sai":             "sai([codigo]): encerra o script na hora com o codigo de saida (default 0).",
 	"caminho_junta": "caminho_junta(p1, p2, ...) -> texto: filepath.Join (caminho valido pro SO).",
 	"caminho_base":  "caminho_base(caminho) -> texto: ultimo componente do caminho.",
 	"caminho_dir":   "caminho_dir(caminho) -> texto: diretorio do caminho (sem o nome final).",

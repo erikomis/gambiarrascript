@@ -22,6 +22,7 @@ const (
 	ERRO_OBJ     = "ERRO"
 	VAZA_OBJ     = "VAZA"
 	CONTINUA_OBJ = "CONTINUA"
+	SAIR_OBJ     = "SAIR"
 
 	BUILTIN_OBJ    = "BUILTIN"
 	DICIONARIO_OBJ = "DICIONARIO"
@@ -242,6 +243,14 @@ type Continua struct{ Line int }
 
 func (c *Continua) Type() ObjectType { return CONTINUA_OBJ }
 func (c *Continua) Inspect() string  { return "continua" }
+
+// Sair e o objeto de controle do builtin `sai(codigo)`: desenrola tudo (blocos,
+// loops, funcoes) ate o topo, onde o runner encerra o processo com o codigo.
+// Diferente de Vaza/Continua (que param no loop), Sair nao para em lugar nenhum.
+type Sair struct{ Codigo int }
+
+func (s *Sair) Type() ObjectType { return SAIR_OBJ }
+func (s *Sair) Inspect() string  { return "sai" }
 
 type BuiltinFunc func(args []Object) Object
 

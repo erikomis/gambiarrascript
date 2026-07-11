@@ -271,6 +271,12 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if vme, ok := r.(VMError); ok {
+				// sai(codigo): nao e erro nem passa por handler (nao da pra
+				// capturar com arruma/quebrou). Desenrola direto pro runner.
+				if vme.sai != nil {
+					errRet = SaiRequisicao{Codigo: vme.sai.Codigo}
+					return
+				}
 				// amarra a linha do fonte (tabela pc->linha) e formata a
 				// mensagem igual o tree-walker ("deu ruim na linha N: ...").
 				// So pra erro cru de runtime: builtins ja vem formatados.
@@ -543,6 +549,9 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				copy(args, vm.stack[vm.sp-1-argc:vm.sp-1])
 				vm.sp -= argc + 1 // popa args + callee
 				res := b.Fn(args)
+				if s, ok := res.(*object.Sair); ok {
+					panic(VMError{sai: s}) // sai(codigo): desenrola tudo ate o Run
+				}
 				if e, ok := res.(*object.Erro); ok && e != nil && !e.Handled {
 					panic(VMError{err: e})
 				}
@@ -563,6 +572,9 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				panic(VMError{err: &object.Erro{Message: "builtin " + nome + " nao registrada na VM", Kind: "runtime"}})
 			}
 			res := b.Fn(args)
+			if s, ok := res.(*object.Sair); ok {
+				panic(VMError{sai: s}) // sai(codigo): desenrola tudo ate o Run
+			}
 			if e, ok := res.(*object.Erro); ok && e != nil && !e.Handled {
 				panic(VMError{err: e})
 			}
@@ -679,9 +691,23 @@ func (vm *VM) limpaTriesOrfaos() {
 	}
 }
 
-type VMError struct{ err *object.Erro }
+type VMError struct {
+	err *object.Erro
+	sai *object.Sair // preenchido quando o panic e um sai(codigo), nao um erro
+}
 
-func (v VMError) Error() string { return v.err.Message }
+func (v VMError) Error() string {
+	if v.sai != nil {
+		return fmt.Sprintf("sai com codigo %d", v.sai.Codigo)
+	}
+	return v.err.Message
+}
+
+// SaiRequisicao e o que o Run devolve quando o script chamou sai(codigo). Nao
+// e um erro de verdade: o runner (cmd/gs) traduz pra os.Exit(codigo).
+type SaiRequisicao struct{ Codigo int }
+
+func (s SaiRequisicao) Error() string { return fmt.Sprintf("sai com codigo %d", s.Codigo) }
 
 func (vm *VM) execBinario(op code.Opcode) {
 	right := vm.pop()
