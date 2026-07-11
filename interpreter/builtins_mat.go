@@ -2,7 +2,6 @@ package interpreter
 
 import (
 	"math"
-	"math/rand"
 
 	"gambiarrascript/object"
 )
@@ -20,13 +19,13 @@ func builtinAleatorio(args []object.Object) object.Object {
 		return erroBuiltin("aleatorio() quer 0 ou 1 argumento, veio %d", len(args))
 	}
 	if len(args) == 0 {
-		return &object.Numero{Value: rand.Float64()}
+		return &object.Numero{Value: rngFloat()}
 	}
 	max, ok := args[0].(*object.Numero)
 	if !ok {
 		return erroBuiltin("aleatorio() espera numero, veio %s", args[0].Type())
 	}
-	return &object.Numero{Value: rand.Float64() * max.Value}
+	return &object.Numero{Value: rngFloat() * max.Value}
 }
 
 func builtinArredonda(args []object.Object) object.Object {

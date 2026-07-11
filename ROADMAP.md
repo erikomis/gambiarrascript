@@ -98,7 +98,7 @@ ficaram pra levas próprias (DAP, FFI, multi-catch).
       `io`, `rede`, `parse`, `usuario` (ver `interpreter/errors.go`).
 - [ ] Debug com breakpoints (DAP no LSP + `gs debug`) — grande; fica pra uma
       leva própria.
-- [ ] multi-catch (vários `quebrou` filtrando por `erro_tipo`).
+- [ ] multi-catch (vários `quebrou` filtrando por `erro_tipo`) deixar para depois esse.
 
 ### Tier 3 — Maturidade
 
@@ -178,21 +178,24 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 - [ ] **Processos** — `roda_comando(cmd, [args])` devolvendo
       `{saida, erro, codigo}`, e `sai(codigo)` pra encerrar o script.
       Essencial pra scripts de automação (a praia da linguagem).
-- [~] **Lista estatística/agrupamento** — entregue: `soma`, `media`,
-      `zip(a, b)`, `enumera(lista)` (builtins puros, rodam no tree-walker **e**
-      na VM; `examples/stats.gs`). De quebra, corrigido bug de paridade: binding
-      do usuário (`bota`/`gambiarra`) agora sombreia builtin na VM igual ao
-      tree-walker. **Falta**: `ordena_por(lista, "campo")` e
-      `agrupa_por(lista, fn)` (higher-order — precisam da ponte `ChamaCompilada`).
-- [ ] **Aleatório de verdade** — `semente(n)` (reprodutível), `embaralha(lista)`,
-      `escolhe_um(lista)`, `uuid()`.
+- [x] **Lista estatística/agrupamento** — `soma`, `media`, `zip(a, b)`,
+      `enumera(lista)`, `ordena_por(lista, "campo")` (lista nova, não muta) e
+      `agrupa_por(lista, fn)` (higher-order via `ChamaCompilada`). Tree-walker
+      **e** VM (teste de paridade); `examples/stats.gs`. De quebra, corrigido bug
+      de paridade: binding do usuário (`bota`/`gambiarra`) agora sombreia builtin
+      na VM igual ao tree-walker.
+- [x] **Aleatório de verdade** — `semente(n)` (reprodutível), `embaralha(lista)`
+      (Fisher-Yates, não muta), `escolhe_um(lista)`, `uuid()` (v4). Gerador
+      compartilhado thread-safe (mutex); `semente` afeta `aleatorio` também.
+      `examples/aleatorio.gs`.
 - [ ] **fs parte 2** — `copia(de, pra)`, `move(de, pra)`, `tamanho_arquivo`,
       `modificado_em`, `glob("*.gs")`.
 - [ ] **Datas parte 2** — soma/subtração de durações a instantes, timezone,
       `dia_da_semana`, diferença entre datas em dias/horas.
 - [ ] **CSV** — `le_csv` / `escreve_csv` (lista de dicts ↔ arquivo).
 - [ ] **Compressão** — `gzip_comprime` / `gzip_descomprime` (e talvez zip).
-      Deve libs para essa linguagem
+
+## Deve libs para essa linguagem
       - [ ] **HTTP cliente turbinado** — `busca` com verbo custom (PUT/DELETE/PATCH),
             headers, timeout e body binário. Hoje cobre o básico.
       - [ ] **Rede baixo nível** — TCP/UDP (`conecta_tcp`, `escuta_tcp`) e

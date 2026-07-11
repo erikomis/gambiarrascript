@@ -266,3 +266,26 @@ mostra soma(2, 3)`,
 		comparaEngines(t, src)
 	}
 }
+
+// TestParidadeMunging: ordena_por (puro), agrupa_por (higher-order via
+// ChamaCompilada) e os aleatorios (com semente pra determinismo) rodam
+// identico no tree-walker e na VM.
+func TestParidadeMunging(t *testing.T) {
+	casos := []string{
+		`bota gente = [{"n": "Ana", "idade": 30}, {"n": "Ze", "idade": 20}, {"n": "Rita", "idade": 25}]
+bota ord = ordena_por(gente, "idade")
+mostra ord[0].n
+mostra ord[1].n
+mostra ord[2].n`,
+		`bota g = agrupa_por([1, 2, 3, 4, 5, 6], gambiarra(n) funciona n % 2 acabou_finalmente)
+mostra g[0]
+mostra g[1]`,
+		`semente(9)
+mostra embaralha([1, 2, 3, 4, 5, 6, 7, 8])`,
+		`semente(9)
+mostra escolhe_um([10, 20, 30, 40, 50])`,
+	}
+	for _, src := range casos {
+		comparaEngines(t, src)
+	}
+}

@@ -58,6 +58,7 @@ func New(out io.Writer) *Interpreter {
 		"mapeia":       {Nome: "mapeia", Fn: i.builtinMapeia},
 		"filtra":       {Nome: "filtra", Fn: i.builtinFiltra},
 		"ordena_com":   {Nome: "ordena_com", Fn: i.builtinOrdenaCom},
+		"agrupa_por":   {Nome: "agrupa_por", Fn: i.builtinAgrupaPor},
 		"reduz":        {Nome: "reduz", Fn: i.builtinReduz},
 		"acha":         {Nome: "acha", Fn: i.builtinAcha},
 		"acha_indice":  {Nome: "acha_indice", Fn: i.builtinAchaIndice},

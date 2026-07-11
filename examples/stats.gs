@@ -18,3 +18,14 @@ acabou_finalmente
 pra_cada iv em enumera(nomes)
     mostra iv[0] + ": " + iv[1]
 acabou_finalmente
+
+# ordena_por: ordena lista de dicts por campo (lista nova, nao mexe na original)
+bota gente = [{"n": "Ana", "idade": 30}, {"n": "Ze", "idade": 20}, {"n": "Rita", "idade": 25}]
+pra_cada p em ordena_por(gente, "idade")
+    mostra p.n + " (" + p.idade + ")"
+acabou_finalmente
+
+# agrupa_por: agrupa por chave calculada por uma gambiarra
+bota grupos = agrupa_por([1, 2, 3, 4, 5, 6], gambiarra(n) funciona n % 2 acabou_finalmente)
+mostra "pares: " + grupos[0]
+mostra "impares: " + grupos[1]

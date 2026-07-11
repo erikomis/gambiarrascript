@@ -103,3 +103,63 @@ func TestEnumeraNaoListaDaErro(t *testing.T) {
 		t.Fatalf("enumera erro: %q", out)
 	}
 }
+
+func TestOrdenaPor(t *testing.T) {
+	out := rodar(t, `bota gente = [{"n": "Ana", "idade": 30}, {"n": "Ze", "idade": 20}, {"n": "Rita", "idade": 25}]
+pra_cada p em ordena_por(gente, "idade")
+    mostra p.n
+acabou_finalmente`)
+	if out != "Ze\nRita\nAna\n" {
+		t.Fatalf("ordena_por: %q", out)
+	}
+}
+
+func TestOrdenaPorNaoMutaOriginal(t *testing.T) {
+	out := rodar(t, `bota gente = [{"n": "Ana", "idade": 30}, {"n": "Ze", "idade": 20}]
+ordena_por(gente, "idade")
+mostra gente[0].n`)
+	if out != "Ana\n" {
+		t.Fatalf("ordena_por mutou original: %q", out)
+	}
+}
+
+func TestOrdenaPorCampoFaltandoDaErro(t *testing.T) {
+	out := rodarErro(t, `ordena_por([{"a": 1}], "idade")`)
+	if !strings.Contains(out, "idade") {
+		t.Fatalf("ordena_por campo faltando: %q", out)
+	}
+}
+
+func TestAgrupaPorNumero(t *testing.T) {
+	out := rodar(t, `bota nums = [1, 2, 3, 4, 5, 6]
+bota g = agrupa_por(nums, gambiarra(n) funciona n % 2 acabou_finalmente)
+mostra g[0]
+mostra g[1]`)
+	if out != "[2, 4, 6]\n[1, 3, 5]\n" {
+		t.Fatalf("agrupa_por numero: %q", out)
+	}
+}
+
+func TestAgrupaPorTexto(t *testing.T) {
+	out := rodar(t, `bota gente = [{"time": "a", "n": "Ze"}, {"time": "b", "n": "Rita"}, {"time": "a", "n": "Ana"}]
+bota g = agrupa_por(gente, gambiarra(p) funciona p.time acabou_finalmente)
+mostra tamanho(g["a"])
+mostra tamanho(g["b"])`)
+	if out != "2\n1\n" {
+		t.Fatalf("agrupa_por texto: %q", out)
+	}
+}
+
+func TestAgrupaPorChaveNaoHashavelDaErro(t *testing.T) {
+	out := rodarErro(t, `agrupa_por([1], gambiarra(n) funciona [n] acabou_finalmente)`)
+	if !strings.Contains(out, "chave") {
+		t.Fatalf("agrupa_por chave: %q", out)
+	}
+}
+
+func TestAgrupaPorErroDaFnPropaga(t *testing.T) {
+	out := rodarErro(t, `agrupa_por([1, 2], gambiarra(n) funciona n / 0 acabou_finalmente)`)
+	if !strings.Contains(out, "dividir por zero") {
+		t.Fatalf("agrupa_por erro fn: %q", out)
+	}
+}

@@ -41,10 +41,17 @@ var builtins = map[string]*object.Builtin{
 	"achatada": {Nome: "achatada", Fn: builtinAchatada},
 
 	// estatistica / munging de dados
-	"soma":    {Nome: "soma", Fn: builtinSoma},
-	"media":   {Nome: "media", Fn: builtinMedia},
-	"zip":     {Nome: "zip", Fn: builtinZip},
-	"enumera": {Nome: "enumera", Fn: builtinEnumera},
+	"soma":       {Nome: "soma", Fn: builtinSoma},
+	"media":      {Nome: "media", Fn: builtinMedia},
+	"zip":        {Nome: "zip", Fn: builtinZip},
+	"enumera":    {Nome: "enumera", Fn: builtinEnumera},
+	"ordena_por": {Nome: "ordena_por", Fn: builtinOrdenaPor},
+
+	// aleatoriedade (gerador compartilhado, semeavel)
+	"semente":    {Nome: "semente", Fn: builtinSemente},
+	"embaralha":  {Nome: "embaralha", Fn: builtinEmbaralha},
+	"escolhe_um": {Nome: "escolhe_um", Fn: builtinEscolheUm},
+	"uuid":       {Nome: "uuid", Fn: builtinUuid},
 
 	// conjunto (Set)
 	"conjunto":          {Nome: "conjunto", Fn: builtinConjunto},

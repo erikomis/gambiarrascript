@@ -1,6 +1,10 @@
 package interpreter
 
-import "gambiarrascript/object"
+import (
+	"sort"
+
+	"gambiarrascript/object"
+)
 
 // builtinSoma soma os numeros de uma lista. Se todos forem inteiros exatos, o
 // resultado sai inteiro; se tiver algum float, sai float. Lista vazia = 0.
@@ -99,4 +103,98 @@ func builtinEnumera(args []object.Object) object.Object {
 		out = append(out, par)
 	}
 	return &object.Lista{Elements: out}
+}
+
+// builtinOrdenaPor ordena uma lista de dicionarios por um campo (crescente) e
+// devolve uma lista NOVA (a original nao e mexida). Compara numeros e textos.
+func builtinOrdenaPor(args []object.Object) object.Object {
+	if len(args) != 2 {
+		return erroBuiltin("ordena_por() quer 2 args (lista, campo), veio %d", len(args))
+	}
+	lst, ok := args[0].(*object.Lista)
+	if !ok {
+		return erroBuiltin("ordena_por: 1o arg tem que ser lista, veio %s", args[0].Type())
+	}
+	campo, ok := args[1].(*object.Texto)
+	if !ok {
+		return erroBuiltin("ordena_por: 2o arg (campo) tem que ser texto, veio %s", args[1].Type())
+	}
+	chave := campo.ChaveHash()
+
+	// Extrai o campo de todo elemento ANTES de ordenar: erra cedo se algum nao
+	// for dicionario ou nao tiver o campo (mesmo com 0/1 elemento, onde o
+	// comparator do sort nem roda), e evita relookup a cada comparacao.
+	type parOrd struct {
+		elem     object.Object
+		valChave object.Object
+	}
+	pares := make([]parOrd, len(lst.Elements))
+	for idx, e := range lst.Elements {
+		d, ok := e.(*object.Dicionario)
+		if !ok {
+			return erroBuiltin("ordena_por: elemento %d nao e dicionario, veio %s", idx, e.Type())
+		}
+		par, existe := d.Pares[chave]
+		if !existe {
+			return erroBuiltin("ordena_por: dicionario nao tem o campo %q", campo.Value)
+		}
+		pares[idx] = parOrd{elem: e, valChave: par.Valor}
+	}
+
+	var primeiroErro object.Object
+	sort.SliceStable(pares, func(a, b int) bool {
+		if primeiroErro != nil {
+			return false
+		}
+		menor, ok := comparaLista(pares[a].valChave, pares[b].valChave)
+		if !ok {
+			primeiroErro = erroBuiltin("ordena_por: nao soube comparar %s com %s no campo %q", pares[a].valChave.Type(), pares[b].valChave.Type(), campo.Value)
+			return false
+		}
+		return menor
+	})
+	if primeiroErro != nil {
+		return primeiroErro
+	}
+	out := make([]object.Object, len(pares))
+	for i, p := range pares {
+		out[i] = p.elem
+	}
+	return &object.Lista{Elements: out}
+}
+
+// builtinAgrupaPor agrupa os elementos num dicionario {chave: [elementos]},
+// onde a chave vem de aplicar a gambiarra em cada elemento. A ordem dentro de
+// cada grupo segue a lista original. Higher-order: usa applyFunction (funciona
+// nos dois engines via a ponte ChamaCompilada).
+func (i *Interpreter) builtinAgrupaPor(args []object.Object) object.Object {
+	if len(args) != 2 {
+		return erroBuiltin("agrupa_por() quer 2 args (lista, gambiarra), veio %d", len(args))
+	}
+	lst, ok := args[0].(*object.Lista)
+	if !ok {
+		return erroBuiltin("agrupa_por: 1o arg tem que ser lista, veio %s", args[0].Type())
+	}
+	fn := args[1]
+	dic := &object.Dicionario{Pares: map[object.HashKey]object.ParDic{}}
+	for _, e := range lst.Elements {
+		chaveObj := i.applyFunction(fn, []object.Object{e}, 0, "<agrupa_por>")
+		if isError(chaveObj) {
+			return chaveObj
+		}
+		chaveavel, ok := chaveObj.(object.Chaveavel)
+		if !ok {
+			return erroBuiltin("agrupa_por: a gambiarra devolveu %s, que nao serve de chave (use texto, numero ou booleano)", chaveObj.Type())
+		}
+		hk := chaveavel.ChaveHash()
+		par, existe := dic.Pares[hk]
+		if !existe {
+			par = object.ParDic{Chave: chaveObj, Valor: &object.Lista{Elements: []object.Object{}}}
+		}
+		grupo := par.Valor.(*object.Lista)
+		grupo.Elements = append(grupo.Elements, e)
+		par.Valor = grupo
+		dic.Pares[hk] = par
+	}
+	return dic
 }
