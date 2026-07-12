@@ -44,6 +44,7 @@ var keywords = []string{
 	"finalmente", "escolhe", "caso",
 	"e", "ou", "nao", "importa",
 	"bora", // bora fn(args) -> Futuro (concorrencia)
+	"entao", "como",
 }
 
 // builtinsCompletion são as funções nativas da linguagem expostas no autocomplete.
@@ -77,6 +78,8 @@ var builtinsCompletion = []string{
 	// tempo
 	"agora", "agora_num", "agora_ns", "formata_tempo", "parse_tempo",
 	"duracao", "espera_ms",
+	"soma_tempo", "sub_tempo", "dia_da_semana", "diferenca_dias",
+	"diferenca_horas", "converte_tz",
 	// crypto / codificacao
 	"md5", "sha1", "sha256", "sha512", "hmac_sha256",
 	"base64_codifica", "base64_decodifica",
@@ -85,6 +88,10 @@ var builtinsCompletion = []string{
 	// set
 	"conjunto", "contem_conjunto", "adiciona_conjunto", "remove_conjunto",
 	"uniao", "intersecao", "diferenca",
+	// csv
+	"le_csv", "escreve_csv",
+	// compressao
+	"gzip_comprime", "gzip_descomprime",
 	// erros
 	"quebra", "erro_msg", "erro_linha", "erro_tipo", "erro_pilha",
 	"erro_causa", "envolve_erro",
@@ -174,8 +181,20 @@ var docsBuiltin = map[string]string{
 	"envia":  "envia(cano, valor): manda um valor pro cano. Bloqueia se o cano estiver cheio ou se nao houver receptor.",
 	"recebe": "recebe(cano) -> valor: pega o proximo valor do cano. Bloqueia ate ter algo (ou cano ser fechado -> nada).",
 	"fecha":  "fecha(cano_ou_conexao): fecha um cano (channel) ou uma conexao de banco. Idempotente.",
-	"espera": "espera(futuro|lista_de_futuros) -> valor|lista: aguarda o(s) futuro(s) e devolve o(s) valor(es). Tambem: espera(a, b) = assert de teste.",
-	"afirma": "afirma(cond, [msg]): assert de teste pra gs testa.",
+	"espera":        "espera(futuro|lista_de_futuros) -> valor|lista: aguarda o(s) futuro(s) e devolve o(s) valor(es). Tambem: espera(a, b) = assert de teste.",
+	"afirma":        "afirma(cond, [msg]): assert de teste pra gs testa.",
+	"duracao":       "duracao(dicionario|inst1, inst2) -> numero (ns): constroi duracao de {h,m,s,ms,us,ns} ou devolve a diferenca (t2-t1) em nanossegundos.",
+	"espera_ms":     "espera_ms(ms): bloqueia a execucao por ms milissegundos.",
+	"soma_tempo":    "soma_tempo(instante, nanos) -> texto ISO 8601: soma uma duracao (em ns, de duracao()) ao instante.",
+	"sub_tempo":     "sub_tempo(instante, nanos) -> texto ISO 8601: subtrai uma duracao (em ns) do instante.",
+	"dia_da_semana": "dia_da_semana(instante) -> texto: nome do dia em portugues (domingo..sabado).",
+	"diferenca_dias":  "diferenca_dias(inst1, inst2) -> numero: dias entre os instantes (pode ser negativo).",
+	"diferenca_horas":"diferenca_horas(inst1, inst2) -> numero: horas entre os instantes (pode ser negativo).",
+	"converte_tz":   "converte_tz(instante, timezone) -> texto ISO 8601: representa o instante no timezone IANA (ex: \"America/Sao_Paulo\").",
+	"le_csv":        "le_csv(caminho) -> lista de dicts: le um CSV (1a linha = cabecalho, cada linha vira dict {coluna: valor}).",
+	"escreve_csv":   "escreve_csv(caminho, lista, [cabecalhos]): escreve uma lista de dicts num CSV. 3o arg opcional reordena/seleciona colunas.",
+	"gzip_comprime":    "gzip_comprime(texto) -> texto (base64): comprime o texto com gzip e devolve em base64.",
+	"gzip_descomprime": "gzip_descomprime(texto) -> texto: recebe um base64 de gzip_comprime e devolve o texto original.",
 }
 
 // docsKeyword descreve cada keyword pro hover do LSP.
@@ -202,8 +221,10 @@ var docsKeyword = map[string]string{
 	"e":                 "e: operador logico AND (curto-circuito).",
 	"ou":                "ou: operador logico OR (curto-circuito).",
 	"nao":               "nao: operador logico NOT.",
-	"importa":           "importa \"caminho.gs\": carrega outro script e traz suas definicoes.",
+	"importa":           "importa \"caminho.gs\": carrega outro script e traz suas definicoes. Usa `como` pra namespace: importa \"util.gs\" como util.",
 	"bora":              "bora fn(args) -> Futuro: dispara a gambiarra numa goroutine e devolve um Futuro imediatamente. Use espera(futuro) pra aguardar o valor.",
+	"entao":             "entao: separador do ternario `se_colar cond entao a se_nao_colar b`.",
+	"como":              "como: alias pra importa — `importa \"x.gs\" como alias` cria um namespace.",
 }
 
 // ---- servidor ----
@@ -508,7 +529,7 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 		tc.define(n.Name.Value)
 		tc.pushScope()
 		for _, p := range n.Parameters {
-			tc.define(p.Value)
+			tc.define(p.Nome.Value)
 		}
 		tc.walkBlock(n.Body)
 		tc.popScope()
@@ -539,7 +560,9 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 	case *ast.PraCadaListStatement:
 		tc.walkExpr(n.Iterable)
 		tc.pushScope()
-		tc.define(n.Var.Value)
+		for _, v := range n.Vars {
+			tc.define(v.Value)
+		}
 		tc.walkBlock(n.Body)
 		tc.popScope()
 	case *ast.ArrumaStatement:
@@ -640,7 +663,7 @@ func (tc *typechecker) walkExpr(e ast.Expression) {
 	case *ast.FuncaoLiteral:
 		tc.pushScope()
 		for _, p := range n.Parameters {
-			tc.define(p.Value)
+			tc.define(p.Nome.Value)
 		}
 		tc.walkBlock(n.Body)
 		tc.popScope()

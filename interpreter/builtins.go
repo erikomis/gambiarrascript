@@ -122,13 +122,27 @@ var builtins = map[string]*object.Builtin{
 	"separa_regex":    {Nome: "separa_regex", Fn: builtinSeparaRegex},
 
 	// tempo/datetime
-	"agora":         {Nome: "agora", Fn: builtinAgora},
-	"agora_num":     {Nome: "agora_num", Fn: builtinAgoraNum},
-	"agora_ns":      {Nome: "agora_ns", Fn: builtinAgoraNs},
-	"formata_tempo": {Nome: "formata_tempo", Fn: builtinFormataTempo},
-	"parse_tempo":   {Nome: "parse_tempo", Fn: builtinParseTempo},
-	"duracao":       {Nome: "duracao", Fn: builtinDuracao},
-	"espera_ms":     {Nome: "espera_ms", Fn: builtinEsperaMs},
+	"agora":          {Nome: "agora", Fn: builtinAgora},
+	"agora_num":      {Nome: "agora_num", Fn: builtinAgoraNum},
+	"agora_ns":       {Nome: "agora_ns", Fn: builtinAgoraNs},
+	"formata_tempo":  {Nome: "formata_tempo", Fn: builtinFormataTempo},
+	"parse_tempo":    {Nome: "parse_tempo", Fn: builtinParseTempo},
+	"duracao":        {Nome: "duracao", Fn: builtinDuracao},
+	"espera_ms":      {Nome: "espera_ms", Fn: builtinEsperaMs},
+	"soma_tempo":     {Nome: "soma_tempo", Fn: builtinSomaTempo},
+	"sub_tempo":      {Nome: "sub_tempo", Fn: builtinSubTempo},
+	"dia_da_semana":  {Nome: "dia_da_semana", Fn: builtinDiaDaSemana},
+	"diferenca_dias": {Nome: "diferenca_dias", Fn: builtinDiferencaDias},
+	"diferenca_horas":{Nome: "diferenca_horas", Fn: builtinDiferencaHoras},
+	"converte_tz":    {Nome: "converte_tz", Fn: builtinConverteTZ},
+
+	// csv
+	"le_csv":     {Nome: "le_csv", Fn: builtinLeCsv},
+	"escreve_csv":{Nome: "escreve_csv", Fn: builtinEscreveCsv},
+
+	// compressao
+	"gzip_comprime":    {Nome: "gzip_comprime", Fn: builtinGzipComprime},
+	"gzip_descomprime": {Nome: "gzip_descomprime", Fn: builtinGzipDescomprime},
 
 	// crypto / codificacao
 	"md5":               {Nome: "md5", Fn: builtinMd5},
