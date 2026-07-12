@@ -70,11 +70,15 @@ func (f *formatter) emitStmt(s ast.Statement, nivel int) {
 			f.escreve(nivel, f.emitExpr(n.Expression))
 		}
 	case *ast.ImportaStatement:
-		f.escreve(nivel, "importa "+f.emitExpr(n.Path))
+		if n.Alias != nil {
+			f.escreve(nivel, "importa "+f.emitExpr(n.Path)+" como "+n.Alias.Value)
+		} else {
+			f.escreve(nivel, "importa "+f.emitExpr(n.Path))
+		}
 	case *ast.GambiarraStatement:
 		params := make([]string, len(n.Parameters))
 		for i, p := range n.Parameters {
-			params[i] = p.Value
+			params[i] = p.String()
 		}
 		f.escreve(nivel, "gambiarra "+n.Name.Value+"("+strings.Join(params, ", ")+")")
 		f.emitBlock(n.Body, nivel+1)
@@ -102,7 +106,11 @@ func (f *formatter) emitStmt(s ast.Statement, nivel int) {
 		f.emitBlock(n.Body, nivel+1)
 		f.escreve(nivel, "acabou_finalmente")
 	case *ast.PraCadaListStatement:
-		f.escreve(nivel, "pra_cada "+n.Var.Value+" em "+f.emitExpr(n.Iterable))
+		nomes := make([]string, len(n.Vars))
+		for i, v := range n.Vars {
+			nomes[i] = v.Value
+		}
+		f.escreve(nivel, "pra_cada "+strings.Join(nomes, ", ")+" em "+f.emitExpr(n.Iterable))
 		f.emitBlock(n.Body, nivel+1)
 		f.escreve(nivel, "acabou_finalmente")
 	case *ast.EscolheStatement:
@@ -271,7 +279,11 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 	case *ast.IndexExpression:
 		if n.Dot {
 			if t, ok := n.Index.(*ast.TextoLiteral); ok {
-				return f.emitExprPrec(n.Left, precIndex) + "." + t.Value
+				op := "."
+				if n.Safe {
+					op = "?."
+				}
+				return f.emitExprPrec(n.Left, precIndex) + op + t.Value
 			}
 		}
 		return f.emitExprPrec(n.Left, precIndex) + "[" + f.emitExpr(n.Index) + "]"
@@ -280,10 +292,30 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 		// e significativo na linguagem, entao reparseia igual).
 		params := make([]string, len(n.Parameters))
 		for i, p := range n.Parameters {
-			params[i] = p.Value
+			params[i] = p.String()
 		}
 		return "gambiarra(" + strings.Join(params, ", ") + ") " +
 			f.inlineBlock(n.Body) + "acabou_finalmente"
+	case *ast.FatiaExpression:
+		inicio := ""
+		if n.Inicio != nil {
+			inicio = f.emitExpr(n.Inicio)
+		}
+		fim := ""
+		if n.Fim != nil {
+			fim = f.emitExpr(n.Fim)
+		}
+		return f.emitExprPrec(n.Left, precIndex) + "[" + inicio + ":" + fim + "]"
+	case *ast.TernarioExpression:
+		return "se_colar " + f.emitExpr(n.Cond) + " entao " + f.emitExpr(n.SeVerdadeiro) +
+			" se_nao_colar " + f.emitExpr(n.SeFalso)
+	case *ast.CoalesceExpression:
+		my := precOr // ?? tem mesma prec de ou
+		s := f.emitExprPrec(n.Left, my) + " ?? " + f.emitExprPrec(n.Right, my+1)
+		if my < parent {
+			return "(" + s + ")"
+		}
+		return s
 	case *ast.BoraExpression:
 		// `bora` precede uma chamada; formata como prefix.
 		if n.Call != nil {

@@ -64,13 +64,13 @@
       }
     },
     "builtins": {
-      "match": "\\b(tamanho|chaves|tem|texto|numero|busca|rota|escuta|de_json|pra_json|formata|separa|junta|maiusculo|minusculo|substitui|fatia|contem|comeca_com|termina_com|tira_espaco|adiciona|remove|ordena|inverte|mapeia|filtra|reduz|acha|acha_indice|unicos|achatada|ordena_com|raiz|aleatorio|arredonda|teto|chao|abs|min|max|le_arquivo|escreve_arquivo|anexa_arquivo|existe|eh_dir|deleta|cria_dir|le_dir|caminho_junta|caminho_base|caminho_dir|caminho_ext|caminho_abs|pergunta|argumentos|le_tudo|le_linhas|escreve|escreve_erro|env|cano|envia|recebe|fecha|espera|afirma|paralelo|conecta|consulta|executa|busca_regex|acha_regex|combina_regex|substitui_regex|separa_regex|agora|agora_num|agora_ns|formata_tempo|parse_tempo|duracao|espera_ms|md5|sha1|sha256|sha512|hmac_sha256|base64_codifica|base64_decodifica|base32_codifica|base32_decodifica|hex_codifica|hex_decodifica|conjunto|contem_conjunto|adiciona_conjunto|remove_conjunto|uniao|intersecao|diferenca|quebra|erro_msg|erro_linha|erro_tipo|erro_pilha|erro_causa|envolve_erro)\\b",
+      "match": "\\b(tamanho|chaves|tem|texto|numero|busca|rota|escuta|de_json|pra_json|formata|separa|junta|maiusculo|minusculo|substitui|fatia|contem|comeca_com|termina_com|tira_espaco|adiciona|remove|ordena|inverte|mapeia|filtra|reduz|acha|acha_indice|unicos|achatada|ordena_com|raiz|aleatorio|arredonda|teto|chao|abs|min|max|le_arquivo|escreve_arquivo|anexa_arquivo|existe|eh_dir|deleta|cria_dir|le_dir|caminho_junta|caminho_base|caminho_dir|caminho_ext|caminho_abs|pergunta|argumentos|le_tudo|le_linhas|escreve|escreve_erro|env|cano|envia|recebe|fecha|espera|afirma|paralelo|conecta|consulta|executa|busca_regex|acha_regex|combina_regex|substitui_regex|separa_regex|agora|agora_num|agora_ns|formata_tempo|parse_tempo|duracao|espera_ms|soma_tempo|sub_tempo|dia_da_semana|diferenca_dias|diferenca_horas|converte_tz|md5|sha1|sha256|sha512|hmac_sha256|base64_codifica|base64_decodifica|base32_codifica|base32_decodifica|hex_codifica|hex_decodifica|conjunto|contem_conjunto|adiciona_conjunto|remove_conjunto|uniao|intersecao|diferenca|le_csv|escreve_csv|gzip_comprime|gzip_descomprime|quebra|erro_msg|erro_linha|erro_tipo|erro_pilha|erro_causa|envolve_erro)\\b",
       "name": "support.function.builtin.gambiarrascript"
     },
     "keywords": {
       "patterns": [
         {
-          "match": "\\b(se_colar|se_nao_colar|enquanto|pra_cada|de|ate|em|vaza|continua|arruma|quebrou|finalmente|acabou_finalmente|escolhe|caso|funciona|importa|bora)\\b",
+          "match": "\\b(se_colar|se_nao_colar|enquanto|pra_cada|de|ate|em|vaza|continua|arruma|quebrou|finalmente|acabou_finalmente|escolhe|caso|funciona|importa|bora|entao|como)\\b",
           "name": "keyword.control.gambiarrascript"
         },
         {

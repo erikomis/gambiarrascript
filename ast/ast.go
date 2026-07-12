@@ -257,7 +257,7 @@ func (s *PraCadaNumStatement) String() string {
 
 type PraCadaListStatement struct {
 	Token    token.Token
-	Var      *Identifier
+	Vars     []*Identifier // 1 nome (valor) ou 2 nomes (indice/chave, valor)
 	Iterable Expression
 	Body     *BlockStatement
 }
@@ -265,14 +265,18 @@ type PraCadaListStatement struct {
 func (s *PraCadaListStatement) statementNode()       {}
 func (s *PraCadaListStatement) TokenLiteral() string { return s.Token.Literal }
 func (s *PraCadaListStatement) String() string {
-	return "pra_cada " + s.Var.String() + " em " + s.Iterable.String() + " " + s.Body.String() + "acabou_finalmente"
+	nomes := make([]string, len(s.Vars))
+	for i, v := range s.Vars {
+		nomes[i] = v.String()
+	}
+	return "pra_cada " + strings.Join(nomes, ", ") + " em " + s.Iterable.String() + " " + s.Body.String() + "acabou_finalmente"
 }
 
 type GambiarraStatement struct {
-	Token      token.Token
-	Name       *Identifier
-	Parameters []*Identifier
-	Body       *BlockStatement
+	Token       token.Token
+	Name        *Identifier
+	Parameters  []*Parametro
+	Body        *BlockStatement
 }
 
 func (s *GambiarraStatement) statementNode()       {}
@@ -309,11 +313,15 @@ func (s *ArrumaStatement) String() string {
 type ImportaStatement struct {
 	Token token.Token
 	Path  Expression
+	Alias *Identifier // nil = importa sem alias (despeja no escopo)
 }
 
 func (s *ImportaStatement) statementNode()       {}
 func (s *ImportaStatement) TokenLiteral() string { return s.Token.Literal }
 func (s *ImportaStatement) String() string {
+	if s.Alias != nil {
+		return "importa " + s.Path.String() + " como " + s.Alias.Value
+	}
 	return "importa " + s.Path.String()
 }
 
@@ -446,6 +454,9 @@ type IndexExpression struct {
 	// Dot marca acesso por ponto (`obj.campo`) — acucar sintatico pra
 	// `obj["campo"]`. Engines ignoram; o formatter reimprime com ponto.
 	Dot bool
+	// Safe marca navegacao segura (`obj?.campo`): se Left for nada, devolve
+	// nada em vez de erro. So faz sentido com Dot=true.
+	Safe bool
 }
 
 func (e *IndexExpression) expressionNode()      {}
@@ -453,7 +464,11 @@ func (e *IndexExpression) TokenLiteral() string { return e.Token.Literal }
 func (e *IndexExpression) String() string {
 	if e.Dot {
 		if t, ok := e.Index.(*TextoLiteral); ok {
-			return "(" + e.Left.String() + "." + t.Value + ")"
+			op := "."
+			if e.Safe {
+				op = "?."
+			}
+			return "(" + e.Left.String() + op + t.Value + ")"
 		}
 	}
 	return "(" + e.Left.String() + "[" + e.Index.String() + "])"
@@ -484,18 +499,18 @@ func (e *DicionarioLiteral) String() string {
 // so que sem nome — avalia pra um valor de funcao (closure).
 type FuncaoLiteral struct {
 	Token      token.Token
-	Parameters []*Identifier
+	Parameters []*Parametro
 	Body       *BlockStatement
 }
 
 func (e *FuncaoLiteral) expressionNode()      {}
 func (e *FuncaoLiteral) TokenLiteral() string { return e.Token.Literal }
 func (e *FuncaoLiteral) String() string {
-	nomes := make([]string, len(e.Parameters))
+	params := make([]string, len(e.Parameters))
 	for i, p := range e.Parameters {
-		nomes[i] = p.Value
+		params[i] = p.String()
 	}
-	return "gambiarra(" + strings.Join(nomes, ", ") + ") " + e.Body.String() + "acabou_finalmente"
+	return "gambiarra(" + strings.Join(params, ", ") + ") " + e.Body.String() + "acabou_finalmente"
 }
 
 // RangeExpression representa `inicio..fim` (inclusive). Devolve uma Lista
@@ -526,4 +541,78 @@ func (e *BoraExpression) String() string {
 		return "bora " + e.Call.String()
 	}
 	return "bora"
+}
+
+// ---- FatiaExpression: xs[1:3], xs[:2], xs[2:] ----
+
+// FatiaExpression representa uma fatia sintatica [inicio:fim] de uma lista ou
+// texto. Inicio/Fim nil = omitido (xs[:2], xs[2:], xs[:]).
+type FatiaExpression struct {
+	Token   token.Token
+	Left    Expression
+	Inicio  Expression // nil = do comeco
+	Fim     Expression // nil = ate o fim
+}
+
+func (e *FatiaExpression) expressionNode()      {}
+func (e *FatiaExpression) TokenLiteral() string { return e.Token.Literal }
+func (e *FatiaExpression) String() string {
+	inicio := ""
+	if e.Inicio != nil {
+		inicio = e.Inicio.String()
+	}
+	fim := ""
+	if e.Fim != nil {
+		fim = e.Fim.String()
+	}
+	return e.Left.String() + "[" + inicio + ":" + fim + "]"
+}
+
+// ---- TernarioExpression: se_colar cond entao a se_nao_colar b ----
+
+type TernarioExpression struct {
+	Token       token.Token
+	Cond        Expression
+	SeVerdadeiro Expression
+	SeFalso      Expression
+}
+
+func (e *TernarioExpression) expressionNode()      {}
+func (e *TernarioExpression) TokenLiteral() string { return e.Token.Literal }
+func (e *TernarioExpression) String() string {
+	return "se_colar " + e.Cond.String() + " entao " + e.SeVerdadeiro.String() + " se_nao_colar " + e.SeFalso.String()
+}
+
+// ---- CoalesceExpression: x ?? padrao ----
+
+type CoalesceExpression struct {
+	Token    token.Token
+	Left     Expression
+	Right    Expression
+}
+
+func (e *CoalesceExpression) expressionNode()      {}
+func (e *CoalesceExpression) TokenLiteral() string { return e.Token.Literal }
+func (e *CoalesceExpression) String() string {
+	return "(" + e.Left.String() + " ?? " + e.Right.String() + ")"
+}
+
+// ---- Parametro: nome + valor padrao + flag varargs ----
+
+// Parametro representa um parametro de gambiarra com valor padrao opcional
+// e/ou flag varargs (...resto).
+type Parametro struct {
+	Nome    *Identifier
+	Padrao  Expression // nil = sem valor padrao
+	Variadico bool     // true: ...resto (coleta args extras numa lista)
+}
+
+func (p *Parametro) String() string {
+	if p.Variadico {
+		return "..." + p.Nome.Value
+	}
+	if p.Padrao != nil {
+		return p.Nome.Value + " = " + p.Padrao.String()
+	}
+	return p.Nome.Value
 }

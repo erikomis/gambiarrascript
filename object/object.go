@@ -133,16 +133,16 @@ func (l *Lista) Inspect() string {
 }
 
 type Funcao struct {
-	Parameters []*ast.Identifier
+	Parametros []*ast.Parametro
 	Body       *ast.BlockStatement
 	Env        *Environment
 }
 
 func (f *Funcao) Type() ObjectType { return FUNCAO_OBJ }
 func (f *Funcao) Inspect() string {
-	nomes := make([]string, len(f.Parameters))
-	for i, p := range f.Parameters {
-		nomes[i] = p.Value
+	nomes := make([]string, len(f.Parametros))
+	for i, p := range f.Parametros {
+		nomes[i] = p.String()
 	}
 	return "gambiarra(" + strings.Join(nomes, ", ") + ")"
 }
@@ -163,10 +163,12 @@ type LinhaPC struct {
 type CompiledFunction struct {
 	Name      string
 	NumArgs   int
+	MinArgs   int // args requeridos (sem default e sem varargs); 0 = nenhum
 	NumLocals int
 	Bytecode  []byte
 	Free      []Object
 	Linhas    []LinhaPC // tabela pc->linha pra erros com posicao
+	Variadic  bool       // true: ultimo param e ...resto (coleta args extras)
 }
 
 func (f *CompiledFunction) Type() ObjectType { return FUNCAO_OBJ }
@@ -251,6 +253,55 @@ type Sair struct{ Codigo int }
 
 func (s *Sair) Type() ObjectType { return SAIR_OBJ }
 func (s *Sair) Inspect() string  { return "sai" }
+
+// IndiceNormalizado resolve indice negativo (estilo Python: -1 = ultimo) e
+// checa limites. Devolve (indice real, true) se valido; (0, false) se fora.
+// Usado por lista e texto nos dois engines pra indexacao/atribuicao.
+func IndiceNormalizado(pos, tamanho int) (int, bool) {
+	if pos < 0 {
+		pos += tamanho
+	}
+	if pos < 0 || pos >= tamanho {
+		return 0, false
+	}
+	return pos, true
+}
+
+// NormalizarFatia resolve os indices de uma fatia [inicio:fim] (nil = omitido),
+// suportando indices negativos (estilo Python). Devolve (lo, hi) validos pra
+// usar direto num slice Go (c.Elements[lo:hi]). Clampa nos limites [0, tamanho].
+func NormalizarFatia(inicio, fim *Numero, tamanho int) (int, int) {
+	lo := 0
+	if inicio != nil {
+		lo = int(inicio.Value)
+		if lo < 0 {
+			lo += tamanho
+		}
+		if lo < 0 {
+			lo = 0
+		}
+		if lo > tamanho {
+			lo = tamanho
+		}
+	}
+	hi := tamanho
+	if fim != nil {
+		hi = int(fim.Value)
+		if hi < 0 {
+			hi += tamanho
+		}
+		if hi < 0 {
+			hi = 0
+		}
+		if hi > tamanho {
+			hi = tamanho
+		}
+	}
+	if lo > hi {
+		lo = hi
+	}
+	return lo, hi
+}
 
 type BuiltinFunc func(args []Object) Object
 

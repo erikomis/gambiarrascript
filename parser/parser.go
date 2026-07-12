@@ -32,6 +32,7 @@ const (
 var precedencias = map[token.TokenType]int{
 	token.OU:       OU,
 	token.E:        E,
+	token.COALESCE: OU, // ?? mesma precedencia que ou (curto-circuito)
 	token.BOR:      BOR,
 	token.BXOR:     BXOR,
 	token.BAND:     BAND,
@@ -52,6 +53,7 @@ var precedencias = map[token.TokenType]int{
 	token.LPAREN:   CALL,
 	token.LBRACKET: INDEX,
 	token.DOT:      INDEX,
+	token.QDOT:     INDEX,
 }
 
 // baseDoComposto mapeia o token de atribuicao composta pro operador base.
@@ -110,6 +112,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.LBRACE, p.parseDicionario)
 	p.registerPrefix(token.BORA, p.parseBora)               // bora fn(args) -> Futuro
 	p.registerPrefix(token.GAMBIARRA, p.parseFuncaoLiteral) // lambda anonima
+	p.registerPrefix(token.SE_COLAR, p.parseTernario)       // se_colar cond entao a se_nao_colar b
 
 	p.infixParseFns = map[token.TokenType]infixParseFn{}
 	for _, tt := range []token.TokenType{
@@ -124,6 +127,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.LBRACKET, p.parseIndex)
 	p.registerInfix(token.RANGE, p.parseRange)
 	p.registerInfix(token.DOT, p.parseDot)
+	p.registerInfix(token.QDOT, p.parseDot)       // obj?.campo
+	p.registerInfix(token.COALESCE, p.parseCoalesce) // x ?? padrao
 
 	p.nextToken()
 	p.nextToken()
@@ -384,12 +389,12 @@ func (p *Parser) parseRange(left ast.Expression) ast.Expression {
 	return exp
 }
 
-// parseDot monta `obj.campo` como acucar pra `obj["campo"]`: vira uma
-// IndexExpression com Dot=true (engines nao mudam; formatter reimprime com
-// ponto). Funciona pra leitura, escrita (`bota obj.campo = v`) e chamada de
-// metodo (`obj.metodo(args)`).
+// parseDot monta `obj.campo` ou `obj?.campo` como acucar pra `obj["campo"]`:
+// vira uma IndexExpression com Dot=true (e Safe=true se veio `?.`). Funciona
+// pra leitura, escrita e chamada de metodo.
 func (p *Parser) parseDot(left ast.Expression) ast.Expression {
-	tok := p.curToken // o '.'
+	tok := p.curToken // o '.' ou '?.'
+	safe := p.curTokenIs(token.QDOT)
 	if !p.expectPeek(token.IDENT) {
 		return nil
 	}
@@ -398,7 +403,43 @@ func (p *Parser) parseDot(left ast.Expression) ast.Expression {
 		Left:  left,
 		Index: &ast.TextoLiteral{Token: p.curToken, Value: p.curToken.Literal},
 		Dot:   true,
+		Safe:  safe,
 	}
+}
+
+// parseTernario: `se_colar cond entao a se_nao_colar b` como expressao.
+// So aparece em contexto de expressao (RHS de bota, argumento, etc); como
+// statement, `se_colar` vira SeColarStatement normal (parserStmt desvia antes).
+func (p *Parser) parseTernario() ast.Expression {
+	tok := p.curToken // se_colar
+	p.nextToken()
+	cond := p.parseExpression(LOWEST)
+	if !p.peekTokenIs(token.ENTAO) {
+		p.addErro(p.peekToken.Line, p.peekToken.Coluna,
+			"esperava `entao` no ternario, veio %q", p.peekToken.Literal)
+		return nil
+	}
+	p.nextToken() // entao
+	p.nextToken() // primeiro token do ramo verdadeiro
+	seV := p.parseExpression(LOWEST)
+	if !p.peekTokenIs(token.SE_NAO_COLAR) {
+		p.addErro(p.peekToken.Line, p.peekToken.Coluna,
+			"esperava `se_nao_colar` no ternario, veio %q", p.peekToken.Literal)
+		return nil
+	}
+	p.nextToken() // se_nao_colar
+	p.nextToken() // primeiro token do ramo falso
+	seF := p.parseExpression(LOWEST)
+	return &ast.TernarioExpression{Token: tok, Cond: cond, SeVerdadeiro: seV, SeFalso: seF}
+}
+
+// parseCoalesce: `x ?? padrao` — se x for nada, devolve padrao; senao x.
+func (p *Parser) parseCoalesce(left ast.Expression) ast.Expression {
+	tok := p.curToken // ??
+	prec := p.curPrecedence()
+	p.nextToken()
+	right := p.parseExpression(prec)
+	return &ast.CoalesceExpression{Token: tok, Left: left, Right: right}
 }
 
 func (p *Parser) parseGrouped() ast.Expression {
@@ -442,9 +483,36 @@ func (p *Parser) parseCall(fn ast.Expression) ast.Expression {
 }
 
 func (p *Parser) parseIndex(left ast.Expression) ast.Expression {
-	exp := &ast.IndexExpression{Token: p.curToken, Left: left}
+	tok := p.curToken
 	p.nextToken()
-	exp.Index = p.parseExpression(LOWEST)
+	// fatia sintatica: xs[:3], xs[:] — inicio omitido (cur = :)
+	if p.curTokenIs(token.COLON) {
+		fatia := &ast.FatiaExpression{Token: tok, Left: left}
+		p.nextToken() // consome :
+		if !p.curTokenIs(token.RBRACKET) {
+			fatia.Fim = p.parseExpression(LOWEST)
+		}
+		if !p.curTokenIs(token.RBRACKET) && !p.expectPeek(token.RBRACKET) {
+			return nil
+		}
+		return fatia
+	}
+	inicio := p.parseExpression(LOWEST)
+	// fatia: xs[1:3], xs[2:] — peek = : (parseExpression nao consome :)
+	if p.peekTokenIs(token.COLON) {
+		fatia := &ast.FatiaExpression{Token: tok, Left: left, Inicio: inicio}
+		p.nextToken() // cur = :
+		p.nextToken() // cur = primeiro token depois de :
+		if !p.curTokenIs(token.RBRACKET) {
+			fatia.Fim = p.parseExpression(LOWEST)
+		}
+		if !p.curTokenIs(token.RBRACKET) && !p.expectPeek(token.RBRACKET) {
+			return nil
+		}
+		return fatia
+	}
+	// index normal
+	exp := &ast.IndexExpression{Token: tok, Left: left, Index: inicio}
 	if !p.expectPeek(token.RBRACKET) {
 		return nil
 	}
@@ -729,12 +797,25 @@ func (p *Parser) parsePraCada() ast.Statement {
 	if !p.expectPeek(token.IDENT) {
 		return nil
 	}
-	varName := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	varNames := []*ast.Identifier{{Token: p.curToken, Value: p.curToken.Literal}}
+
+	// pra_cada i, v em lista — 2o nome (indice/chave + valor)
+	if p.peekTokenIs(token.COMMA) {
+		p.nextToken() // ,
+		if !p.expectPeek(token.IDENT) {
+			return nil
+		}
+		varNames = append(varNames, &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal})
+	}
 
 	p.nextToken() // de | em
 	switch p.curToken.Type {
 	case token.DE:
-		stmt := &ast.PraCadaNumStatement{Token: tok, Var: varName}
+		if len(varNames) > 1 {
+			p.addErro(tok.Line, tok.Coluna, "pra_cada de..ate so aceita 1 nome")
+			return nil
+		}
+		stmt := &ast.PraCadaNumStatement{Token: tok, Var: varNames[0]}
 		p.nextToken()
 		stmt.Start = p.parseExpression(LOWEST)
 		if !p.expectPeek(token.ATE) {
@@ -746,7 +827,7 @@ func (p *Parser) parsePraCada() ast.Statement {
 		stmt.Body = p.parseBlockStatement()
 		return stmt
 	case token.EM:
-		stmt := &ast.PraCadaListStatement{Token: tok, Var: varName}
+		stmt := &ast.PraCadaListStatement{Token: tok, Vars: varNames}
 		p.nextToken()
 		stmt.Iterable = p.parseExpression(LOWEST)
 		p.nextToken()
@@ -794,27 +875,59 @@ func (p *Parser) parseGambiarra() ast.Statement {
 }
 
 // parseFunctionParameters: curToken deve estar em '(' ; ao final fica em ')'.
-func (p *Parser) parseFunctionParameters() []*ast.Identifier {
-	params := []*ast.Identifier{}
+// Suporta valor padrao: `f(x, y = 10)` e varargs: `f(primeiro, ...resto)`.
+func (p *Parser) parseFunctionParameters() []*ast.Parametro {
+	params := []*ast.Parametro{}
 	if p.peekTokenIs(token.RPAREN) {
 		p.nextToken()
 		return params
 	}
 	p.nextToken()
-	params = append(params, &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal})
+	params = append(params, p.parseParametro())
 	for p.peekTokenIs(token.COMMA) {
 		p.nextToken()
 		p.nextToken()
-		params = append(params, &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal})
+		params = append(params, p.parseParametro())
 	}
 	p.nextToken() // curToken = )
 	return params
+}
+
+// parseParametro le um parametro: nome, opcionalmente `= valor_padrao`
+// ou `...nome` (varargs). curToken ja esta no IDENT ou ELLIPSIS.
+func (p *Parser) parseParametro() *ast.Parametro {
+	param := &ast.Parametro{}
+	if p.curTokenIs(token.ELLIPSIS) {
+		param.Variadico = true
+		p.nextToken()
+	}
+	if !p.curTokenIs(token.IDENT) {
+		p.addErro(p.curToken.Line, p.curToken.Coluna,
+			"esperava nome de parametro, veio %q", p.curToken.Literal)
+		return param
+	}
+	param.Nome = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	// valor padrao: `= expr`
+	if p.peekTokenIs(token.ASSIGN) {
+		p.nextToken() // =
+		p.nextToken()
+		param.Padrao = p.parseExpression(LOWEST)
+	}
+	return param
 }
 
 func (p *Parser) parseImporta() ast.Statement {
 	stmt := &ast.ImportaStatement{Token: p.curToken}
 	p.nextToken()
 	stmt.Path = p.parseExpression(LOWEST)
+	// importa "x.gs" como alias
+	if p.peekTokenIs(token.COMO) {
+		p.nextToken() // como
+		if !p.expectPeek(token.IDENT) {
+			return nil
+		}
+		stmt.Alias = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	}
 	return stmt
 }
 

@@ -177,7 +177,7 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		return i.evalInfix(node, env)
 	case *ast.FuncaoLiteral:
 		// lambda anonima: closure sobre o env atual, igual gambiarra nomeada.
-		return &object.Funcao{Parameters: node.Parameters, Body: node.Body, Env: env}
+		return &object.Funcao{Parametros: node.Parameters, Body: node.Body, Env: env}
 	case *ast.DesestruturaStatement:
 		return i.evalDesestrutura(node, env)
 	case *ast.EscolheStatement:
@@ -196,6 +196,10 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		left := i.Eval(node.Left, env)
 		if isError(left) {
 			return left
+		}
+		// navegacao segura: obj?.campo — se left for nada, devolve nada
+		if node.Safe && left.Type() == object.NADA_OBJ {
+			return NADA
 		}
 		index := i.Eval(node.Index, env)
 		if isError(index) {
@@ -234,13 +238,33 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 	case *ast.PraCadaListStatement:
 		return i.evalPraCadaList(node, env)
 	case *ast.GambiarraStatement:
-		fn := &object.Funcao{Parameters: node.Parameters, Body: node.Body, Env: env}
+		fn := &object.Funcao{Parametros: node.Parameters, Body: node.Body, Env: env}
 		env.Set(node.Name.Value, fn)
 		return NADA
 	case *ast.ArrumaStatement:
 		return i.evalArruma(node, env)
 	case *ast.ImportaStatement:
 		return i.evalImporta(node, env)
+	case *ast.FatiaExpression:
+		return i.evalFatia(node, env)
+	case *ast.TernarioExpression:
+		cond := i.Eval(node.Cond, env)
+		if isError(cond) {
+			return cond
+		}
+		if isTruthy(cond) {
+			return i.Eval(node.SeVerdadeiro, env)
+		}
+		return i.Eval(node.SeFalso, env)
+	case *ast.CoalesceExpression:
+		left := i.Eval(node.Left, env)
+		if isError(left) {
+			return left
+		}
+		if left.Type() == object.NADA_OBJ {
+			return i.Eval(node.Right, env)
+		}
+		return left
 	case *ast.CallExpression:
 		fn := i.Eval(node.Function, env)
 		if isError(fn) {
@@ -610,9 +634,9 @@ func (i *Interpreter) evalAtribuiIndice(alvo *ast.IndexExpression, val object.Ob
 		if !ok {
 			return newError(linha, "indice de lista tem que ser numero, veio %s", idx.Type())
 		}
-		pos := int(n.Value)
-		if pos < 0 || pos >= len(c.Elements) {
-			return newError(linha, "esse indice (%d) ta fora da lista, o", pos)
+		pos, dentro := object.IndiceNormalizado(int(n.Value), len(c.Elements))
+		if !dentro {
+			return newError(linha, "esse indice (%d) ta fora da lista, o", int(n.Value))
 		}
 		c.Elements[pos] = val
 		return NADA
@@ -655,11 +679,22 @@ func (i *Interpreter) evalIndex(left, index object.Object, linha int) object.Obj
 		if !ok {
 			return newError(linha, "indice de lista tem que ser numero, veio %s", index.Type())
 		}
-		pos := int(idx.Value)
-		if pos < 0 || pos >= len(c.Elements) {
-			return newError(linha, "esse indice (%d) ta fora da lista, o", pos)
+		pos, dentro := object.IndiceNormalizado(int(idx.Value), len(c.Elements))
+		if !dentro {
+			return newError(linha, "esse indice (%d) ta fora da lista, o", int(idx.Value))
 		}
 		return c.Elements[pos]
+	case *object.Texto:
+		idx, ok := index.(*object.Numero)
+		if !ok {
+			return newError(linha, "indice de texto tem que ser numero, veio %s", index.Type())
+		}
+		runes := []rune(c.Value)
+		pos, dentro := object.IndiceNormalizado(int(idx.Value), len(runes))
+		if !dentro {
+			return newError(linha, "esse indice (%d) ta fora do texto, o", int(idx.Value))
+		}
+		return &object.Texto{Value: string(runes[pos])}
 	case *object.Dicionario:
 		chave, ok := index.(object.Chaveavel)
 		if !ok {
@@ -671,7 +706,7 @@ func (i *Interpreter) evalIndex(left, index object.Object, linha int) object.Obj
 		}
 		return par.Valor
 	default:
-		return newError(linha, "so da pra indexar lista ou dicionario, e isso ai e %s", left.Type())
+		return newError(linha, "so da pra indexar lista, texto ou dicionario, e isso ai e %s", left.Type())
 	}
 }
 
@@ -849,31 +884,51 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 		return it
 	}
 
-	var itens []object.Object
+	doisNomes := len(node.Vars) == 2
+
 	switch c := it.(type) {
 	case *object.Lista:
-		itens = c.Elements
+		for idx, item := range c.Elements {
+			if doisNomes {
+				env.Set(node.Vars[0].Value, object.NumInt(int64(idx)))
+				env.Set(node.Vars[1].Value, item)
+			} else {
+				env.Set(node.Vars[0].Value, item)
+			}
+			res := i.evalBlock(node.Body, env)
+			if res != nil {
+				switch res.Type() {
+				case object.ERRO_OBJ, object.RETORNO_OBJ, object.SAIR_OBJ:
+					return res
+				case object.VAZA_OBJ:
+					return NADA
+				case object.CONTINUA_OBJ:
+					continue
+				}
+			}
+		}
 	case *object.Dicionario:
 		for _, par := range c.Pares {
-			itens = append(itens, par.Chave)
+			if doisNomes {
+				env.Set(node.Vars[0].Value, par.Chave)
+				env.Set(node.Vars[1].Value, par.Valor)
+			} else {
+				env.Set(node.Vars[0].Value, par.Chave)
+			}
+			res := i.evalBlock(node.Body, env)
+			if res != nil {
+				switch res.Type() {
+				case object.ERRO_OBJ, object.RETORNO_OBJ, object.SAIR_OBJ:
+					return res
+				case object.VAZA_OBJ:
+					return NADA
+				case object.CONTINUA_OBJ:
+					continue
+				}
+			}
 		}
 	default:
 		return newError(node.Token.Line, "pra_cada ... em ... so funciona com lista ou dicionario, e isso ai e %s", it.Type())
-	}
-
-	for _, item := range itens {
-		env.Set(node.Var.Value, item)
-		res := i.evalBlock(node.Body, env)
-		if res != nil {
-			switch res.Type() {
-			case object.ERRO_OBJ, object.RETORNO_OBJ, object.SAIR_OBJ:
-				return res
-			case object.VAZA_OBJ:
-				return NADA
-			case object.CONTINUA_OBJ:
-				continue
-			}
-		}
 	}
 	return NADA
 }
@@ -903,20 +958,86 @@ func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Enviro
 
 	dirAntes := i.dirBase
 	i.DefinirDirBase(filepath.Dir(resolvido))
+
+	if node.Alias != nil {
+		// importa "x.gs" como alias — modulo vira namespace isolado
+		modEnv := object.NewEnclosedEnvironment(env)
+		res := i.evalProgram(prog, modEnv)
+		i.DefinirDirBase(dirAntes)
+		if isError(res) {
+			return res
+		}
+		// Cria um dicionario com todas as definicoes do modulo
+		pares := map[object.HashKey]object.ParDic{}
+		for _, nome := range modEnv.Locais() {
+			if v, ok := modEnv.Get(nome); ok {
+				chave := &object.Texto{Value: nome}
+				pares[chave.ChaveHash()] = object.ParDic{Chave: chave, Valor: v}
+			}
+		}
+		modulo := &object.Dicionario{Pares: pares}
+		env.Set(node.Alias.Value, modulo)
+		return NADA
+	}
+
+	// importa sem alias — despeja tudo no escopo (comportamento classico)
 	modEnv := object.NewEnclosedEnvironment(env)
 	res := i.evalProgram(prog, modEnv)
 	i.DefinirDirBase(dirAntes)
 	if isError(res) {
 		return res
 	}
-
-	// mescla as definicoes do modulo no escopo importador
 	for _, nome := range modEnv.Locais() {
 		if v, ok := modEnv.Get(nome); ok {
 			env.Set(nome, v)
 		}
 	}
 	return NADA
+}
+
+// evalFatia executa xs[inicio:fim] pra lista e texto. nil = omitido.
+func (i *Interpreter) evalFatia(node *ast.FatiaExpression, env *object.Environment) object.Object {
+	left := i.Eval(node.Left, env)
+	if isError(left) {
+		return left
+	}
+	linha := node.Token.Line
+
+	var inicioVal, fimVal *object.Numero
+	if node.Inicio != nil {
+		v := i.Eval(node.Inicio, env)
+		if isError(v) {
+			return v
+		}
+		n, ok := v.(*object.Numero)
+		if !ok {
+			return newError(linha, "fatia so aceita numero como inicio, veio %s", v.Type())
+		}
+		inicioVal = n
+	}
+	if node.Fim != nil {
+		v := i.Eval(node.Fim, env)
+		if isError(v) {
+			return v
+		}
+		n, ok := v.(*object.Numero)
+		if !ok {
+			return newError(linha, "fatia so aceita numero como fim, veio %s", v.Type())
+		}
+		fimVal = n
+	}
+
+	switch c := left.(type) {
+	case *object.Lista:
+		lo, hi := object.NormalizarFatia(inicioVal, fimVal, len(c.Elements))
+		return &object.Lista{Elements: c.Elements[lo:hi]}
+	case *object.Texto:
+		runes := []rune(c.Value)
+		lo, hi := object.NormalizarFatia(inicioVal, fimVal, len(runes))
+		return &object.Texto{Value: string(runes[lo:hi])}
+	default:
+		return newError(linha, "so da pra fatiar lista ou texto, e isso ai e %s", left.Type())
+	}
 }
 
 func (i *Interpreter) evalArruma(node *ast.ArrumaStatement, env *object.Environment) object.Object {
@@ -976,12 +1097,60 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 	if !ok {
 		return newError(linha, "isso ai (%s) nao e gambiarra pra voce sair chamando", fn.Type())
 	}
-	if len(args) != len(funcao.Parameters) {
-		return newError(linha, "essa gambiarra quer %d parametro(s), voce mandou %d", len(funcao.Parameters), len(args))
+	// Valida argc: Varargs aceita >= minReq; padrao aceita entre minReq e
+	// total. Sem padrao/varargs: strictly igual.
+	minReq := 0
+	temVariadic := false
+	for _, p := range funcao.Parametros {
+		if p.Variadico {
+			temVariadic = true
+			continue
+		}
+		if p.Padrao == nil {
+			minReq++
+		}
+	}
+	totalParams := len(funcao.Parametros)
+	if temVariadic {
+		if len(args) < minReq {
+			return newError(linha, "essa gambiarra quer no minimo %d parametro(s), voce mandou %d", minReq, len(args))
+		}
+	} else if totalParams > 0 {
+		hasDefaults := false
+		for _, p := range funcao.Parametros {
+			if p.Padrao != nil {
+				hasDefaults = true
+				break
+			}
+		}
+		if hasDefaults {
+			if len(args) < minReq || len(args) > totalParams {
+				return newError(linha, "essa gambiarra quer entre %d e %d parametro(s), voce mandou %d", minReq, totalParams, len(args))
+			}
+		} else if len(args) != totalParams {
+			return newError(linha, "essa gambiarra quer %d parametro(s), voce mandou %d", totalParams, len(args))
+		}
+	} else if totalParams == 0 && len(args) != 0 {
+		return newError(linha, "essa gambiarra nao quer parametro(s), voce mandou %d", len(args))
 	}
 	escopo := object.NewEnclosedEnvironment(funcao.Env)
-	for idx, p := range funcao.Parameters {
-		escopo.Set(p.Value, args[idx])
+	for idx, p := range funcao.Parametros {
+		if p.Variadico {
+			// coleta args extras (do idx em diante) numa lista
+			resto := []object.Object{}
+			if idx < len(args) {
+				resto = args[idx:]
+			}
+			escopo.Set(p.Nome.Value, &object.Lista{Elements: resto})
+		} else if idx < len(args) {
+			escopo.Set(p.Nome.Value, args[idx])
+		} else if p.Padrao != nil {
+			// valor padrao: avalia no escopo da funcao (nao do caller)
+			defaultVal := i.Eval(p.Padrao, escopo)
+			escopo.Set(p.Nome.Value, defaultVal)
+		} else {
+			escopo.Set(p.Nome.Value, NADA)
+		}
 	}
 	avaliado := i.evalBlock(funcao.Body, escopo)
 	if s, ok := avaliado.(*object.Sair); ok {

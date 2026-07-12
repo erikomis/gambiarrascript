@@ -161,6 +161,17 @@ func (l *Lexer) NextToken() token.Token {
 		}
 	case '~':
 		tok = newToken(token.BNOT, l.ch, linha, coluna)
+	case '?':
+		switch l.peekChar() {
+		case '.':
+			l.readChar()
+			tok = token.Token{Type: token.QDOT, Literal: "?.", Line: linha, Coluna: coluna}
+		case '?':
+			l.readChar()
+			tok = token.Token{Type: token.COALESCE, Literal: "??", Line: linha, Coluna: coluna}
+		default:
+			tok = newToken(token.ILLEGAL, l.ch, linha, coluna)
+		}
 	case ',':
 		tok = newToken(token.COMMA, l.ch, linha, coluna)
 	case '(':
@@ -180,7 +191,12 @@ func (l *Lexer) NextToken() token.Token {
 	case '.':
 		if l.peekChar() == '.' {
 			l.readChar()
-			tok = token.Token{Type: token.RANGE, Literal: "..", Line: linha, Coluna: coluna}
+			if l.peekChar() == '.' {
+				l.readChar()
+				tok = token.Token{Type: token.ELLIPSIS, Literal: "...", Line: linha, Coluna: coluna}
+			} else {
+				tok = token.Token{Type: token.RANGE, Literal: "..", Line: linha, Coluna: coluna}
+			}
 		} else {
 			// acesso por ponto: obj.campo (acucar pra obj["campo"])
 			tok = newToken(token.DOT, l.ch, linha, coluna)

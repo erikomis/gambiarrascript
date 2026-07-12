@@ -60,8 +60,14 @@ const (
 	RBRACE   = "}"
 	COLON    = ":"
 
-	RANGE = ".."
-	DOT   = "." // acesso por ponto: obj.campo
+	RANGE    = ".."
+	DOT      = "."  // acesso por ponto: obj.campo
+	QDOT     = "?." // navegacao segura: obj?.campo
+	COALESCE = "??" // coalescing: x ?? padrao
+	ELLIPSIS = "..." // varargs: gambiarra f(primeiro, ...resto)
+
+	ENTAO = "ENTAO" // se_colar cond ENTAO a se_nao_colar b (ternario)
+	COMO  = "COMO"  // importa "x.gs" COMO alias
 
 	BOTA         = "BOTA"
 	MOSTRA       = "MOSTRA"
@@ -122,6 +128,8 @@ var keywords = map[string]TokenType{
 	"nao":               NAO,
 	"importa":           IMPORTA,
 	"bora":              BORA,
+	"entao":             ENTAO,
+	"como":              COMO,
 }
 
 // LookupIdent devolve o TokenType de uma keyword, ou IDENT se for um nome comum.
