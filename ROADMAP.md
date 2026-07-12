@@ -222,27 +222,33 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 
 ### Tier 6 — Tooling / ecossistema
 
-- [ ] **`gs testa` parte 2** — flag `--vm`, filtro por nome
-      (`gs testa -so aquele_teste`), e cobertura simples (% de linhas
-      visitadas).
-- [ ] **`gs formata -w .`** — recursivo em diretório (hoje é arquivo a
-      arquivo).
-- [ ] **`gs doc`** — extrai os comentários `#` acima de cada `gambiarra` e
-      gera markdown de referência do projeto.
+- [~] **`gs testa` parte 2** — feito: flag `--vm` (roda a suíte na VM, com
+      contagem de asserts via `vm.NovaComInterp`) e filtro por nome
+      (`gs testa -so aquele_teste`). Falta cobertura (% de linhas) — exige
+      instrumentar linha nos dois engines, fica pra depois.
+- [x] **`gs formata -w .`** — aceita diretório e varre recursivamente todos
+      os `.gs` (helper `coletaArquivosGs`).
+- [x] **`gs doc`** — novo subcomando: extrai a assinatura de cada `gambiarra`
+      e os comentários `#` acima dela, gerando markdown de referência no stdout
+      (aceita arquivo ou diretório).
 - [ ] **`gs instala`** — baixa todas as dependências do `gambiarra.tomcat` de
       uma vez; `gambiarra.lock` com hash pra build reprodutível; `gs get`
       com versão/tag na URL.
 - [ ] **`gs build --alvo`** — cross-compile do standalone (linux/windows a
       partir do mac): precisa de binários `gs` pré-compilados por plataforma
       embutidos ou baixáveis.
-- [ ] **REPL parte 2** — histórico com setas (readline), autocomplete de
-      builtins/variáveis, `:ajuda` / `:limpa`.
+- [x] **REPL parte 2** — modo rico via `golang.org/x/term` quando a entrada é
+      um TTY: histórico com setas ↑/↓, edição de linha, autocomplete no TAB
+      (builtins + keywords + variáveis do escopo) e comandos `:ajuda`/`:limpa`.
+      Cai no modo simples linha-a-linha em pipes/testes.
 - [ ] **Release CI** — GitHub Actions gerando binários mac/linux/windows a
       cada tag + fórmula do Homebrew (`brew install gambiarrascript`).
 - [ ] **Playground web** — o build wasm já existe (`cmd/wasm`); falta o
       playground no site com editor, saída ao vivo e botão de compartilhar.
-- [ ] **Lint parte 2** — variável declarada e não usada, sombreamento
-      (redeclarar nome de fora), código morto depois de `funciona`.
+- [~] **Lint parte 2** — feito no typechecker (`gs check` + LSP): **código
+      morto** depois de `funciona`/`vaza`/`continua` e **variável `bota`
+      declarada e nunca usada** (top-level isento). Sombreamento ficou de fora
+      por ora (propenso a falso-positivo com o escopo Python-style).
 
 ### Tier 7 — Motor / performance
 
