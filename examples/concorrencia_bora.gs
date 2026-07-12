@@ -5,7 +5,7 @@ gambiarra demora(n)
     bota out = 0
     pra_cada i de 1 ate n
         bota out = out + i
-        espera(10) # simula trabalho
+        espera_ms(10) # simula trabalho
         mostra "soma parcial " + i + " = " + out
     acabou_finalmente
     funciona out

@@ -152,21 +152,26 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
       recover da VM. Mensagem idêntica ao tree-walker ("deu ruim na linha N:
       ..."), `erro_linha()` funciona após `quebrou` nos 2 engines, e a tabela
       sobrevive ao cache `.gsc`. De quebra: mensagens de divisão por zero e
-      índice fora alinhadas byte a byte (teste de paridade garante). Falta só
-      o stack trace na VM (Tier 7).
-- [ ] **Índice negativo** — `xs[-1]` pega o último (estilo Python). Hoje dá
-      "indice fora da lista". Vale pra lista e texto.
-- [ ] **Fatia sintática** — `xs[1:3]`, `xs[:2]`, `xs[2:]` pra lista e texto
+      índice fora alinhadas byte a byte (teste de paridade garante). O stack
+      trace na VM também já bate com o tree-walker (Tier 7).
+- [x] **Índice negativo** — `xs[-1]` pega o último (estilo Python), na leitura
+      e na atribuição (`xs[-1] += 1`). De quebra entrou **indexação de texto**
+      (que não existia): `"café"[0]`/`[-1]`, rune-aware (conta caractere, não
+      byte). Helper `object.IndiceNormalizado` compartilhado pelos 2 engines
+      (tree-walker `evalIndex`/`evalAtribuiIndice` e VM `vmIndex`/`vmIndexSet`);
+      teste de paridade. `examples/indice.gs`.
+- [x] **Fatia sintática** — `xs[1:3]`, `xs[:2]`, `xs[2:]` pra lista e texto
       (o builtin `fatia` existe, mas a sintaxe é mais gostosa).
-- [ ] **`pra_cada` com índice/chave+valor** — `pra_cada i, v em lista` e
+- [x] **`pra_cada` com índice/chave+valor** — `pra_cada i, v em lista` e
       `pra_cada chave, valor em dict`. Hoje só itera um nome.
-- [ ] **Parâmetros com valor padrão** — `gambiarra f(x, y = 10)`.
-- [ ] **Varargs** — `gambiarra f(primeiro, ...resto)` (resto vira lista).
-- [ ] **Ternário / `se_colar` como expressão** — algo tipo
+- [x] **Parâmetros com valor padrão** — `gambiarra f(x, y = 10)`.
+- [x] **Varargs** — `gambiarra f(primeiro, ...resto)` (resto vira lista).
+- [x] **Ternário / `se_colar` como expressão** — algo tipo
       `bota x = se_colar cond entao a se_nao_colar b` (sintaxe a decidir).
-- [ ] **Navegação segura** — `obj?.campo` (nada se obj for nada) e coalescing
-      `x ?? padrao`. Nomes/símbolos a decidir pra manter a zoeira.
-- [ ] **`importa ... como`** — `importa "util.gs" como util` →
+- [x] **Navegação segura** — `obj?.campo` (nada se obj for nada) e coalescing
+      `x ?? padrao`. Roda nos 2 engines; corrigido bug de underflow de pilha
+      na VM (OpPop espúrio no ramo não-nada do `?.`).
+- [x] **`importa ... como`** — `importa "util.gs" como util` →
       `util.funcao()`. Hoje o importa despeja tudo no escopo global (colisão
       de nome é silenciosa).
 - [ ] **Constantes** — declaração que não pode ser reatribuída
@@ -194,10 +199,14 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
       (bytes), `modificado_em` (unix-segundos, encaixa no `formata_tempo`) e
       `glob("*.gs")` (sem match = lista vazia). Builtins puros, tree-walker **e**
       VM (teste de paridade); `examples/fs2.gs`.
-- [ ] **Datas parte 2** — soma/subtração de durações a instantes, timezone,
-      `dia_da_semana`, diferença entre datas em dias/horas.
-- [ ] **CSV** — `le_csv` / `escreve_csv` (lista de dicts ↔ arquivo).
-- [ ] **Compressão** — `gzip_comprime` / `gzip_descomprime` (e talvez zip).
+- [x] **Datas parte 2** — `soma_tempo`, `sub_tempo`, `dia_da_semana`,
+      `diferenca_dias`, `diferenca_horas`, `converte_tz` (timezone IANA, ex:
+      "America/Sao_Paulo"). Veja `examples/datas.gs`.
+- [x] **CSV** — `le_csv(caminho)` (1a linha vira cabeçalho, resto vira
+      dicionários) e `escreve_csv(caminho, lista, [cabecalhos])` (cabeçalho
+      custom opcional reordena colunas). Veja `examples/csv.gs`.
+- [x] **Compressão** — `gzip_comprime(texto)` → base64 dos bytes gzipped,
+      `gzip_descomprime(base64)` → texto original. Veja `examples/compressao.gs`.
 
 ## Deve libs para essa linguagem
       - [ ] **HTTP cliente turbinado** — `busca` com verbo custom (PUT/DELETE/PATCH),
@@ -220,7 +229,7 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
       arquivo).
 - [ ] **`gs doc`** — extrai os comentários `#` acima de cada `gambiarra` e
       gera markdown de referência do projeto.
-- [ ] **`gs instala`** — baixa todas as dependências do `gambiarra.json` de
+- [ ] **`gs instala`** — baixa todas as dependências do `gambiarra.tomcat` de
       uma vez; `gambiarra.lock` com hash pra build reprodutível; `gs get`
       com versão/tag na URL.
 - [ ] **`gs build --alvo`** — cross-compile do standalone (linux/windows a
@@ -237,18 +246,28 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 
 ### Tier 7 — Motor / performance
 
-- [ ] **VM como engine padrão** — flip do `gs roda` pra VM quando fechar a
-      paridade de mensagens de erro (linha/stack trace, ver Tier 4). O
-      tree-walker vira fallback (`--tree`).
-- [ ] **Stack trace na VM** — igual o tree-walker (`Traço de pilha: em f
-      (linha N)`), guardando call-sites nos frames.
-- [ ] **Otimizações de bytecode** — constant folding (`2 + 3` vira `5` em
-      compile time), peephole (pop+push redundantes), interning de strings
-      repetidas na pool de constantes.
-- [ ] **Tail call** — recursão em cauda sem estourar frame (hoje MaxFrames
-      = 1024).
-- [ ] **Bench de regressão** — suite fixa de benchmarks (fib, sort, json,
-      http) rodando no CI pra pegar regressão de performance entre commits.
+- [x] **VM como engine padrão** — `gs roda` agora executa na VM por padrão;
+      `--tree` volta pro tree-walker (fallback). `--vm` segue aceito por
+      compatibilidade. Todos os exemplos rodam idêntico nos dois; paridade de
+      erro/linha/stack trace fechada.
+- [x] **Stack trace na VM** — já implementado: `handleVMError` monta o `Traço
+      de pilha: em f (linha N)` a partir dos frames (`frame.callPos` +
+      `fn.Name` + `LinhaDoPC`), byte a byte igual ao tree-walker
+      (`TestParidadePilhaErros` garante).
+- [x] **Otimizações de bytecode** — **constant folding** (`2 + 3` vira `5` em
+      compile time, recursivo, só nos casos byte-a-byte iguais ao runtime) e
+      **interning de constantes** (Numero/Texto/Booleano repetidos reusam o
+      índice no pool). Peephole (pop+push) ficou de fora — o folding já elimina
+      o grosso do compute redundante; jump-fixup seguro fica pra depois.
+- [x] **Tail call** — `funciona f(...)` em **auto-recursão** vira `OpTailCall`,
+      que reusa o frame atual → recursão em cauda roda em profundidade CONSTANTE
+      (testado com 200 mil níveis). Restrito a self-call de propósito: chamadas
+      entre funções diferentes seguem empilhando, preservando o traço de pilha.
+      De quebra, recursão funda não-cauda agora dá **erro limpo** ("recursao
+      funda demais, passou de 1024 chamadas") em vez de panic do Go.
+- [x] **Bench de regressão** — suite fixa `go test -bench=. ./vm/`
+      (`vm/bench_test.go`): fib (recursão), sort (lista+ordena), json
+      (de_json/pra_json). Reporta ns/op + allocs pra comparar commits.
 
 ---
 
