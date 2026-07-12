@@ -73,18 +73,28 @@ func main() {
 				continue
 			}
 			if a == "-h" || a == "--help" {
-				fmt.Println("uso: gs formata [-w|--write] <arquivo.gs>...")
+				fmt.Println("uso: gs formata [-w|--write] <arquivo.gs | diretorio>...")
 				fmt.Println("  sem flag: imprime no stdout ( FORMATADO).")
 				fmt.Println("  -w / --write: sobrescreve cada arquivo com a versao formatada.")
+				fmt.Println("  diretorio: varre recursivamente todos os .gs (ex.: gs formata -w .).")
 				os.Exit(0)
 			}
 			arquivos = append(arquivos, a)
 		}
 		if len(arquivos) == 0 {
-			fmt.Println("uso: gs formata [-w|--write] <arquivo.gs>...")
+			fmt.Println("uso: gs formata [-w|--write] <arquivo.gs | diretorio>...")
 			os.Exit(1)
 		}
-		for _, arq := range arquivos {
+		alvos, err := coletaArquivosGs(arquivos)
+		if err != nil {
+			fmt.Printf("nao consegui listar os arquivos: %v\n", err)
+			os.Exit(1)
+		}
+		if len(alvos) == 0 {
+			fmt.Println("nenhum arquivo .gs encontrado")
+			os.Exit(1)
+		}
+		for _, arq := range alvos {
 			if escreverFlag {
 				formatarArquivoEscrever(arq)
 			} else {
@@ -92,8 +102,9 @@ func main() {
 			}
 		}
 	case "repl":
-		fmt.Println("GambiarraScript REPL — manda ver (ctrl+d pra vazar)")
 		repl.Start(os.Stdin, os.Stdout)
+	case "doc":
+		comandoDoc(os.Args[2:])
 	case "testa":
 		rodarTestes(os.Args[2:])
 	case "disasm":
@@ -233,61 +244,41 @@ func reportaErroVM(err error) {
 // cuja execucao retornou Erro como "com perrengue". Exit 0 sse todos os
 // asserts passarem e nenhum arquivo deu Erro.
 func rodarTestes(args []string) {
-	dir := "."
-	if len(args) > 0 {
-		dir = args[0]
-	}
+	dir, usarVM, filtro := parseArgsTesta(args)
 	arquivos, err := filepath.Glob(filepath.Join(dir, "*_test.gs"))
 	if err != nil {
 		fmt.Printf("nao conseguir achar testes: %v\n", err)
 		os.Exit(1)
 	}
+	arquivos = filtraTestes(arquivos, filtro)
 	if len(arquivos) == 0 {
-		fmt.Println("nada de *_test.gs aqui, parca. cria um arquivo tipo `meu_test.gs` com `espera(1, 1)`.")
+		if filtro != "" {
+			fmt.Printf("nenhum *_test.gs casa com %q em %s\n", filtro, dir)
+		} else {
+			fmt.Println("nada de *_test.gs aqui, parca. cria um arquivo tipo `meu_test.gs` com `espera(1, 1)`.")
+		}
 		os.Exit(0)
 	}
 
-	totalArqs := len(arquivos)
+	engine := "tree-walker"
+	if usarVM {
+		engine = "VM"
+	}
+	fmt.Printf("rodando %d arquivo(s) no %s:\n", len(arquivos), engine)
+
 	totalAsserts, totalOk, falhas := 0, 0, 0
 	for _, arq := range arquivos {
-		fonte, err := os.ReadFile(arq)
-		if err != nil {
-			fmt.Printf("%s: nao deu pra ler: %v\n", arq, err)
-			falhas++
-			continue
-		}
-		p := parser.New(lexer.New(string(fonte)))
-		prog := p.ParseProgram()
-		if errs := p.Errors(); len(errs) != 0 {
-			fmt.Printf("%s: perrengue de parse:\n", arq)
-			for _, e := range errs {
-				fmt.Println("  - " + e)
-			}
-			falhas++
-			continue
-		}
-
-		interp := interpreter.New(os.Stdout)
-		interp.DefinirDirBase(filepath.Dir(arq))
-		interp.ResetTeste()
-		res := interp.Eval(prog, object.NewEnvironment())
-		esperaTotal, esperaOk := interp.TotaisTeste()
-		totalAsserts += esperaTotal
-		totalOk += esperaOk
-
-		nota := "OK"
-		if res != nil && res.Type() == object.ERRO_OBJ {
-			nota = "DEU RUIM: " + res.Inspect()
-			falhas++
-		} else if esperaTotal > 0 && esperaOk != esperaTotal {
-			nota = "FALHA"
+		total, ok, nota := rodaUmTeste(arq, usarVM)
+		totalAsserts += total
+		totalOk += ok
+		if nota != "OK" {
 			falhas++
 		}
-		fmt.Printf("  %s  %s  (%d/%d asserts)\n", nota, filepath.Base(arq), esperaOk, esperaTotal)
+		fmt.Printf("  %s  %s  (%d/%d asserts)\n", nota, filepath.Base(arq), ok, total)
 	}
 
-	fmt.Printf("\nResumo: %d arquivos, %d/%d asserts passaram, %d com perrengue\n",
-		totalArqs, totalOk, totalAsserts, falhas)
+	fmt.Printf("\nResumo (%s): %d arquivos, %d/%d asserts passaram, %d com perrengue\n",
+		engine, len(arquivos), totalOk, totalAsserts, falhas)
 	if falhas > 0 || totalAsserts != totalOk {
 		os.Exit(1)
 	}

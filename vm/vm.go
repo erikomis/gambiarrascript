@@ -63,11 +63,17 @@ type VM struct {
 }
 
 func New(bytecode *compiler.Bytecode, out io.Writer) *VM {
+	return NovaComInterp(bytecode, out, interpreter.New(out))
+}
+
+// NovaComInterp cria a VM reusando um interpretador ja configurado. Util pra
+// quem precisa ler estado do interp depois (ex.: `gs testa --vm` que le os
+// contadores de espera()/afirma() via interp.TotaisTeste()).
+func NovaComInterp(bytecode *compiler.Bytecode, out io.Writer, interp *interpreter.Interpreter) *VM {
 	bidx := map[string]int{}
 	for i, n := range compiler.BuiltinNomes() {
 		bidx[n] = i
 	}
-	interp := interpreter.New(out)
 	vm := &VM{
 		constants:  bytecode.Constants,
 		inst:       bytecode.Instructions,
