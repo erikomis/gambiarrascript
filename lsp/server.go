@@ -451,10 +451,18 @@ func isWordChar(r rune) bool {
 
 func typecheck(prog *ast.Program) []Diagnostico {
 	tc := &typechecker{
-		scopes: []map[string]bool{{}},
+		scopes:     []map[string]bool{{}},
+		botaScopes: []map[string]*varUso{{}},
 	}
 	tc.walkProgram(prog)
 	return tc.diags
+}
+
+// varUso rastreia uma variavel declarada com `bota` (posicao + se foi lida).
+type varUso struct {
+	linha  int
+	coluna int
+	usada  bool
 }
 
 // Typecheck expoe o linter de identificadores pra fora do LSP (usado pelo
@@ -464,16 +472,43 @@ func Typecheck(prog *ast.Program) []Diagnostico {
 }
 
 type typechecker struct {
-	scopes []map[string]bool
-	diags  []Diagnostico
+	scopes     []map[string]bool
+	botaScopes []map[string]*varUso // paralelo a scopes: vars `bota` (p/ nao-usada)
+	diags      []Diagnostico
 }
 
 func (tc *typechecker) pushScope() {
 	tc.scopes = append(tc.scopes, map[string]bool{})
+	tc.botaScopes = append(tc.botaScopes, map[string]*varUso{})
 }
 func (tc *typechecker) popScope() {
 	if len(tc.scopes) > 1 {
+		// avisa as vars `bota` deste escopo que nunca foram lidas
+		for nome, v := range tc.botaScopes[len(tc.botaScopes)-1] {
+			if !v.usada {
+				tc.warn(v.linha, v.coluna, "`"+nome+"` foi declarada mas nunca usada")
+			}
+		}
 		tc.scopes = tc.scopes[:len(tc.scopes)-1]
+		tc.botaScopes = tc.botaScopes[:len(tc.botaScopes)-1]
+	}
+}
+
+// registraBota marca uma variavel `bota` no escopo atual (só em escopos que
+// serão fechados — o global/top-level não é checado). marcaUsado é chamado
+// quando o nome é lido em alguma expressão.
+func (tc *typechecker) registraBota(id *ast.Identifier) {
+	if len(tc.botaScopes) <= 1 {
+		return // escopo global (top-level): não checa var não-usada
+	}
+	tc.botaScopes[len(tc.botaScopes)-1][id.Value] = &varUso{linha: id.Token.Line, coluna: id.Token.Coluna}
+}
+func (tc *typechecker) marcaUsado(nome string) {
+	for i := len(tc.botaScopes) - 1; i >= 0; i-- {
+		if v, ok := tc.botaScopes[i][nome]; ok {
+			v.usada = true
+			return
+		}
 	}
 }
 func (tc *typechecker) define(nome string) {
@@ -522,6 +557,7 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 		tc.walkExpr(n.Value)
 		if n.Name != nil {
 			tc.define(n.Name.Value)
+			tc.registraBota(n.Name)
 		}
 	case *ast.MostraStatement:
 		tc.walkExpr(n.Value)
@@ -619,15 +655,74 @@ func (tc *typechecker) walkBlock(b *ast.BlockStatement) {
 	if b == nil {
 		return
 	}
+	terminou := false
 	for _, s := range b.Statements {
+		if terminou {
+			// primeiro statement depois de um funciona/vaza/continua no mesmo
+			// bloco: inalcancavel. Avisa uma vez e para de avisar no bloco.
+			l, c := posDoStmt(s)
+			tc.warn(l, c, "codigo morto: isso nunca roda (vem depois de funciona/vaza/continua)")
+			terminou = false
+		}
 		tc.walkStmt(s)
+		if ehTerminador(s) {
+			terminou = true
+		}
 	}
+}
+
+// ehTerminador diz se o statement encerra o fluxo do bloco (o que vier depois
+// no mesmo bloco e inalcancavel).
+func ehTerminador(s ast.Statement) bool {
+	switch s.(type) {
+	case *ast.FuncionaStatement, *ast.VazaStatement, *ast.ContinuaStatement:
+		return true
+	}
+	return false
+}
+
+// posDoStmt devolve (linha, coluna) do token inicial de um statement.
+func posDoStmt(s ast.Statement) (int, int) {
+	switch n := s.(type) {
+	case *ast.BotaStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.MostraStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.FuncionaStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.ExpressionStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.SeColarStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.EnquantoStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.PraCadaNumStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.PraCadaListStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.ArrumaStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.GambiarraStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.EscolheStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.VazaStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.ContinuaStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.DesestruturaStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.ImportaStatement:
+		return n.Token.Line, n.Token.Coluna
+	}
+	return 0, 0
 }
 
 func (tc *typechecker) walkExpr(e ast.Expression) {
 	switch n := e.(type) {
 	case *ast.Identifier:
 		nome := n.Value
+		tc.marcaUsado(nome)
 		if !tc.resolvivel(nome) && !builtinsSet[nome] && !ehKeyword(nome) {
 			tc.warn(n.Token.Line, n.Token.Coluna, "`"+nome+"` pode estar indefinido (nao e builtin nem keyword)")
 		}
