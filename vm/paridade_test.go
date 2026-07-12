@@ -289,3 +289,22 @@ mostra escolhe_um([10, 20, 30, 40, 50])`,
 		comparaEngines(t, src)
 	}
 }
+
+// TestParidadeIndiceNegativo: indice negativo e indexacao de texto batem nos
+// dois engines.
+func TestParidadeIndiceNegativo(t *testing.T) {
+	casos := []string{
+		`mostra [10, 20, 30][-1]`,
+		`mostra [10, 20, 30][-3]`,
+		`mostra "café"[3]`,
+		`mostra "abc"[-1]`,
+		`bota xs = [1, 2, 3]
+xs[-1] += 5
+mostra xs`,
+		`mostra [1, 2, 3][-4]`,
+		`mostra "abc"[9]`,
+	}
+	for _, src := range casos {
+		comparaEngines(t, src)
+	}
+}

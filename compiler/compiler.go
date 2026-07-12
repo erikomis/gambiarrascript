@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 
 	"gambiarrascript/ast"
 	"gambiarrascript/code"
@@ -141,19 +142,28 @@ type Compiler struct {
 	// disasm ad-hoc), `importa` devolve erro explicando.
 	DirBase    string
 	importados map[string]bool
+
+	// interning de constantes escalares (Numero/Texto/Booleano): mesma
+	// constante literal repetida reusa o mesmo indice no pool.
+	constDedupe map[string]int
+
+	// funcAtual: nome da funcao sendo compilada (pra detectar self-tail-call).
+	funcAtual string
 }
 
 type compiledFn struct {
 	name      string
 	numArgs   int
+	minArgs   int // argumentos requeridos (sem default e sem varargs)
 	numLocals int
 	bytecode  []byte
 	free      []Symbol
+	variadic  bool
 }
 
 func New() *Compiler {
 	main := NewSymbolTable()
-	c := &Compiler{scope: main, scopes: []*SymbolTable{main}}
+	c := &Compiler{scope: main, scopes: []*SymbolTable{main}, constDedupe: map[string]int{}}
 	// registra builtins no escopo global — idx 0..N-1. A ordem aqui determina
 	// o indice que a VM usa pra despachar a builtin (veja vm.Builtins()).
 	for i, nome := range nomesBuiltins {
@@ -200,6 +210,12 @@ var nomesBuiltins = []string{
 	// set
 	"conjunto", "contem_conjunto", "adiciona_conjunto", "remove_conjunto",
 	"uniao", "intersecao", "diferenca",
+	// datas parte 2
+	"soma_tempo", "sub_tempo", "dia_da_semana", "diferenca_dias", "diferenca_horas", "converte_tz",
+	// csv
+	"le_csv", "escreve_csv",
+	// compressao
+	"gzip_comprime", "gzip_descomprime",
 }
 
 // BuiltinNomes expoe a lista canonica de nomes de builtins (em ordem -> idx).
@@ -376,10 +392,24 @@ func (c *Compiler) compile(node ast.Node) error {
 		frame.continueJumps = append(frame.continueJumps, jmpPos)
 	case *ast.FuncionaStatement:
 		if node.Value != nil {
-			if err := c.compile(node.Value); err != nil {
-				return err
+			// tail call: `funciona f(args)` DENTRO de uma funcao vira OpTailCall,
+			// que reusa o frame atual — recursao em cauda nao estoura os frames.
+			if call, ok := node.Value.(*ast.CallExpression); ok && ehSelfCall(call, c.funcAtual) {
+				for _, a := range call.Arguments {
+					if err := c.compile(a); err != nil {
+						return err
+					}
+				}
+				if err := c.compile(call.Function); err != nil {
+					return err
+				}
+				c.emit(code.OpTailCall, len(call.Arguments))
+			} else {
+				if err := c.compile(node.Value); err != nil {
+					return err
+				}
+				c.emit(code.OpReturn)
 			}
-			c.emit(code.OpReturn)
 		} else {
 			c.emit(code.OpReturnNada)
 		}
@@ -397,10 +427,61 @@ func (c *Compiler) compile(node ast.Node) error {
 		if err := c.compile(node.Left); err != nil {
 			return err
 		}
-		if err := c.compile(node.Index); err != nil {
+		if node.Safe {
+			// obj?.campo — se left for nada, empilha nada e pula
+			c.emit(code.OpDup)
+			c.emit(code.OpIsNada)
+			jmpNada := c.emit(code.OpJumpIfTrue, 9999)
+			// left ja esta na pilha (OpIsNada consumiu o dup, OpJumpIfTrue o bool);
+			// nao ha OpPop aqui — o left e justamente o que o OpIndex precisa.
+			if err := c.compile(node.Index); err != nil {
+				return err
+			}
+			c.emit(code.OpIndex)
+			jmpFim := c.emit(code.OpJump, 9999)
+			c.backpatch(jmpNada, len(c.instructions))
+			c.emit(code.OpPop) // descarta o dup
+			c.emit(code.OpNada)
+			c.backpatch(jmpFim, len(c.instructions))
+		} else {
+			if err := c.compile(node.Index); err != nil {
+				return err
+			}
+			c.emit(code.OpIndex)
+		}
+	case *ast.FatiaExpression:
+		return c.compileFatia(node)
+	case *ast.TernarioExpression:
+		if err := c.compile(node.Cond); err != nil {
 			return err
 		}
-		c.emit(code.OpIndex)
+		jmpF := c.emit(code.OpJumpIfFalse, 9999)
+		if err := c.compile(node.SeVerdadeiro); err != nil {
+			return err
+		}
+		jmpFim := c.emit(code.OpJump, 9999)
+		c.backpatch(jmpF, len(c.instructions))
+		if err := c.compile(node.SeFalso); err != nil {
+			return err
+		}
+		c.backpatch(jmpFim, len(c.instructions))
+	case *ast.CoalesceExpression:
+		if err := c.compile(node.Left); err != nil {
+			return err
+		}
+		c.emit(code.OpDup)
+		c.emit(code.OpIsNada)
+		jmpNada := c.emit(code.OpJumpIfTrue, 9999)
+		// nao e nada: mantem left (ja na pilha 2x), descarta o dup
+		c.emit(code.OpPop)
+		jmpFim := c.emit(code.OpJump, 9999)
+		c.backpatch(jmpNada, len(c.instructions))
+		// e nada: descarta o dup e empilha right
+		c.emit(code.OpPop)
+		if err := c.compile(node.Right); err != nil {
+			return err
+		}
+		c.backpatch(jmpFim, len(c.instructions))
 	case *ast.FuncaoLiteral:
 		// lambda anonima: closure fica na pilha como valor de expressao.
 		return c.compileFuncaoValor("<anonima>", node.Parameters, node.Body)
@@ -468,6 +549,12 @@ func (c *Compiler) defineVar(nome string) Symbol {
 }
 
 func (c *Compiler) compileInfix(node *ast.InfixExpression) error {
+	// constant folding: se a expressao inteira e uma constante segura, emite
+	// uma constante so (ex.: `2 + 3` vira OpConstant 5).
+	if v, ok := dobraConstante(node); ok {
+		c.emit(code.OpConstant, c.addConstant(v))
+		return nil
+	}
 	switch node.Operator {
 	case "e":
 		if err := c.compile(node.Left); err != nil {
@@ -667,26 +754,29 @@ func (c *Compiler) compilePraCadaNum(node *ast.PraCadaNumStatement) error {
 //	  bota __it = __it + 1
 //	acabou_finalmente
 func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
-	// nomes unicos (nao podem colidir com user)
 	const seqNome = "__seq_gs"
 	const itNome = "__it_gs"
 	const lenNome = "__len_gs"
+	const origNome = "__orig_gs"
 
-	// __seq = sequencia de iteracao: elementos (lista) ou chaves (dicionario).
-	// Avaliamos o iteravel UMA vez (evita reexecutar efeito colateral por
-	// iteracao) e normalizamos com OpIterSeq.
+	doisNomes := len(node.Vars) == 2
+
+	// __orig = iteravel original; __seq = OpIterSeq(orig) (elementos p/ lista,
+	// chaves p/ dict). Ambos usados quando ha 2 nomes (OpIterPar precisa do
+	// original pra resolver o valor de um dict).
 	if err := c.compile(node.Iterable); err != nil {
 		return err
 	}
+	origSym := c.defineVar(origNome)
+	c.emitVarSet(origSym)
+	c.emitVarGet(origSym)
 	c.emit(code.OpIterSeq)
 	seqSym := c.defineVar(seqNome)
 	c.emitVarSet(seqSym)
 
-	// __it = 0  (indice inteiro exato — ver nota no loop numerico)
 	c.emit(code.OpConstant, c.addConstant(object.NumInt(0)))
 	itSym := c.defineVar(itNome)
 	c.emitVarSet(itSym)
-	// __len = tamanho(__seq)
 	c.emitVarGet(seqSym)
 	tamanhoSym, _ := c.scope.Resolve("tamanho")
 	c.emit(code.OpCallBuiltin, tamanhoSym.Index, 1)
@@ -699,12 +789,25 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 	c.emit(code.OpMenor)
 	jmpFim := c.emit(code.OpJumpIfFalse, 9999)
 
-	// x = __seq[__it]
-	c.emitVarGet(seqSym)
-	c.emitVarGet(itSym)
-	c.emit(code.OpIndex)
-	xSym := c.defineVar(node.Var.Value)
-	c.emitVarSet(xSym)
+	if doisNomes {
+		// OpIterPar: pop __it, pop __seq, pop __orig -> push (key, value)
+		c.emitVarGet(origSym)
+		c.emitVarGet(seqSym)
+		c.emitVarGet(itSym)
+		c.emit(code.OpIterPar)
+		// pilha: [key, value] (value no topo)
+		v2Sym := c.defineVar(node.Vars[1].Value)
+		c.emitVarSet(v2Sym)
+		v1Sym := c.defineVar(node.Vars[0].Value)
+		c.emitVarSet(v1Sym)
+	} else {
+		// x = __seq[__it]
+		c.emitVarGet(seqSym)
+		c.emitVarGet(itSym)
+		c.emit(code.OpIndex)
+		xSym := c.defineVar(node.Vars[0].Value)
+		c.emitVarSet(xSym)
+	}
 
 	c.pushLoop(loopFrame{})
 	idx := len(c.loopStack) - 1
@@ -712,12 +815,10 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 		c.popLoop()
 		return err
 	}
-	// bloco de incremento - endereço so conhecido agora
 	incrementoAddr := len(c.instructions)
 	for _, j := range c.loopStack[idx].continueJumps {
 		c.backpatch(j, incrementoAddr)
 	}
-	// __it = __it + 1  (indice inteiro exato — ver nota no loop numerico)
 	c.emitVarGet(itSym)
 	c.emit(code.OpConstant, c.addConstant(object.NumInt(1)))
 	c.emit(code.OpAdd)
@@ -732,6 +833,8 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 	}
 	return nil
 }
+
+// compilePraCadaList original replaced by implementation above.
 
 // compileEscolhe vira uma cadeia if-else com jumps:
 //
@@ -818,22 +921,55 @@ func (c *Compiler) compileGambiarra(node *ast.GambiarraStatement) error {
 // compileFuncaoValor compila params+corpo e deixa a CLOSURE no topo da pilha.
 // Usado pela gambiarra nomeada (que em seguida amarra num simbolo) e pela
 // lambda anonima (que usa o valor direto como expressao).
-func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Identifier, body *ast.BlockStatement) error {
+func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body *ast.BlockStatement) error {
+	funcSalva := c.funcAtual
+	c.funcAtual = nome
+	defer func() { c.funcAtual = funcSalva }()
 	// Empurra um novo escopo (novo symbol table) — params viram locals.
 	outer := c.scope
 	newScope := NewEnclosedSymbolTable(outer)
 	c.scope = newScope
-	for _, p := range params {
-		newScope.Define(p.Value)
+	paramSyms := make([]Symbol, len(params))
+	minArgs := 0
+	temVariadic := false
+	for i, p := range params {
+		paramSyms[i] = newScope.Define(p.Nome.Value)
+		if p.Variadico {
+			temVariadic = true
+		} else if p.Padrao == nil {
+			minArgs++
+		}
 	}
 
 	// SALVA o bytecode (e a tabela de linhas) do fluxo principal e troca por
-	// buffers vazios so pra compilar o body da funcao. Isso garante que os
-	// opcodes do corpo NAO sejam executados como parte do programa principal.
+	// buffers vazios so pra compilar o body da funcao.
 	savedInst := c.instructions
 	savedLinhas := c.linhas
 	c.instructions = code.Instructions{}
 	c.linhas = nil
+
+	// Prologo: pra cada param com valor padrao, se o slot veio NADA (nao
+	// preenchido pela VM), substitui pelo default. A VM poe NADA nos slots
+	// nao fornecidos (ver OpCall: padding com NADA quando argc < NumArgs).
+	for i, p := range params {
+		if p.Padrao == nil || p.Variadico {
+			continue
+		}
+		// if param[i] == nada then param[i] = default
+		c.emit(code.OpGetLocal, paramSyms[i].Index)
+		c.emit(code.OpNada)
+		c.emit(code.OpEqual)
+		jmpSkip := c.emit(code.OpJumpIfFalse, 9999)
+		// avalia o default no escopo da funcao (podereferenciar params anteriores)
+		if err := c.compile(p.Padrao); err != nil {
+			c.instructions = savedInst
+			c.linhas = savedLinhas
+			c.scope = outer
+			return err
+		}
+		c.emit(code.OpSetLocal, paramSyms[i].Index)
+		c.backpatch(jmpSkip, len(c.instructions))
+	}
 
 	if err := c.compile(body); err != nil {
 		c.instructions = savedInst
@@ -843,7 +979,7 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Identifier, bod
 	}
 	c.emit(code.OpReturnNada)
 
-	bc := c.instructions       // body bytecode isolado
+	bc := c.instructions       // body bytecode isolado (com prologo)
 	fnLinhas := c.linhas       // tabela pc->linha do corpo
 	c.instructions = savedInst // restaura fluxo principal
 	c.linhas = savedLinhas
@@ -853,9 +989,11 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Identifier, bod
 	cf := compiledFn{
 		name:      nome,
 		numArgs:   len(params),
+		minArgs:   minArgs,
 		numLocals: newScope.count,
 		bytecode:  bc,
 		free:      free,
+		variadic:  temVariadic,
 	}
 	c.compiledFns = append(c.compiledFns, cf)
 
@@ -864,10 +1002,12 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Identifier, bod
 	fnIdx := c.addConstant(&object.CompiledFunction{
 		Name:      cf.name,
 		NumArgs:   cf.numArgs,
+		MinArgs:   cf.minArgs,
 		NumLocals: cf.numLocals,
 		Bytecode:  cf.bytecode,
 		Free:      nil,
 		Linhas:    fnLinhas,
+		Variadic:  cf.variadic,
 	})
 	// pra cada freevar, empilhamos o valor capturado ANTES do OpClosure.
 	// o `free[i]` e um Symbol com scope=FreeScope que Resolve devolveu
@@ -1051,8 +1191,119 @@ func (c *Compiler) backpatch(jumpPos int, alvo int) {
 }
 
 func (c *Compiler) addConstant(obj object.Object) int {
+	// interning: constante escalar identica reusa o indice existente.
+	if k, ok := chaveConstante(obj); ok {
+		if idx, existe := c.constDedupe[k]; existe {
+			return idx
+		}
+		c.constants = append(c.constants, obj)
+		idx := len(c.constants) - 1
+		c.constDedupe[k] = idx
+		return idx
+	}
 	c.constants = append(c.constants, obj)
 	return len(c.constants) - 1
+}
+
+// chaveConstante devolve uma chave canonica pra interning de constantes
+// escalares. Inteiro e float sao chaves distintas (a VM usa aritimetica
+// diferente pra cada), assim como textos e booleanos.
+func chaveConstante(obj object.Object) (string, bool) {
+	switch o := obj.(type) {
+	case *object.Numero:
+		if o.EhInt {
+			return "i" + strconv.FormatInt(o.Int, 10), true
+		}
+		return "f" + strconv.FormatFloat(o.Value, 'g', -1, 64), true
+	case *object.Texto:
+		return "s" + o.Value, true
+	case *object.Booleano:
+		if o.Value {
+			return "b1", true
+		}
+		return "b0", true
+	}
+	return "", false
+}
+
+// ehSelfCall diz se `call` e uma chamada direta a `nome` (a propria funcao).
+// So nesse caso emitimos OpTailCall: recursao em cauda roda em profundidade
+// constante SEM perder o traco de pilha de chamadas entre funcoes diferentes
+// (essas continuam empilhando frame).
+func ehSelfCall(call *ast.CallExpression, nome string) bool {
+	if nome == "" || nome == "<anonima>" {
+		return false
+	}
+	id, ok := call.Function.(*ast.Identifier)
+	return ok && id.Value == nome
+}
+
+// dobraConstante avalia em tempo de compilacao expressoes 100% constantes
+// (literais + operacoes SEGURAS), pra emitir uma constante so em vez de
+// OpConstant/OpConstant/OpAdd. So dobra o que casa byte-a-byte com o runtime;
+// qualquer duvida (divisao, overflow, tipo, float) devolve (nil,false) e a
+// expressao compila normal — mantendo a paridade com o tree-walker.
+func dobraConstante(expr ast.Expression) (object.Object, bool) {
+	switch n := expr.(type) {
+	case *ast.NumeroLiteral:
+		return &object.Numero{Value: n.Value, Int: n.Int, EhInt: n.EhInt}, true
+	case *ast.TextoLiteral:
+		return &object.Texto{Value: n.Value}, true
+	case *ast.InfixExpression:
+		l, ok := dobraConstante(n.Left)
+		if !ok {
+			return nil, false
+		}
+		r, ok := dobraConstante(n.Right)
+		if !ok {
+			return nil, false
+		}
+		return dobraInfixo(n.Operator, l, r)
+	}
+	return nil, false
+}
+
+// dobraInfixo computa uma op binaria de constantes so nos casos garantidamente
+// iguais ao runtime: texto+texto e inteiro exato +/-/* sem overflow (mesma
+// deteccao do vmExecBinarioIntShort). Divisao, modulo, float, comparacao,
+// bitwise e logico NAO sao dobrados (ficam pro runtime).
+func dobraInfixo(op string, l, r object.Object) (object.Object, bool) {
+	if lt, ok := l.(*object.Texto); ok {
+		rt, ok := r.(*object.Texto)
+		if ok && op == "+" {
+			return &object.Texto{Value: lt.Value + rt.Value}, true
+		}
+		return nil, false
+	}
+	ln, lok := l.(*object.Numero)
+	rn, rok := r.(*object.Numero)
+	if !lok || !rok || !ln.EhInt || !rn.EhInt {
+		return nil, false
+	}
+	switch op {
+	case "+":
+		res := ln.Int + rn.Int
+		if (ln.Int > 0 && rn.Int > 0 && res < 0) || (ln.Int < 0 && rn.Int < 0 && res > 0) {
+			return nil, false // overflow: deixa a VM cair no float
+		}
+		return object.NumInt(res), true
+	case "-":
+		res := ln.Int - rn.Int
+		if (ln.Int > 0 && rn.Int < 0 && res < 0) || (ln.Int < 0 && rn.Int > 0 && res > 0) {
+			return nil, false
+		}
+		return object.NumInt(res), true
+	case "*":
+		if ln.Int == 0 || rn.Int == 0 {
+			return object.NumInt(0), true
+		}
+		res := ln.Int * rn.Int
+		if res/rn.Int != ln.Int {
+			return nil, false
+		}
+		return object.NumInt(res), true
+	}
+	return nil, false
 }
 
 func (c *Compiler) emit(op code.Opcode, operands ...int) int {
@@ -1100,6 +1351,15 @@ func (c *Compiler) compileImporta(node *ast.ImportaStatement) error {
 		return fmt.Errorf("importa: modulo %q com perrengue: %s", tx.Value, errs[0])
 	}
 
+	// registra nomes globais antes de compilar o modulo (pra saber quais
+	// variaveis novas vieram dele — usado em `importa ... como alias`)
+	globaisAntes := map[string]Symbol{}
+	for k, v := range c.scope.symbols {
+		if v.Scope == GlobalScope {
+			globaisAntes[k] = v
+		}
+	}
+
 	dirAntes := c.DirBase
 	c.DirBase = filepath.Dir(resolvido)
 	for _, s := range prog.Statements {
@@ -1109,5 +1369,62 @@ func (c *Compiler) compileImporta(node *ast.ImportaStatement) error {
 		}
 	}
 	c.DirBase = dirAntes
+
+	// importa ... como alias: cria um dicionario com as definicoes do modulo
+	// e amarra no alias. As globals tambem existem no escopo global (nao da
+	// pra evitar na VM sem reescrever o sistema de modulos), mas o alias
+	// resolve o acesso via alias.nome.
+	if node.Alias != nil {
+		// coleta nomes novos (definidos pelo modulo)
+		novosNomes := []string{}
+		for k, v := range c.scope.symbols {
+			if v.Scope == GlobalScope {
+				if _, ja := globaisAntes[k]; !ja {
+					novosNomes = append(novosNomes, k)
+				}
+			}
+		}
+		// empilha OpHash com pares {nome: global}
+		nPares := 0
+		for _, nome := range novosNomes {
+			sym, _ := c.scope.Resolve(nome)
+			c.emit(code.OpConstant, c.addConstant(&object.Texto{Value: nome}))
+			c.emitVarGet(sym)
+			nPares++
+		}
+		c.emit(code.OpHash, nPares)
+		// amarra no alias
+		aliasSym := c.defineVar(node.Alias.Value)
+		c.emitVarSet(aliasSym)
+	}
+	return nil
+}
+
+// compileFatia compila xs[inicio:fim]. Desugar pra chamada da builtin fatia
+// — mas como fatia so trabalha com texto, implemementamos via OpIndex com
+// inicio/fim no stack e um novo opcode. Por simplicidade, desugaramos pra
+// uma chamada da builtin `fatia` com indices nil (0 / tamanho).
+// Na verdade, mais limpo: empilhamos left, inicio (ou nada-numero), fim (ou
+// nada-numero) e usamos OpFatia.
+func (c *Compiler) compileFatia(node *ast.FatiaExpression) error {
+	if err := c.compile(node.Left); err != nil {
+		return err
+	}
+	// nil = NADA (sentinela); a VM cuida da normalizacao.
+	if node.Inicio != nil {
+		if err := c.compile(node.Inicio); err != nil {
+			return err
+		}
+	} else {
+		c.emit(code.OpNada)
+	}
+	if node.Fim != nil {
+		if err := c.compile(node.Fim); err != nil {
+			return err
+		}
+	} else {
+		c.emit(code.OpNada)
+	}
+	c.emit(code.OpFatia)
 	return nil
 }

@@ -29,14 +29,18 @@ func main() {
 
 	switch os.Args[1] {
 	case "roda":
-		usarVM := false
+		usarVM := true // VM e o engine padrao (Tier 7); use --tree pro tree-walker
 		usarCache := false
 		arquivo := ""
 		var scriptArgs []string
 		proximoEArquivo := true
 		for _, a := range os.Args[2:] {
-			if a == "--vm" {
+			if a == "--vm" { // aceito por compatibilidade; a VM ja e o padrao
 				usarVM = true
+				continue
+			}
+			if a == "--tree" { // fallback pro tree-walker (interpretador)
+				usarVM = false
 				continue
 			}
 			if a == "--cache" {
@@ -51,11 +55,11 @@ func main() {
 			scriptArgs = append(scriptArgs, a)
 		}
 		if arquivo == "" {
-			fmt.Println("uso: gs roda [--vm] [--cache] <arquivo.gs> [argumentos...]")
+			fmt.Println("uso: gs roda [--tree] [--cache] <arquivo.gs> [argumentos...]")
 			os.Exit(1)
 		}
 		if usarCache && !usarVM {
-			fmt.Println("--cache so faz sentido com --vm (bytecode); ignorando")
+			fmt.Println("--cache nao se aplica com --tree (bytecode e so da VM); ignorando")
 			usarCache = false
 		}
 		rodarArquivoCache(arquivo, usarVM, usarCache, scriptArgs)
@@ -122,8 +126,8 @@ func main() {
 func uso() {
 	fmt.Println("GambiarraScript")
 	fmt.Println("uso:")
-	fmt.Println("  gs roda <arquivo.gs> [argumentos...]   # executa um arquivo")
-	fmt.Println("  gs roda --vm [--cache] <arquivo.gs>    # executa na VM (--cache grava/usa .gsc)")
+	fmt.Println("  gs roda [--cache] <arquivo.gs> [args]   # executa na VM (padrao; --cache grava/usa .gsc)")
+	fmt.Println("  gs roda --tree <arquivo.gs>            # executa no tree-walker (fallback)")
 	fmt.Println("  gs formata <arquivo.gs>                # formata o arquivo e imprime")
 	fmt.Println("  gs formata -w <arquivo.gs>...         # formata e sobrescreve no disco")
 	fmt.Println("  gs check <arquivo.gs>...               # parse + lint (erros e avisos)")

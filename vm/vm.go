@@ -135,7 +135,13 @@ func (vm *VM) push(o object.Object) { vm.stack[vm.sp] = o; vm.sp++ }
 func (vm *VM) pop() object.Object   { vm.sp--; return vm.stack[vm.sp] }
 
 func (vm *VM) currentFrame() *Frame { return vm.frames[vm.framesIdx-1] }
-func (vm *VM) pushFrame(f *Frame)   { vm.frames[vm.framesIdx] = f; vm.framesIdx++ }
+func (vm *VM) pushFrame(f *Frame) {
+	if vm.framesIdx >= MaxFrames {
+		panic(VMError{err: &object.Erro{Message: fmt.Sprintf("recursao funda demais (passou de %d chamadas) — usa recursao em cauda (funciona f(...)) ou um laco", MaxFrames), Kind: "runtime"}})
+	}
+	vm.frames[vm.framesIdx] = f
+	vm.framesIdx++
+}
 func (vm *VM) popFrame() *Frame     { vm.framesIdx--; return vm.frames[vm.framesIdx] }
 
 // clone devolve uma VM nova pronta pra rodar em goroutine: compartilha
@@ -514,6 +520,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			}
 			vm.push(&object.CompiledFunction{
 				Name: cf.Name, NumArgs: cf.NumArgs, NumLocals: cf.NumLocals,
+				MinArgs: cf.MinArgs, Variadic: cf.Variadic,
 				Bytecode: cf.Bytecode, Free: free, Linhas: cf.Linhas,
 			})
 		case code.OpCall:
@@ -522,22 +529,51 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			ip += 2
 			callee := vm.stack[vm.sp-1]
 			if cf, ok := callee.(*object.CompiledFunction); ok {
-				if argc != cf.NumArgs {
-					panic(VMError{err: &object.Erro{Message: fmt.Sprintf("essa gambiarra quer %d parametro(s), voce mandou %d", cf.NumArgs, argc), Kind: "runtime"}})
+				// valida argc: variadic aceita >= minArgs; default aceita
+				// entre minArgs e numArgs; sem nenhum = estritamente numArgs.
+				if cf.Variadic {
+					if argc < cf.MinArgs {
+						panic(VMError{err: &object.Erro{Message: fmt.Sprintf("essa gambiarra quer no minimo %d parametro(s), voce mandou %d", cf.MinArgs, argc), Kind: "runtime"}})
+					}
+				} else {
+					minA := cf.MinArgs
+					if minA == 0 {
+						minA = cf.NumArgs
+					}
+					if argc < minA || argc > cf.NumArgs {
+						if cf.MinArgs > 0 && cf.MinArgs < cf.NumArgs {
+							panic(VMError{err: &object.Erro{Message: fmt.Sprintf("essa gambiarra quer entre %d e %d parametro(s), voce mandou %d", cf.MinArgs, cf.NumArgs, argc), Kind: "runtime"}})
+						}
+						panic(VMError{err: &object.Erro{Message: fmt.Sprintf("essa gambiarra quer %d parametro(s), voce mandou %d", cf.NumArgs, argc), Kind: "runtime"}})
+					}
 				}
-				// bp = endereco do arg0 (local 0). args em stack[sp-1-argc .. sp-2].
 				bp := vm.sp - 1 - argc
+				// varargs: coleta extras numa lista (antes de ajustar sp)
+				if cf.Variadic && argc >= cf.NumArgs {
+					variadicIdx := cf.NumArgs - 1
+					nExtras := argc - variadicIdx
+					restElems := make([]object.Object, nExtras)
+					copy(restElems, vm.stack[bp+variadicIdx:bp+argc])
+					vm.stack[bp+variadicIdx] = &object.Lista{Elements: restElems}
+					argc = cf.NumArgs
+				}
+				// default params: pad missing slots com NADA. Excecao: se o
+				// ultimo param e variadico e ficou sem nenhum extra, o slot dele
+				// vira lista VAZIA (nao NADA) — paridade com o tree-walker.
+				if argc < cf.NumArgs {
+					for i := argc; i < cf.NumArgs; i++ {
+						if cf.Variadic && i == cf.NumArgs-1 {
+							vm.stack[bp+i] = &object.Lista{Elements: []object.Object{}}
+						} else {
+							vm.stack[bp+i] = NADA
+						}
+					}
+					argc = cf.NumArgs
+				}
 				newFrame := &Frame{fn: cf, ip: 0, basePointer: bp, callPos: opPos}
-				// reserva os slots de locals (params + `bota`/vars sinteticos como
-				// os do `pra_cada em`): a pilha de trabalho comeca ACIMA deles,
-				// senao um push do corpo sobrescreve um local. OpReturn volta sp
-				// pra bp, entao aqui subimos ate bp+NumLocals.
 				vm.sp = bp + cf.NumLocals
-				frame.ip = ip // ponto de retomada quando a funcao retornar
+				frame.ip = ip
 				vm.pushFrame(newFrame)
-				// troca ITERATIVA de frame (sem recursao Go): o unwinding de
-				// erro pode pular varios frames de uma vez sem deixar
-				// invocacoes pendentes retomando codigo ja abandonado.
 				frame = newFrame
 				fn = cf
 				ip = 0
@@ -556,6 +592,83 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					panic(VMError{err: e})
 				}
 				vm.push(res)
+				continue
+			}
+			panic(VMError{err: &object.Erro{Message: fmt.Sprintf("isso ai (%s) nao e gambiarra pra voce sair chamando", callee.Type()), Kind: "runtime"}})
+		case code.OpTailCall:
+			argc := int(fn.Bytecode[ip+1])
+			ip += 2
+			callee := vm.stack[vm.sp-1]
+			if cf, ok := callee.(*object.CompiledFunction); ok {
+				// mesma validacao de aridez do OpCall
+				if cf.Variadic {
+					if argc < cf.MinArgs {
+						panic(VMError{err: &object.Erro{Message: fmt.Sprintf("essa gambiarra quer no minimo %d parametro(s), voce mandou %d", cf.MinArgs, argc), Kind: "runtime"}})
+					}
+				} else {
+					minA := cf.MinArgs
+					if minA == 0 {
+						minA = cf.NumArgs
+					}
+					if argc < minA || argc > cf.NumArgs {
+						if cf.MinArgs > 0 && cf.MinArgs < cf.NumArgs {
+							panic(VMError{err: &object.Erro{Message: fmt.Sprintf("essa gambiarra quer entre %d e %d parametro(s), voce mandou %d", cf.MinArgs, cf.NumArgs, argc), Kind: "runtime"}})
+						}
+						panic(VMError{err: &object.Erro{Message: fmt.Sprintf("essa gambiarra quer %d parametro(s), voce mandou %d", cf.NumArgs, argc), Kind: "runtime"}})
+					}
+				}
+				bpCall := vm.sp - 1 - argc
+				if cf.Variadic && argc >= cf.NumArgs {
+					variadicIdx := cf.NumArgs - 1
+					nExtras := argc - variadicIdx
+					restElems := make([]object.Object, nExtras)
+					copy(restElems, vm.stack[bpCall+variadicIdx:bpCall+argc])
+					vm.stack[bpCall+variadicIdx] = &object.Lista{Elements: restElems}
+					argc = cf.NumArgs
+				}
+				if argc < cf.NumArgs {
+					for i := argc; i < cf.NumArgs; i++ {
+						if cf.Variadic && i == cf.NumArgs-1 {
+							vm.stack[bpCall+i] = &object.Lista{Elements: []object.Object{}}
+						} else {
+							vm.stack[bpCall+i] = NADA
+						}
+					}
+					argc = cf.NumArgs
+				}
+				// TAIL CALL: reusa o frame ATUAL — move os args pra base do frame
+				// corrente e troca a funcao, sem empilhar. Recursao em cauda roda em
+				// profundidade constante de frames.
+				bp := frame.basePointer
+				copy(vm.stack[bp:bp+cf.NumArgs], vm.stack[bpCall:bpCall+cf.NumArgs])
+				vm.sp = bp + cf.NumLocals
+				frame.fn = cf
+				frame.ip = 0
+				fn = cf
+				ip = 0
+				continue
+			}
+			if b, ok := callee.(*object.Builtin); ok {
+				// tail call a builtin: chama e retorna (builtin nao recursa via frames)
+				args := make([]object.Object, argc)
+				copy(args, vm.stack[vm.sp-1-argc:vm.sp-1])
+				res := b.Fn(args)
+				if sr, ok := res.(*object.Sair); ok {
+					panic(VMError{sai: sr})
+				}
+				if e, ok := res.(*object.Erro); ok && e != nil && !e.Handled {
+					panic(VMError{err: e})
+				}
+				returnedFn := vm.popFrame()
+				vm.sp = returnedFn.basePointer
+				vm.push(res)
+				vm.limpaTriesOrfaos()
+				if vm.framesIdx < baseIdx {
+					return nil
+				}
+				frame = vm.currentFrame()
+				fn = frame.fn
+				ip = frame.ip
 				continue
 			}
 			panic(VMError{err: &object.Erro{Message: fmt.Sprintf("isso ai (%s) nao e gambiarra pra voce sair chamando", callee.Type()), Kind: "runtime"}})
@@ -602,10 +715,86 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			frame = vm.currentFrame()
 			fn = frame.fn
 			ip = frame.ip
+		case code.OpIterPar:
+			it := vm.pop()
+			seq := vm.pop()
+			orig := vm.pop()
+			idx, ok := it.(*object.Numero)
+			if !ok || !idx.EhInt {
+				panic(VMError{err: &object.Erro{Message: "IterPar: indice tem que ser inteiro", Kind: "runtime"}})
+			}
+			i := int(idx.Int)
+			seqList, sok := seq.(*object.Lista)
+			if !sok {
+				panic(VMError{err: &object.Erro{Message: "IterPar: __seq tem que ser lista", Kind: "runtime"}})
+			}
+			if i < 0 || i >= len(seqList.Elements) {
+				panic(VMError{err: &object.Erro{Message: "IterPar: indice fora do range", Kind: "runtime"}})
+			}
+			mid := seqList.Elements[i]
+			// orig pode ser lista ou dict
+			if dOrig, isDict := orig.(*object.Dicionario); isDict {
+				// mid e a chave
+				chave, ok := mid.(object.Chaveavel)
+				if !ok {
+					panic(VMError{err: &object.Erro{Message: "IterPar: chave nao e chaveavel", Kind: "runtime"}})
+				}
+				par, existe := dOrig.Pares[chave.ChaveHash()]
+				var valor object.Object = NADA
+				if existe {
+					valor = par.Valor
+				}
+				vm.push(mid)      // chave
+				vm.push(valor)    // valor
+			} else {
+				// lista: 1o nome = indice (i), 2o = elemento (mid)
+				vm.push(object.NumInt(int64(i)))
+				vm.push(mid)
+			}
+			ip++
+		case code.OpFatia:
+			fimRaw := vm.pop()
+			inicioRaw := vm.pop()
+			left := vm.pop()
+			var inicio, fim *object.Numero
+			if n, ok := inicioRaw.(*object.Numero); ok {
+				inicio = n
+			} else if _, ok := inicioRaw.(*object.Nada); !ok {
+				panic(VMError{err: &object.Erro{Message: "fatia so aceita numero como inicio, veio " + string(inicioRaw.Type()), Kind: "runtime"}})
+			}
+			if n, ok := fimRaw.(*object.Numero); ok {
+				fim = n
+			} else if _, ok := fimRaw.(*object.Nada); !ok {
+				panic(VMError{err: &object.Erro{Message: "fatia so aceita numero como fim, veio " + string(fimRaw.Type()), Kind: "runtime"}})
+			}
+			switch c := left.(type) {
+			case *object.Lista:
+				lo, hi := object.NormalizarFatia(inicio, fim, len(c.Elements))
+				vm.push(&object.Lista{Elements: c.Elements[lo:hi]})
+			case *object.Texto:
+				runes := []rune(c.Value)
+				lo, hi := object.NormalizarFatia(inicio, fim, len(runes))
+				vm.push(&object.Texto{Value: string(runes[lo:hi])})
+			default:
+				panic(VMError{err: &object.Erro{Message: "so da pra fatiar lista ou texto, e isso ai e " + string(left.Type()), Kind: "runtime"}})
+			}
+			ip++
 		case code.OpBoraCall:
 			argc := int(fn.Bytecode[ip+1])
 			ip += 2
 			vm.execBoraCall(argc)
+		case code.OpDup:
+			val := vm.stack[vm.sp-1]
+			vm.push(val)
+			ip++
+		case code.OpIsNada:
+			o := vm.pop()
+			if _, ok := o.(*object.Nada); ok {
+				vm.push(DEU_BOM)
+			} else {
+				vm.push(DEU_RUIM)
+			}
+			ip++
 		case code.OpGetBuiltin:
 			idx := int(code.ReadUint16(fn.Bytecode[ip+1:]))
 			ip += 3
@@ -935,11 +1124,22 @@ func vmIndex(cont, idx object.Object) (object.Object, error) {
 		if !ok {
 			return nil, fmt.Errorf("indice de lista tem que ser numero")
 		}
-		pos := int(n.Value)
-		if pos < 0 || pos >= len(c.Elements) {
-			return nil, fmt.Errorf("esse indice (%d) ta fora da lista, o", pos)
+		pos, dentro := object.IndiceNormalizado(int(n.Value), len(c.Elements))
+		if !dentro {
+			return nil, fmt.Errorf("esse indice (%d) ta fora da lista, o", int(n.Value))
 		}
 		return c.Elements[pos], nil
+	case *object.Texto:
+		n, ok := idx.(*object.Numero)
+		if !ok {
+			return nil, fmt.Errorf("indice de texto tem que ser numero")
+		}
+		runes := []rune(c.Value)
+		pos, dentro := object.IndiceNormalizado(int(n.Value), len(runes))
+		if !dentro {
+			return nil, fmt.Errorf("esse indice (%d) ta fora do texto, o", int(n.Value))
+		}
+		return &object.Texto{Value: string(runes[pos])}, nil
 	case *object.Dicionario:
 		chave, ok := idx.(object.Chaveavel)
 		if !ok {
@@ -951,8 +1151,8 @@ func vmIndex(cont, idx object.Object) (object.Object, error) {
 		}
 		return par.Valor, nil
 	}
-	// igual ao tree-walker: so lista e dicionario sao indexaveis (texto nao).
-	return nil, fmt.Errorf("so da pra indexar lista ou dicionario, e isso ai e %s", cont.Type())
+	// lista, texto e dicionario sao indexaveis.
+	return nil, fmt.Errorf("so da pra indexar lista, texto ou dicionario, e isso ai e %s", cont.Type())
 }
 
 func vmIndexSet(cont, idx, val object.Object) error {
@@ -962,9 +1162,9 @@ func vmIndexSet(cont, idx, val object.Object) error {
 		if !ok {
 			return fmt.Errorf("indice de lista tem que ser numero")
 		}
-		pos := int(n.Value)
-		if pos < 0 || pos >= len(c.Elements) {
-			return fmt.Errorf("esse indice (%d) ta fora da lista, o", pos)
+		pos, dentro := object.IndiceNormalizado(int(n.Value), len(c.Elements))
+		if !dentro {
+			return fmt.Errorf("esse indice (%d) ta fora da lista, o", int(n.Value))
 		}
 		c.Elements[pos] = val
 	case *object.Dicionario:

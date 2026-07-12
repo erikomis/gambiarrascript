@@ -69,24 +69,20 @@ func roda(t *testing.T, casos []casoComp) {
 func TestCompilaMostraEAritmetica(t *testing.T) {
 	roda(t, []casoComp{
 		{
+			// constant folding: 1 + 2 vira a constante 3 (sem OpAdd)
 			input:      "mostra 1 + 2",
-			constantes: []interface{}{1.0, 2.0},
+			constantes: []interface{}{3.0},
 			instrucoes: []code.Instructions{
 				code.Make(code.OpConstant, 0),
-				code.Make(code.OpConstant, 1),
-				code.Make(code.OpAdd),
 				code.Make(code.OpMostra),
 			},
 		},
 		{
+			// 1 + 2 * 3 dobra recursivamente pra 7
 			input:      "1 + 2 * 3",
-			constantes: []interface{}{1.0, 2.0, 3.0},
+			constantes: []interface{}{7.0},
 			instrucoes: []code.Instructions{
 				code.Make(code.OpConstant, 0),
-				code.Make(code.OpConstant, 1),
-				code.Make(code.OpConstant, 2),
-				code.Make(code.OpMul),
-				code.Make(code.OpAdd),
 				code.Make(code.OpPop),
 			},
 		},

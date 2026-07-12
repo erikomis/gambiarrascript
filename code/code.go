@@ -70,7 +70,12 @@ const (
 	// --- fase 6f: concorrencia ---
 	OpBoraCall // argc (1): dispara chamada em goroutine, push Futuro
 	// misc
-	OpHalt // para execucao
+	OpFatia  // pop fim, pop inicio, pop left; push fatia left[inicio:fim]
+	OpIterPar // pop __it, pop __seq, pop __orig; push (key, value) pra pra_cada 2-nomes
+	OpDup    // duplica topo da pilha
+	OpIsNada // pop x; push (x == nada)
+	OpTailCall // argc (1): tail call — reusa o frame atual (recursao em cauda)
+	OpHalt   // para execucao
 )
 
 type Definition struct {
@@ -123,6 +128,7 @@ var definitions = map[Opcode]*Definition{
 	// fase 6d
 	OpClosure:     {"OpClosure", []int{2, 1}}, // constIdx (2), numFree (1)
 	OpCall:        {"OpCall", []int{1}},
+	OpTailCall:    {"OpTailCall", []int{1}},
 	OpReturn:      {"OpReturn", []int{}},
 	OpReturnNada:  {"OpReturnNada", []int{}},
 	OpGetLocal:    {"OpGetLocal", []int{1}},
@@ -137,7 +143,11 @@ var definitions = map[Opcode]*Definition{
 	// fase 6f
 	OpBoraCall: {"OpBoraCall", []int{1}},
 	// misc
-	OpHalt: {"OpHalt", []int{}},
+	OpFatia:  {"OpFatia", []int{}},
+	OpIterPar: {"OpIterPar", []int{}},
+	OpDup:    {"OpDup", []int{}},
+	OpIsNada: {"OpIsNada", []int{}},
+	OpHalt:   {"OpHalt", []int{}},
 }
 
 func Lookup(op byte) (*Definition, error) {
