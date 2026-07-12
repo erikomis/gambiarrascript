@@ -5,6 +5,7 @@ go 1.23.12
 require (
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/jackc/pgx/v5 v5.7.2
+	golang.org/x/term v0.27.0
 	modernc.org/sqlite v1.34.5
 )
 
