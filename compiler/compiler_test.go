@@ -92,12 +92,55 @@ func TestCompilaMostraEAritmetica(t *testing.T) {
 func TestCompilaMenor(t *testing.T) {
 	roda(t, []casoComp{
 		{
+			// lado direito literal vira OpBinConst (superinstrucao): a
+			// comparacao acontece contra a constante sem ela passar pela pilha.
 			input:      "1 < 2",
 			constantes: []interface{}{1.0, 2.0},
 			instrucoes: []code.Instructions{
 				code.Make(code.OpConstant, 0),
+				code.Make(code.OpBinConst, 1, int(code.OpMenor)),
+				code.Make(code.OpPop),
+			},
+		},
+	})
+}
+
+// TestCompilaBinConst cobre quando a superinstrucao entra e quando NAO entra:
+// so o lado DIREITO literal funde, porque a ordem de avaliacao (esquerda antes
+// da direita) tem que continuar valendo.
+func TestCompilaBinConst(t *testing.T) {
+	roda(t, []casoComp{
+		{
+			// direita literal: funde
+			input:      "bota i = 0\ni + 1",
+			constantes: []interface{}{0.0, 1.0},
+			instrucoes: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpBinConst, 1, int(code.OpAdd)),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			// esquerda literal: NAO funde, segue o caminho normal
+			input:      "bota i = 0\n1 + i",
+			constantes: []interface{}{0.0, 1.0},
+			instrucoes: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
 				code.Make(code.OpConstant, 1),
-				code.Make(code.OpMenor),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpAdd),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			// dois lados constantes continuam sendo dobrados em compile time
+			input:      "2 + 3",
+			constantes: []interface{}{5.0},
+			instrucoes: []code.Instructions{
+				code.Make(code.OpConstant, 0),
 				code.Make(code.OpPop),
 			},
 		},

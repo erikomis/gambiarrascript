@@ -75,6 +75,11 @@ const (
 	OpDup    // duplica topo da pilha
 	OpIsNada // pop x; push (x == nada)
 	OpTailCall // argc (1): tail call — reusa o frame atual (recursao em cauda)
+	// OpBinConst funde `OpConstant K` + operacao binaria numa instrucao so:
+	// aplica a operacao entre o topo da pilha e a constante, no lugar. Cobre o
+	// caso mais comum de aritmetica (`i + 1`, `i * 2`, `i < 200000`) sem o
+	// push/pop da constante nem o segundo dispatch.
+	OpBinConst // constIdx (2) + opcode da operacao (1)
 	OpHalt   // para execucao
 )
 
@@ -129,6 +134,7 @@ var definitions = map[Opcode]*Definition{
 	OpClosure:     {"OpClosure", []int{2, 1}}, // constIdx (2), numFree (1)
 	OpCall:        {"OpCall", []int{1}},
 	OpTailCall:    {"OpTailCall", []int{1}},
+	OpBinConst:    {"OpBinConst", []int{2, 1}},
 	OpReturn:      {"OpReturn", []int{}},
 	OpReturnNada:  {"OpReturnNada", []int{}},
 	OpGetLocal:    {"OpGetLocal", []int{1}},
@@ -229,6 +235,13 @@ func (ins Instructions) fmtInstrucao(def *Definition, operands []int) string {
 	case 1:
 		return fmt.Sprintf("%s %d", def.Name, operands[0])
 	case 2:
+		// OpBinConst carrega um OPCODE no segundo operando: mostra o nome dele
+		// em vez do numero cru, senao o disasm vira adivinhacao.
+		if def.Name == "OpBinConst" {
+			if sub, err := Lookup(byte(operands[1])); err == nil {
+				return fmt.Sprintf("%s %d %s", def.Name, operands[0], sub.Name)
+			}
+		}
 		return fmt.Sprintf("%s %d %d", def.Name, operands[0], operands[1])
 	}
 	return fmt.Sprintf("ERRO: fmtInstrucao nao trata %d operandos", n)

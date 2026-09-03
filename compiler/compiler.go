@@ -566,6 +566,77 @@ func (c *Compiler) defineVar(nome string) Symbol {
 	return c.scope.Define(nome)
 }
 
+// opcodeBinario devolve o opcode da operacao infixa e se ela pode virar
+// OpBinConst (operacao simples entre dois valores, sem fluxo de controle).
+func opcodeBinario(operador string) (code.Opcode, bool) {
+	switch operador {
+	case "+":
+		return code.OpAdd, true
+	case "-":
+		return code.OpSub, true
+	case "*":
+		return code.OpMul, true
+	case "/":
+		return code.OpDiv, true
+	case "%":
+		return code.OpMod, true
+	case "<":
+		return code.OpMenor, true
+	case "<=":
+		return code.OpMenorEqual, true
+	case ">":
+		return code.OpGreaterThan, true
+	case ">=":
+		return code.OpGreaterEqual, true
+	case "==":
+		return code.OpEqual, true
+	case "!=":
+		return code.OpNotEqual, true
+	case "&":
+		return code.OpBAnd, true
+	case "|":
+		return code.OpBOr, true
+	case "^":
+		return code.OpBXor, true
+	case "<<":
+		return code.OpLShift, true
+	case ">>":
+		return code.OpRShift, true
+	}
+	return 0, false
+}
+
+// literalConstante devolve o valor se a expressao for um literal simples
+// (numero ou texto). So esses viram operando de OpBinConst: sao imutaveis e
+// nao tem efeito colateral, entao fundir nao muda ordem de avaliacao.
+func literalConstante(e ast.Expression) (object.Object, bool) {
+	switch n := e.(type) {
+	case *ast.NumeroLiteral:
+		return &object.Numero{Value: n.Value, Int: n.Int, EhInt: n.EhInt}, true
+	case *ast.TextoLiteral:
+		return &object.Texto{Value: n.Value}, true
+	}
+	return nil, false
+}
+
+// tentaBinConst emite `left` seguido de OpBinConst quando o lado direito e um
+// literal. Devolve false se nao der (o chamador segue pelo caminho normal).
+func (c *Compiler) tentaBinConst(node *ast.InfixExpression) (bool, error) {
+	op, ok := opcodeBinario(node.Operator)
+	if !ok {
+		return false, nil
+	}
+	val, ok := literalConstante(node.Right)
+	if !ok {
+		return false, nil
+	}
+	if err := c.compile(node.Left); err != nil {
+		return true, err
+	}
+	c.emit(code.OpBinConst, c.addConstant(val), int(op))
+	return true, nil
+}
+
 func (c *Compiler) compileInfix(node *ast.InfixExpression) error {
 	// constant folding: se a expressao inteira e uma constante segura, emite
 	// uma constante so (ex.: `2 + 3` vira OpConstant 5).
@@ -609,6 +680,9 @@ func (c *Compiler) compileInfix(node *ast.InfixExpression) error {
 		c.backpatch(jmpFim, len(c.instructions))
 		return nil
 	case "<", "<=":
+		if feito, err := c.tentaBinConst(node); feito {
+			return err
+		}
 		if err := c.compile(node.Left); err != nil {
 			return err
 		}
@@ -621,6 +695,9 @@ func (c *Compiler) compileInfix(node *ast.InfixExpression) error {
 			c.emit(code.OpMenorEqual)
 		}
 		return nil
+	}
+	if feito, err := c.tentaBinConst(node); feito {
+		return err
 	}
 	if err := c.compile(node.Left); err != nil {
 		return err

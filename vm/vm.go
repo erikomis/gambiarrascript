@@ -478,6 +478,19 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 		case code.OpNada:
 			vm.push(NADA)
 			ip++
+		case code.OpBinConst:
+			// superinstrucao: aplica a operacao entre o topo e a constante NO
+			// LUGAR — sem push/pop da constante e com um dispatch so.
+			idx := int(code.ReadUint16(fn.Bytecode[ip+1:]))
+			sub := code.Opcode(fn.Bytecode[ip+3])
+			ip += 4
+			esq := vm.stack[vm.sp-1]
+			dir := vm.constants[idx]
+			if ehComparacao(sub) {
+				vm.stack[vm.sp-1] = vm.comparacao(sub, esq, dir)
+			} else {
+				vm.stack[vm.sp-1] = vm.binario(sub, esq, dir)
+			}
 		case code.OpEqual, code.OpNotEqual, code.OpGreaterThan, code.OpGreaterEqual, code.OpMenor, code.OpMenorEqual:
 			vm.execComparacao(op)
 			ip++
@@ -1040,6 +1053,13 @@ func (s SaiRequisicao) Error() string { return fmt.Sprintf("sai com codigo %d", 
 func (vm *VM) execBinario(op code.Opcode) {
 	right := vm.pop()
 	left := vm.pop()
+	vm.push(vm.binario(op, left, right))
+}
+
+// binario aplica a operacao e DEVOLVE o resultado, sem tocar na pilha — assim
+// o OpBinConst (que ja tem os dois operandos em maos) reusa a mesma logica sem
+// pagar push/pop da constante.
+func (vm *VM) binario(op code.Opcode, left, right object.Object) object.Object {
 	ln, lok := left.(*object.Numero)
 	rn, rok := right.(*object.Numero)
 	if lok && rok {
@@ -1055,20 +1075,16 @@ func (vm *VM) execBinario(op code.Opcode) {
 				panic(VMError{err: &object.Erro{Message: msg, Kind: "runtime"}})
 			}
 			r, _ := vm.execBinarioBitwise(op, ln.Int, rn.Int)
-			vm.push(r)
-			return
+			return r
 		}
 		// fast path inteiros exatos
 		if r, ok := vm.execBinarioIntShort(op, ln, rn); ok {
-			vm.push(r)
-			return
+			return r
 		}
-		vm.push(vm.execBinarioNumero(op, ln.Value, rn.Value))
-		return
+		return vm.execBinarioNumero(op, ln.Value, rn.Value)
 	}
 	if op == code.OpAdd && (left.Type() == object.TEXTO_OBJ || right.Type() == object.TEXTO_OBJ) {
-		vm.push(&object.Texto{Value: left.Inspect() + right.Inspect()})
-		return
+		return &object.Texto{Value: left.Inspect() + right.Inspect()}
 	}
 	// mesma mensagem do tree-walker: "nao da pra fazer TEXTO - NUMERO"
 	panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra fazer %s %s %s", left.Type(), simboloBinario(op), right.Type()), Kind: "runtime"}})
@@ -1187,34 +1203,49 @@ func (vm *VM) execBinarioIntShort(op code.Opcode, lo, ro *object.Numero) (object
 func (vm *VM) execComparacao(op code.Opcode) {
 	right := vm.pop()
 	left := vm.pop()
+	vm.push(vm.comparacao(op, left, right))
+}
+
+// comparacao devolve o resultado sem tocar na pilha — mesma razao do binario:
+// o OpBinConst reusa a logica com os operandos ja em maos.
+func (vm *VM) comparacao(op code.Opcode, left, right object.Object) object.Object {
 	ln, lok := left.(*object.Numero)
 	rn, rok := right.(*object.Numero)
 	if lok && rok {
 		switch op {
 		case code.OpGreaterThan:
-			vm.push(boolNativo(ln.Value > rn.Value))
+			return boolNativo(ln.Value > rn.Value)
 		case code.OpGreaterEqual:
-			vm.push(boolNativo(ln.Value >= rn.Value))
+			return boolNativo(ln.Value >= rn.Value)
 		case code.OpMenor:
-			vm.push(boolNativo(ln.Value < rn.Value))
+			return boolNativo(ln.Value < rn.Value)
 		case code.OpMenorEqual:
-			vm.push(boolNativo(ln.Value <= rn.Value))
+			return boolNativo(ln.Value <= rn.Value)
 		case code.OpEqual:
-			vm.push(boolNativo(ln.Value == rn.Value))
+			return boolNativo(ln.Value == rn.Value)
 		case code.OpNotEqual:
-			vm.push(boolNativo(ln.Value != rn.Value))
+			return boolNativo(ln.Value != rn.Value)
 		}
-		return
 	}
 	switch op {
 	case code.OpEqual:
-		vm.push(boolNativo(iguais(left, right)))
+		return boolNativo(iguais(left, right))
 	case code.OpNotEqual:
-		vm.push(boolNativo(!iguais(left, right)))
-	default:
-		// mesma mensagem do tree-walker: "nao da pra fazer TEXTO > NUMERO"
-		panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra fazer %s %s %s", left.Type(), simboloBinario(op), right.Type()), Kind: "runtime"}})
+		return boolNativo(!iguais(left, right))
 	}
+	// mesma mensagem do tree-walker: "nao da pra fazer TEXTO > NUMERO"
+	panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra fazer %s %s %s", left.Type(), simboloBinario(op), right.Type()), Kind: "runtime"}})
+}
+
+// ehComparacao diz se o opcode e de comparacao (vai pra vm.comparacao) em vez
+// de aritmetica/bitwise (vm.binario).
+func ehComparacao(op code.Opcode) bool {
+	switch op {
+	case code.OpEqual, code.OpNotEqual, code.OpGreaterThan, code.OpGreaterEqual,
+		code.OpMenor, code.OpMenorEqual:
+		return true
+	}
+	return false
 }
 
 func (vm *VM) execMinus() {
