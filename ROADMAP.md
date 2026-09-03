@@ -378,11 +378,22 @@ contra o binario do inicio da leva:
 > Regra: bench pra pegar regressao entre commits vizinhos, medicao fim a fim
 > pra afirmar ganho.
 
+- [x] **REPL na VM** — era o último caminho no tree-walker, o que é pior que
+      lentidão: dava pra uma construção funcionar no REPL e falhar no `gs roda`.
+      Exigiu **compilação incremental** (`compiler.NovaEntrada` zera só o buffer
+      de instruções e mantém pool de constantes, tabela de símbolos e funções já
+      compiladas) mais uma `vm.Sessao` guardando os valores das globais e
+      rodando cada entrada numa VM limpa em cima delas — de brinde, erro de
+      runtime não deixa `sp`/frames sujos pra próxima linha. Corrigiu uma
+      duplicação antiga: `mostra "oi"` saía como `oi` seguido de `=> oi`, porque
+      o tree-walker devolvia o valor mostrado e o REPL imprimia de novo.
+
+**O tree-walker agora é só fallback**: sobrou nos ramos `--tree` (que existem de
+propósito) e como rede quando a VM não compila algo. Todo caminho padrão —
+`gs roda`, `build`, `testa`, `bench`, REPL e o playground WASM — roda na VM.
+
 Falta nesse tier:
 
-- [ ] **REPL na VM** — é o último caminho no tree-walker. Precisa de compilação
-      incremental (symbol table e globais que sobrevivem entre linhas), então é
-      leva própria. Enquanto isso o REPL pode divergir do `gs roda`.
 - [ ] **Max stack por função** — hoje o `push` checa capacidade a cada
       empilhada. Se o compilador publicasse o `MaxStack` de cada função (igual
       a JVM), a reserva sairia uma vez por frame no `OpCall` e o `push` viraria
