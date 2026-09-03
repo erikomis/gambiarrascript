@@ -336,6 +336,26 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
       existe nenhum `y` por aqui — confere o nome ou declara com `bota y = ...`".
       Mesmo tratamento pra `vaza`/`continua` fora de laço.
 
+- [x] **Arena de Numeros** — profile do laco apertado mostrou que o gargalo NAO
+      e o dispatch: **99,92% das alocacoes vinham de `object.NumInt`**, um
+      malloc de 24 bytes por operacao que sai do cache de inteiros (tres por
+      iteracao). `object.ArenaNum` aloca em blocos de 32. Sem lock de proposito:
+      vive na VM e uma VM roda numa goroutine so (clone do `bora` e sub-VM do
+      pool ganham cada uma a sua). Laco 28% mais rapido, 32x menos alocacao.
+      Bloco 32 e o meio-termo: um Numero vivo segura o bloco inteiro, entao
+      128 daria so +20% de velocidade por 4x mais retencao no pior caso.
+- [x] **Superinstrucao `OpBinConst`** — funde `OpConstant K` + operacao binaria
+      e aplica a operacao contra o topo da pilha, no lugar: sai um dispatch, o
+      push/pop da constante e o pop do operando, nos mesmos 4 bytes. Emitida
+      direto pelo compilador, **nao por peephole** — e por isso nao esbarra no
+      problema de jump apontando pro meio do par, que tinha deixado o peephole
+      de fora. So funde com literal a DIREITA (fundir a esquerda mudaria a
+      ordem de avaliacao). Laco e fib 17% mais rapidos cada.
+
+**Acumulado do motor nesta leva** (mediana de 5 rodadas, lado a lado):
+fib **2,5x** (1269x menos alocacao), loop **1,5x** (32x), sort **1,6x**,
+json **2,1x**, mapeia **35,6x**.
+
 Falta nesse tier:
 
 - [ ] **REPL na VM** — é o último caminho no tree-walker. Precisa de compilação
