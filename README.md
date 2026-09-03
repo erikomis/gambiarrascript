@@ -63,7 +63,8 @@ escuta(8080)
 que recebe um dicionário-pedido (`pedido["metodo"]`, `["caminho"]`, `["corpo"]`,
 `["cabecalhos"]`, `["query"]`) e devolve um texto (corpo, status 200) ou um
 dicionário `{"status", "corpo", "cabecalhos"}`. `escuta(porta)` sobe o servidor.
-É serializado (uma requisição por vez) — concorrência de verdade vem depois.
+Cada requisição roda na própria goroutine (o `net/http` já entrega assim), então
+o servidor atende em paralelo — o lock só protege a tabela de rotas.
 Cabeçalhos e query usam a forma canônica nas chaves (ex.: `pedido["cabecalhos"]["X-Teste"]`, com maiúscula); quando um cabeçalho ou parâmetro de query vem com múltiplos valores, eles chegam unidos por `", "`.
 
 ## JSON

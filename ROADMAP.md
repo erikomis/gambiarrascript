@@ -9,9 +9,9 @@ REPL multiline, LSP e extensão VSCode) já está pronta — e agora também
 lambdas, destructuring, `escolhe`/`caso`, dot access) e **tooling**
 (`gs check/init/bench/get/build/testa/formata -w`, cache `.gsc`).
 
-Tiers 1–3 estão entregues; o backlog vivo agora são os **Tiers 4–7**
-(qualidade de vida, stdlib, ecossistema e motor) + os itens grandes que
-ficaram pra levas próprias (DAP, FFI, multi-catch).
+Tiers 1–3 estão entregues; o backlog vivo agora são os **Tiers 4–8**
+(qualidade de vida, stdlib, ecossistema, motor e **POO no estilo Go**) + os
+itens grandes que ficaram pra levas próprias (DAP, FFI, multi-catch).
 
 ---
 
@@ -274,6 +274,178 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 - [x] **Bench de regressão** — suite fixa `go test -bench=. ./vm/`
       (`vm/bench_test.go`): fib (recursão), sort (lista+ordena), json
       (de_json/pra_json). Reporta ns/op + allocs pra comparar commits.
+- [x] **Otimizações de runtime** — guiadas por profile (pprof no fib). Duas
+      grandes fontes de alocação cortadas: **cache de inteiros pequenos**
+      (`object.NumInt` reusa singletons de -256..1024, já que `Numero` é
+      imutável) e **reuso de Frame na VM** (frames alocados sob demanda por
+      profundidade e reusados a cada chamada, em vez de um `&Frame{}` por
+      `OpCall`). Resultado no fib: **~2× mais rápido e 99,9% menos alocações**
+      (143k → 132 allocs/op), sem regressão em sort/json e com paridade/`-race`
+      intactos.
+- [x] **A VM virou o motor de verdade (não só o padrão do `gs roda`)** — a VM
+      era o engine padrão só no `gs roda`; `gs build`, `gs testa`, `gs bench` e
+      o playground WASM ainda caíam no tree-walker. Efeito colateral feio: o
+      binário do `gs build` rodava **10× mais lento** que o `.gs` solto, e a
+      suíte validava o motor que não é o de produção. Agora todos rodam na VM
+      (`--tree` continua como fallback explícito em todos eles).
+- [x] **`argumentos()` e `rota()` estavam quebrados na VM** — dois bugs
+      funcionais no engine padrão, não de performance: `argumentos()` voltava
+      lista vazia (o caminho da VM montava um `interpreter` próprio e vazio, sem
+      os args do script) e `rota()` recusava o handler com "o handler tem que
+      ser uma gambiarra, veio FUNCAO" (só aceitava `*object.Funcao`, o tipo do
+      tree-walker, e na VM chega `*object.CompiledFunction`) — ou seja, não dava
+      pra subir servidor nenhum com `gs roda`. Regressão coberta por teste
+      (`vm/servidor_vm_test.go`).
+- [x] **Chamada de gambiarra vinda de builtin: 33× mais rápida** — `mapeia`,
+      `filtra`, `reduz` e `ordena_com` chamam a função do usuário uma vez por
+      elemento, e cada chamada **clonava a VM inteira** (pilha de 16k slots =
+      256 KB + 1024 frames). Mapear 200 mil elementos alocava mais de 50 GB e
+      o GC afogava — o `mapeia` na VM chegava a ser **150× mais lento que no
+      tree-walker**. Agora as VMs de chamada vêm de um `sync.Pool` e a pilha
+      nasce com 512 slots crescendo sob demanda (`append` no `push`, mantido
+      inlinável de propósito: com o cálculo inline o corpo passava de 81 no
+      orçamento de inline do Go e custava ~30% no fib).
+- [x] **Memória proporcional ao programa** — a pilha não nasce mais com 16k
+      slots e o array de globais deixou de reservar `MaxGlobals` (1 MB zerado em
+      toda VM): o compilador agora publica `Bytecode.NumGlobals` e a VM aloca
+      exatamente isso. O tamanho é fixado no boot de propósito — o slice de
+      globais é compartilhado com os clones do `bora`, então realocar deixaria
+      os clones com o array velho.
+- [x] **Bench honesto** — `BenchmarkMapeia` entrou na suíte, e `gs bench` passou
+      a medir a VM. Medido lado a lado contra o commit anterior (mediana de 5
+      rodadas): fib **2,0×**, sort **1,5×**, json **2,1×**, mapeia **32,7×** —
+      com 105×, 13×, 5× e 2.628× menos memória, respectivamente.
+- [x] **Dicionário com ordem de inserção** — iterar um dicionário usava a ordem
+      do `map` do Go, embaralhada de propósito: `pra_cada k em d` saía numa
+      ordem **diferente a cada execução**. Agora `object.Dicionario` guarda a
+      ordem (`Bota`/`Tira`/`Chaves`/`Itera`), igual Python 3.7+ e JS. Sobrescrever
+      chave existente não muda o lugar dela.
+- [x] **JSON com parser próprio** — `de_json` usava `json.Unmarshal` num
+      `map[string]interface{}`, que **perde a ordem das chaves**; o
+      `json.Decoder` por token preserva mas ficou 66% mais lento. Um parser
+      escrito à mão (`interpreter/json_parser.go`) resolve os dois: `de_json`
+      ficou **1,9× mais rápido** que o original E preserva a ordem do documento;
+      `pra_json` serializa direto (sem `map` intermediário), 24% mais rápido e
+      respeitando a ordem de inserção. Round-trip `de_json` → `pra_json` agora
+      devolve o documento igualzinho. De quebra, inteiro JSON vira inteiro
+      exato (`NumInt`), sem passar por `float64`. Validado contra o
+      `encoding/json` em ~50 casos, incluindo `\u` com pares surrogate,
+      zero à esquerda e números malformados.
+- [x] **Erro de compilação fala a língua do usuário** — "VM nao conhece `y`"
+      (sem linha, vazando que existe uma VM por baixo) virou "linha 7: nao
+      existe nenhum `y` por aqui — confere o nome ou declara com `bota y = ...`".
+      Mesmo tratamento pra `vaza`/`continua` fora de laço.
+
+Falta nesse tier:
+
+- [ ] **REPL na VM** — é o último caminho no tree-walker. Precisa de compilação
+      incremental (symbol table e globais que sobrevivem entre linhas), então é
+      leva própria. Enquanto isso o REPL pode divergir do `gs roda`.
+- [ ] **Max stack por função** — hoje o `push` checa capacidade a cada
+      empilhada. Se o compilador publicasse o `MaxStack` de cada função (igual
+      a JVM), a reserva sairia uma vez por frame no `OpCall` e o `push` viraria
+      duas instruções.
+
+### Tier 8 — POO no modelo do Go (structs + métodos + interfaces, SEM herança)
+
+Objetivo: trazer POO pro GambiarraScript **copiando o jeito do Go** —
+composição no lugar de herança, interface satisfeita de forma **implícita**
+(pelo comportamento, sem declarar), método como gambiarra **com receiver** e
+"construtor" só por convenção (uma gambiarra `nova_X`). Nada de `class`,
+`extends`, `this`, `new` nem herança. Isso **reabre** a decisão antiga de
+deixar `struct` formal de fora (o item "Records + métodos" do Tier 3, feito
+via dict): os dicts continuam existindo; a `treta` é a versão **nomeada, com
+campos tipados opcionais e métodos**.
+
+Princípios (iguais aos do Go):
+
+- **Sem herança, só composição** — encaixa uma treta dentro de outra
+  (embedding) e os campos/métodos "sobem" pra de fora (promotion).
+- **Interface implícita** — se a treta tem os métodos do `combinado`, ela já
+  satisfaz o combinado. Sem palavra `implementa`/`satisfaz`.
+- **Método = gambiarra com receiver** — `gambiarra (p Ponto) distancia()`.
+- **Sem construtor mágico** — convenção `nova_ponto(...)` devolvendo a treta
+  (igual ao `NewX()` do Go).
+- **Zero-value útil** — treta não inicializada já vem com os campos no valor
+  neutro (`0`, `""`, `nada`), como no Go.
+
+Itens (nomes de keyword **a decidir** — sugestões em *itálico*):
+
+- [ ] **Declarar struct** — bloco de campos fechado com `acabou_finalmente`,
+  tipo do campo opcional. *(`treta` = "o troço/a treta"; alt: `molde`,
+  `esquema`.)*
+      ```
+      treta Ponto
+          x
+          y
+      acabou_finalmente
+      ```
+- [ ] **Instanciar** — literal `Ponto{x: 1, y: 2}` (nomeado) ou `Ponto{1, 2}`
+  (posicional); campo faltante cai no zero-value.
+- [ ] **Métodos com receiver** — gambiarra com receiver antes do nome (cópia
+  fiel do Go); dentro, o receiver dá acesso aos campos por dot access.
+      ```
+      gambiarra (p Ponto) distancia()
+          funciona raiz(p.x*p.x + p.y*p.y)
+      acabou_finalmente
+
+      mostra Ponto{x: 3, y: 4}.distancia()   # 5
+      ```
+- [ ] **Interface (`combinado`)** — lista as assinaturas; satisfação
+  **implícita** (structural typing), igual Go. *(`combinado` = "o combinado
+  é...", um contrato; alt: `trato`, `promessa`.)*
+      ```
+      combinado Escritor
+          escreve(texto)
+      acabou_finalmente
+      ```
+- [ ] **Composição / embedding (`puxadinho`)** — encaixa uma treta anônima
+  dentro de outra; os campos e métodos da encaixada sobem pra de fora
+  (promotion). É o "puxadinho" da casa: estende sem virar herança.
+      ```
+      treta Animal
+          nome
+      acabou_finalmente
+      gambiarra (a Animal) fala()  funciona a.nome + " faz barulho"  acabou_finalmente
+
+      treta Cachorro
+          Animal        # embedding: puxa `nome` + `fala()`
+          raca
+      acabou_finalmente
+      # Cachorro{...}.fala() roda via promotion, sem redeclarar
+      ```
+- [ ] **"Construtor" por convenção** — sem keyword nova: uma gambiarra
+  `nova_ponto(x, y)` devolve `Ponto{...}` (idêntico ao `NewPonto()` do Go).
+  Só documentar como idioma.
+- [ ] **Type switch / type assertion** — em cima de interface: reusar
+  `escolhe`/`caso` por tipo (`escolhe tipo_de(v) / caso Ponto ...`) e um jeito
+  de assertion (`v.(Ponto)` → treta ou quebra). Builtin `tipo_de`.
+- [ ] **DECISÃO: receiver valor vs ponteiro** — Go copia no value receiver e
+  muta no pointer receiver. Como a linguagem é dinâmica e dict já é
+  referência, a proposta é **tudo referência, método muta a treta** (mais
+  simples que Go). Se quiser fidelidade total, avaliar cópia no value receiver.
+- [ ] **DECISÃO: métodos em tipos não-struct** — Go permite método em qualquer
+  tipo nomeado (ex.: `type MeuInt int`). Provável **fora de escopo** por ora;
+  foco em `treta`.
+- [ ] **DECISÃO: visibilidade** — Go exporta por maiúscula. A linguagem não usa
+  capitalização pra isso; provável **fora de escopo**, decidir depois.
+
+Onde mexe (fonte da verdade — mesma disciplina da migração EN mais abaixo):
+
+1. `token/token.go` — keywords novas (`treta`, `combinado`, e talvez
+   `puxadinho`) no mapa `keywords` + as constantes de token.
+2. `ast/ast.go` — nós `TretaDecl`, `CombinadoDecl`, `MetodoDecl` (gambiarra com
+   receiver) e `TretaLiteral` (o `AcessoCampo`/dot access já existe).
+3. `parser/parser.go` — parse das declarações e do literal `Tipo{...}`.
+4. `object/object.go` — `object.Treta` (nome + campos + tabela de métodos),
+   `object.Combinado` e a checagem de satisfação implícita.
+5. `interpreter/` **e** `compiler/`+`vm/` — avaliar/compilar tudo nos DOIS
+   engines, mantendo paridade (teste `TestParidade...`).
+6. `lsp/server.go` — keywords novas no autocomplete + hover.
+7. `editors/vscode/syntaxes/*.tmLanguage.json` e `snippets/*.json` — cor e
+   snippets.
+8. `examples/poo.gs` — exemplo cobrindo treta, método, combinado e puxadinho.
+9. `README.md` — documentar o modelo POO.
 
 ---
 
