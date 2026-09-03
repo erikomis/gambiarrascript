@@ -14,14 +14,19 @@ import (
 	"os"
 )
 
-// parseArgsTesta le as flags do `gs testa`: `--vm` (roda na VM), `-so <nome>`
-// (só arquivos cujo nome casa) e o diretório posicional (default ".").
+// parseArgsTesta le as flags do `gs testa`: `--tree` (volta pro tree-walker),
+// `-so <nome>` (só arquivos cujo nome casa) e o diretório posicional
+// (default "."). A VM e o padrao — a suite tem que validar o engine que roda
+// em producao, nao o fallback.
 func parseArgsTesta(args []string) (dir string, usarVM bool, filtro string) {
 	dir = "."
+	usarVM = true
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--vm":
 			usarVM = true
+		case "--tree":
+			usarVM = false
 		case "-so", "--somente":
 			if i+1 < len(args) {
 				filtro = args[i+1]

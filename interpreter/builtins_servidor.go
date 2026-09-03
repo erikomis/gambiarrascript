@@ -12,9 +12,22 @@ import (
 )
 
 type servidorEstado struct {
-	rotas map[string]*object.Funcao
+	// object.Object (nao *object.Funcao): na VM o handler chega como
+	// *object.CompiledFunction. Amarrar no tipo do tree-walker fazia `rota()`
+	// morrer no engine PADRAO — ninguem conseguia subir servidor com `gs roda`.
+	rotas map[string]object.Object
 	mu    sync.Mutex
 	i     *Interpreter
+}
+
+// ehChamavel diz se o valor da pra chamar como gambiarra: `*object.Funcao` no
+// tree-walker, `*object.CompiledFunction` na VM, `*object.Builtin` pros nativos.
+func ehChamavel(o object.Object) bool {
+	switch o.(type) {
+	case *object.Funcao, *object.CompiledFunction, *object.Builtin:
+		return true
+	}
+	return false
 }
 
 func chaveRota(metodo, caminho string) string {
@@ -33,9 +46,9 @@ func (s *servidorEstado) builtinRota(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("rota(): o caminho tem que ser texto, veio %s", args[1].Type())
 	}
-	handler, ok := args[2].(*object.Funcao)
-	if !ok {
-		return erroBuiltin("rota(): o handler tem que ser uma gambiarra, veio %s", args[2].Type())
+	handler := args[2]
+	if !ehChamavel(handler) {
+		return erroBuiltin("rota(): o handler tem que ser uma gambiarra, veio %s", handler.Type())
 	}
 	s.rotas[chaveRota(metodo.Value, caminho.Value)] = handler
 	return NADA
@@ -95,7 +108,7 @@ func (s *servidorEstado) Handler() http.Handler {
 // goroutine propia (Listener.Accept loop). Ou seja, desde que soltamos o
 // lock global, as requisicoes ja sao paralelas naturalmente: o servidor de
 // produção já spawn goroutine por conexão. Isso e o paralelismo real.
-func (s *servidorEstado) atendeRequisicao(w http.ResponseWriter, r *http.Request, handler *object.Funcao, pedido *object.Dicionario) {
+func (s *servidorEstado) atendeRequisicao(w http.ResponseWriter, r *http.Request, handler object.Object, pedido *object.Dicionario) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			w.WriteHeader(http.StatusInternalServerError)

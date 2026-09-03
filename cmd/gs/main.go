@@ -143,15 +143,31 @@ func uso() {
 	fmt.Println("  gs formata -w <arquivo.gs>...         # formata e sobrescreve no disco")
 	fmt.Println("  gs check <arquivo.gs>...               # parse + lint (erros e avisos)")
 	fmt.Println("  gs init [nome]                         # cria gambiarra.json + principal.gs")
-	fmt.Println("  gs bench [--vm] <arquivo.gs> [n]       # mede o tempo de execucao (n rodadas)")
+	fmt.Println("  gs bench [--tree] <arquivo.gs> [n]     # mede o tempo de execucao (n rodadas)")
 	fmt.Println("  gs get <url> [nome.gs]                 # baixa um modulo pra gs_modulos/")
 	fmt.Println("  gs build <arquivo.gs> [-o saida]       # gera binario standalone com o script")
 	fmt.Println("  gs repl                                # abre o modo interativo (multiline)")
-	fmt.Println("  gs testa [<dir>]                       # roda os testes (*_test.gs) e soma os asserts")
+	fmt.Println("  gs testa [--tree] [<dir>]              # roda os testes (*_test.gs) e soma os asserts")
 	fmt.Println("  gs disasm <arquivo.gs>                 # disassembla o bytecode (VM)")
 	fmt.Println("  gs lsp                                 # inicia o language server (usado pela extensao do VSCode)")
 	fmt.Println("  gs --version                           # mostra a versao")
 	fmt.Println("  gs --help                              # mostra esta ajuda")
+}
+
+// rodaNaVM executa o bytecode na VM com o interpretador JA configurado
+// (argumentos do script + diretorio base). Antes cada call site chamava
+// vm.New, que monta um interpreter proprio e vazio — por isso `argumentos()`
+// voltava lista vazia na VM, que e o engine padrao.
+func rodaNaVM(bc *compiler.Bytecode, dirBase string, scriptArgs []string) {
+	interp := interpreter.New(os.Stdout)
+	interp.DefinirArgumentos(scriptArgs)
+	interp.DefinirDirBase(dirBase)
+	maquina := vm.NovaComInterp(bc, os.Stdout, interp)
+	if err := maquina.Run(); err != nil {
+		trataSaiVM(err)
+		reportaErroVM(err)
+		os.Exit(1)
+	}
 }
 
 func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []string) {
@@ -165,12 +181,7 @@ func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []stri
 	if usarVM && usarCache {
 		caminhoGSC := strings.TrimSuffix(caminho, ".gs") + ".gsc"
 		if bc := carregaCache(caminhoGSC, fonte); bc != nil {
-			maquina := vm.New(bc, os.Stdout)
-			if err := maquina.Run(); err != nil {
-				trataSaiVM(err)
-				reportaErroVM(err)
-				os.Exit(1)
-			}
+			rodaNaVM(bc, filepath.Dir(caminho), scriptArgs)
 			return
 		}
 	}
@@ -195,12 +206,7 @@ func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []stri
 		if usarCache {
 			gravaCache(strings.TrimSuffix(caminho, ".gs")+".gsc", fonte, comp.Bytecode())
 		}
-		maquina := vm.New(comp.Bytecode(), os.Stdout)
-		if err := maquina.Run(); err != nil {
-			trataSaiVM(err)
-			reportaErroVM(err)
-			os.Exit(1)
-		}
+		rodaNaVM(comp.Bytecode(), filepath.Dir(caminho), scriptArgs)
 		return
 	}
 

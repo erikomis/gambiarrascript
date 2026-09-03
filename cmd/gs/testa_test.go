@@ -16,9 +16,17 @@ func TestParseArgsTesta(t *testing.T) {
 }
 
 func TestParseArgsTestaDefaults(t *testing.T) {
+	// sem flag = VM: a suite tem que validar o engine que roda em producao.
 	dir, usarVM, filtro := parseArgsTesta(nil)
-	if dir != "." || usarVM || filtro != "" {
+	if dir != "." || !usarVM || filtro != "" {
 		t.Fatalf("defaults errados: dir=%q vm=%v filtro=%q", dir, usarVM, filtro)
+	}
+}
+
+func TestParseArgsTestaTree(t *testing.T) {
+	_, usarVM, _ := parseArgsTesta([]string{"--tree"})
+	if usarVM {
+		t.Fatalf("--tree devia voltar pro tree-walker")
 	}
 }
 

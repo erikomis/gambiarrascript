@@ -114,12 +114,16 @@ func cmdInit(args []string) {
 // cmdBench roda o arquivo N vezes (default 10) e reporta min/mediana/media/max.
 // A saida do script vai pro ralo (io.Discard) pra nao poluir a medicao.
 func cmdBench(args []string) {
-	usarVM := false
+	usarVM := true // mede o engine padrao; --tree mede o tree-walker
 	n := 10
 	arquivo := ""
 	for _, a := range args {
 		if a == "--vm" {
 			usarVM = true
+			continue
+		}
+		if a == "--tree" {
+			usarVM = false
 			continue
 		}
 		if v, err := strconv.Atoi(a); err == nil && arquivo != "" {
@@ -399,11 +403,27 @@ func rodarEmbedado() bool {
 		}
 		os.Exit(1)
 	}
+	wd, _ := os.Getwd()
 	interp := interpreter.New(os.Stdout)
 	interp.DefinirArgumentos(os.Args[1:])
-	if wd, err := os.Getwd(); err == nil {
-		interp.DefinirDirBase(wd)
+	interp.DefinirDirBase(wd)
+
+	// binario standalone roda na VM, igual `gs roda` — antes caia no
+	// tree-walker, o que fazia o executavel "compilado" ser ~10x MAIS LENTO
+	// que rodar o .gs solto. Se a compilacao falhar (construcao que so o
+	// tree-walker aceita), cai pro interpretador em vez de morrer.
+	comp := compiler.New()
+	comp.DirBase = wd
+	if err := comp.Compile(prog); err == nil {
+		maquina := vm.NovaComInterp(comp.Bytecode(), os.Stdout, interp)
+		if err := maquina.Run(); err != nil {
+			trataSaiVM(err)
+			reportaErroVM(err)
+			os.Exit(1)
+		}
+		return true
 	}
+
 	res := interp.Eval(prog, object.NewEnvironment())
 	if res != nil && res.Type() == object.ERRO_OBJ {
 		fmt.Println(res.Inspect())

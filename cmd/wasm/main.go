@@ -5,10 +5,12 @@ import (
 	"strings"
 	"syscall/js"
 
+	"gambiarrascript/compiler"
 	"gambiarrascript/interpreter"
 	"gambiarrascript/lexer"
 	"gambiarrascript/object"
 	"gambiarrascript/parser"
+	"gambiarrascript/vm"
 )
 
 // Versao do runtime WASM — mantida em sincronia visual com cmd/gs/version.go
@@ -24,6 +26,24 @@ func avaliar(code string) map[string]any {
 
 	var buf bytes.Buffer
 	interp := interpreter.New(&buf)
+
+	// roda na VM, igual `gs roda` — o playground tem que mostrar o mesmo
+	// comportamento (e a mesma velocidade) do engine de verdade. Codigo que a
+	// VM nao compila cai no tree-walker, que e mais permissivo.
+	comp := compiler.New()
+	if err := comp.Compile(prog); err == nil {
+		maq := vm.NovaComInterp(comp.Bytecode(), &buf, interp)
+		erros := ""
+		if err := maq.Run(); err != nil {
+			if e := vm.ErroDoRun(err); e != nil {
+				erros = e.Inspect()
+			} else {
+				erros = err.Error()
+			}
+		}
+		return map[string]any{"saida": buf.String(), "erros": erros}
+	}
+
 	resultado := interp.Eval(prog, object.NewEnvironment())
 
 	erros := ""
