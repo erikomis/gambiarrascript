@@ -394,14 +394,14 @@ func (c *Compiler) compile(node ast.Node) error {
 		return c.compilePraCadaList(node)
 	case *ast.VazaStatement:
 		if len(c.loopStack) == 0 {
-			return fmt.Errorf("vaza fora de loop")
+			return fmt.Errorf("linha %d: `vaza` so funciona dentro de um laco", node.Token.Line)
 		}
 		frame := &c.loopStack[len(c.loopStack)-1]
 		jmpPos := c.emit(code.OpJump, 9999)
 		frame.breakJumps = append(frame.breakJumps, jmpPos)
 	case *ast.ContinuaStatement:
 		if len(c.loopStack) == 0 {
-			return fmt.Errorf("continua fora de loop")
+			return fmt.Errorf("linha %d: `continua` so funciona dentro de um laco", node.Token.Line)
 		}
 		frame := &c.loopStack[len(c.loopStack)-1]
 		jmpPos := c.emit(code.OpJump, 9999)
@@ -526,7 +526,9 @@ func (c *Compiler) compile(node ast.Node) error {
 func (c *Compiler) compileIdent(node *ast.Identifier) error {
 	sym, ok := c.scope.Resolve(node.Value)
 	if !ok {
-		return fmt.Errorf("VM nao conhece `%s`", node.Value)
+		// erro do PROGRAMA, nao da VM: quem le tem que saber a linha e o que
+		// fazer, nao que existe um compilador por baixo.
+		return fmt.Errorf("linha %d: nao existe nenhum `%s` por aqui — confere o nome ou declara com `bota %s = ...`", node.Token.Line, node.Value, node.Value)
 	}
 	switch sym.Scope {
 	case GlobalScope:

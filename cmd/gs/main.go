@@ -200,7 +200,8 @@ func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []stri
 		comp := compiler.New()
 		comp.DirBase = filepath.Dir(caminho)
 		if err := comp.Compile(prog); err != nil {
-			fmt.Println("eita, a VM nao compilou: " + err.Error())
+			fmt.Println("eita, teu codigo tem um perrengue:")
+			fmt.Println("  - " + err.Error())
 			os.Exit(1)
 		}
 		if usarCache {
