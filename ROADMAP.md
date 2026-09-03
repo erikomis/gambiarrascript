@@ -352,9 +352,31 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
       de fora. So funde com literal a DIREITA (fundir a esquerda mudaria a
       ordem de avaliacao). Laco e fib 17% mais rapidos cada.
 
-**Acumulado do motor nesta leva** (mediana de 5 rodadas, lado a lado):
-fib **2,5x** (1269x menos alocacao), loop **1,5x** (32x), sort **1,6x**,
-json **2,1x**, mapeia **35,6x**.
+**Acumulado do motor nesta leva**, medido FIM A FIM (`gs roda`, media de 3),
+contra o binario do inicio da leva:
+
+| carga | antes | agora | ganho |
+|---|---|---|---|
+| `mapeia` sobre 200 mil elementos | 1,847s | 0,052s | **35,2x** |
+| `de_json`/`pra_json` 20 mil vezes | 0,066s | 0,047s | **1,41x** |
+| laco de 5 milhoes | 0,263s | 0,198s | **1,33x** |
+| `fib(30)` | 0,116s | 0,099s | **1,17x** |
+| `ordena` 200x sobre lista de 500 | 0,059s | 0,059s | 1,00x |
+
+> **Cuidado ao comparar com `go test -bench`.** Os numeros do bench sao bem
+> maiores que estes, por dois motivos, e os dois enganam:
+>
+> 1. **O baseline.** Comparar com o ultimo commit media contra uma arvore SEM o
+>    cache de inteiros e o reuso de Frame, que ja estavam aqui sem commitar.
+>    Boa parte do "2,5x no fib" era esse trabalho, nao o desta leva.
+> 2. **O setup.** `rodaBench` cria uma VM por iteracao (como `gs roda` faz),
+>    entao o numero e setup + execucao. Em carga pequena (fib(22) e ~1,5ms) o
+>    setup pesa, e ele encolheu muito quando a VM passou a alocar sob demanda —
+>    o que aparece como ganho de "execucao" sem ser. `BenchmarkNovaVM` isola
+>    esse custo; compare os dois antes de atribuir um ganho.
+>
+> Regra: bench pra pegar regressao entre commits vizinhos, medicao fim a fim
+> pra afirmar ganho.
 
 Falta nesse tier:
 

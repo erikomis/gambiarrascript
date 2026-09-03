@@ -93,3 +93,17 @@ acabou_finalmente
 mostra s`
 
 func BenchmarkLoop(b *testing.B) { rodaBench(b, compilaBench(b, fonteLoop)) }
+
+// BenchmarkNovaVM isola o custo de CRIAR a VM (pilha, globais, frames, tabela
+// de builtins) sem rodar nada. Os benchmarks acima criam uma VM por iteracao —
+// como `gs roda` faz — entao o numero deles e setup + execucao. Pra cargas
+// pequenas (fib(22) e ~1,5ms) o setup pesava bastante: antes de a VM passar a
+// alocar sob demanda ele sozinho custava ~2ms, mais que a propria execucao.
+// Compare os dois quando for atribuir um ganho a "execucao" ou a "startup".
+func BenchmarkNovaVM(b *testing.B) {
+	bc := compilaBench(b, `mostra 1`)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = New(bc, io.Discard)
+	}
+}
