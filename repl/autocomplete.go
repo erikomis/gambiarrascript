@@ -6,8 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"gambiarrascript/interpreter"
-	"gambiarrascript/object"
+	"gambiarrascript/vm"
 )
 
 // palavrasChave sao as keywords da linguagem, pro autocomplete do REPL.
@@ -98,13 +97,15 @@ func autocompleta(linha string, pos int, candidatos []string) (string, int, bool
 	return nova, inicio + len(completa), true
 }
 
-// nomesCompletaveis junta keywords + builtins + variaveis do escopo atual.
-func nomesCompletaveis(interp *interpreter.Interpreter, env *object.Environment) []string {
+// nomesCompletaveis junta keywords + builtins + o que o usuario ja definiu na
+// sessao. Na VM nao existe Environment pra perguntar: os nomes vem da tabela de
+// simbolos do compilador.
+func nomesCompletaveis(s *vm.Sessao) []string {
 	nomes := append([]string{}, palavrasChave...)
-	for nome := range interp.BuiltinsVisiveis() {
+	for nome := range s.Interp().BuiltinsVisiveis() {
 		nomes = append(nomes, nome)
 	}
-	nomes = append(nomes, env.Locais()...)
+	nomes = append(nomes, s.NomesGlobais()...)
 	return nomes
 }
 

@@ -9,11 +9,11 @@ import (
 
 	"golang.org/x/term"
 
-	"gambiarrascript/interpreter"
 	"gambiarrascript/lexer"
 	"gambiarrascript/object"
 	"gambiarrascript/parser"
 	"gambiarrascript/token"
+	"gambiarrascript/vm"
 )
 
 const (
@@ -33,8 +33,10 @@ func Start(in io.Reader, out io.Writer) {
 	startSimples(in, out)
 }
 
-// avalia parseia e roda uma fonte completa, imprimindo erros ou `=> valor`.
-func avalia(interp *interpreter.Interpreter, env *object.Environment, fonte string, out io.Writer) {
+// avalia parseia e roda uma fonte completa na sessao da VM, imprimindo erros
+// ou `=> valor`. Roda na VM (nao no tree-walker) pra o REPL se comportar igual
+// ao `gs roda` — antes dava pra uma construcao funcionar aqui e falhar la.
+func avalia(s *vm.Sessao, fonte string, out io.Writer) {
 	p := parser.New(lexer.New(fonte))
 	prog := p.ParseProgram()
 	if errs := p.Errors(); len(errs) != 0 {
@@ -43,25 +45,26 @@ func avalia(interp *interpreter.Interpreter, env *object.Environment, fonte stri
 		}
 		return
 	}
-	resultado := interp.Eval(prog, env)
-	if resultado != nil {
-		switch resultado.Type() {
-		case object.ERRO_OBJ:
-			fmt.Fprintln(out, resultado.Inspect())
-		case object.NADA_OBJ:
-			// nada a mostrar pra bota/se_colar/etc — REPL mais limpo
-		default:
-			// imprime valor de expressoes (a la Python/Lua)
-			fmt.Fprintln(out, "=> "+resultado.Inspect())
+	valor, err := s.Avalia(prog)
+	if err != nil {
+		if e := vm.ErroDoRun(err); e != nil {
+			fmt.Fprintln(out, e.Inspect())
+		} else {
+			fmt.Fprintln(out, "eita, deu ruim: "+err.Error())
 		}
+		return
+	}
+	// so expressao tem valor pra mostrar, e `nada` nao vira `=> nada`:
+	// comando como `ordena(xs)` nao suja a tela.
+	if valor != nil && valor.Type() != object.NADA_OBJ {
+		fmt.Fprintln(out, "=> "+valor.Inspect())
 	}
 }
 
 // startSimples e o REPL linha-a-linha (fallback pra pipes/testes, sem readline).
 func startSimples(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
-	env := object.NewEnvironment()
-	interp := interpreter.New(out)
+	sessao := vm.NovaSessao(out)
 
 	fmt.Fprintln(out, "GambiarraScript REPL — manda ver (:ajuda pra comandos, ctrl+d pra vazar)")
 	var buffer strings.Builder
@@ -90,7 +93,7 @@ func startSimples(in io.Reader, out io.Writer) {
 		if strings.TrimSpace(fonte) == "" {
 			continue
 		}
-		avalia(interp, env, fonte, out)
+		avalia(sessao, fonte, out)
 	}
 }
 
@@ -123,14 +126,13 @@ func startRico(stdin *os.File) bool {
 	}{stdin, os.Stdout}
 	t := term.NewTerminal(rw, prompt)
 
-	env := object.NewEnvironment()
-	interp := interpreter.New(saida)
+	sessao := vm.NovaSessao(saida)
 
 	t.AutoCompleteCallback = func(linha string, pos int, key rune) (string, int, bool) {
 		if key != '\t' {
 			return "", 0, false
 		}
-		return autocompleta(linha, pos, nomesCompletaveis(interp, env))
+		return autocompleta(linha, pos, nomesCompletaveis(sessao))
 	}
 
 	fmt.Fprint(saida, "GambiarraScript REPL — ↑/↓ historico, TAB completa, :ajuda, ctrl+d pra vazar\n")
@@ -159,7 +161,7 @@ func startRico(stdin *os.File) bool {
 		if strings.TrimSpace(fonte) == "" {
 			continue
 		}
-		avalia(interp, env, fonte, saida)
+		avalia(sessao, fonte, saida)
 	}
 	return true
 }

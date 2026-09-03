@@ -257,6 +257,41 @@ func (c *Compiler) Bytecode() *Bytecode {
 	}
 }
 
+// NovaEntrada prepara o compilador pra compilar MAIS um pedaco de programa
+// reusando o estado acumulado — e o que faz o REPL rodar na VM: o pool de
+// constantes, a tabela de simbolos globais e as funcoes ja definidas
+// sobrevivem, so o buffer de instrucoes recomeca. Assim `bota x = 1` numa
+// linha e `mostra x` na seguinte enxergam o mesmo indice global.
+func (c *Compiler) NovaEntrada() {
+	c.instructions = nil
+	c.linhas = nil
+	c.linhaAtual = 0
+	c.loopStack = nil
+	c.funcAtual = ""
+	// volta pro escopo global: se a entrada anterior morreu no meio de um
+	// corpo de funcao, o scope podia ter ficado aninhado.
+	c.scope = c.scopes[0]
+	c.scopes = c.scopes[:1]
+}
+
+// NomesGlobais lista os nomes definidos pelo USUARIO no escopo global (fora os
+// builtins, que quem completa ja conhece por outro caminho). O REPL usa pra
+// completar com TAB — na VM nao existe Environment pra perguntar.
+func (c *Compiler) NomesGlobais() []string {
+	topo := c.scopes[0]
+	nomes := make([]string, 0, len(topo.symbols))
+	for nome, sym := range topo.symbols {
+		if sym.Scope == GlobalScope {
+			nomes = append(nomes, nome)
+		}
+	}
+	return nomes
+}
+
+// NumGlobaisDefinidas diz quantas globais o compilador ja conhece. O REPL usa
+// pra saber se precisa de mais espaco no array de globais da sessao.
+func (c *Compiler) NumGlobaisDefinidas() int { return c.scope.NumGlobais() }
+
 func (c *Compiler) Compile(node ast.Node) error {
 	return c.compile(node)
 }

@@ -38,3 +38,56 @@ func TestStartMultilineElif(t *testing.T) {
 		t.Fatalf("elif multiline nao avaliou; saida: %q", out.String())
 	}
 }
+
+// TestReplRodaNaVM: o REPL passou a rodar na VM (era o ultimo caminho no
+// tree-walker). O que importa e o estado sobreviver entre entradas — global,
+// gambiarra e mutacao.
+func TestReplRodaNaVM(t *testing.T) {
+	entrada := strings.NewReader(
+		"bota x = 10\n" +
+			"gambiarra dobra(n)\n    funciona n * 2\nacabou_finalmente\n" +
+			"dobra(x)\n" +
+			"bota x = x + 1\n" +
+			"x\n")
+	var out bytes.Buffer
+	Start(entrada, &out)
+	got := out.String()
+	for _, quer := range []string{"=> 20", "=> 11"} {
+		if !strings.Contains(got, quer) {
+			t.Errorf("saida nao tem %q:\n%s", quer, got)
+		}
+	}
+}
+
+// TestReplMostraNaoDuplica: `mostra` e COMANDO, nao expressao. No tree-walker o
+// REPL imprimia o valor mostrado uma segunda vez como `=> valor` — `mostra "oi"`
+// saia como "oi" seguido de "=> oi".
+func TestReplMostraNaoDuplica(t *testing.T) {
+	entrada := strings.NewReader("mostra \"oi\"\n")
+	var out bytes.Buffer
+	Start(entrada, &out)
+	if strings.Contains(out.String(), "=> oi") {
+		t.Errorf("mostra virou expressao de novo (saida duplicada):\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "oi") {
+		t.Errorf("mostra nao imprimiu:\n%s", out.String())
+	}
+}
+
+// TestReplSobreviveAErro: erro numa linha nao pode derrubar a sessao nem levar
+// junto o que ja tinha sido definido.
+func TestReplSobreviveAErro(t *testing.T) {
+	entrada := strings.NewReader("bota x = 3\nnaoexiste\nx / 0\nx + 1\n")
+	var out bytes.Buffer
+	Start(entrada, &out)
+	got := out.String()
+	if !strings.Contains(got, "nao existe nenhum `naoexiste`") {
+		t.Errorf("faltou o erro de nome desconhecido:\n%s", got)
+	}
+	if !strings.Contains(got, "dividir por zero") {
+		t.Errorf("faltou o erro de divisao por zero:\n%s", got)
+	}
+	if !strings.Contains(got, "=> 4") {
+		t.Errorf("sessao nao sobreviveu aos erros:\n%s", got)
+	}
+}
