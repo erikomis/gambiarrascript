@@ -81,3 +81,15 @@ acabou_finalmente
 mostra mapeia(xs, dobra)[4999]`
 
 func BenchmarkMapeia(b *testing.B) { rodaBench(b, compilaBench(b, fonteMapeia)) }
+
+// fonteLoop e o caso mais comum de "linguagem parece lenta": laco apertado com
+// aritmetica e comparacao, sem chamada de funcao.
+const fonteLoop = `bota s = 0
+bota i = 0
+enquanto i < 200000
+    bota s = s + i * 2
+    bota i = i + 1
+acabou_finalmente
+mostra s`
+
+func BenchmarkLoop(b *testing.B) { rodaBench(b, compilaBench(b, fonteLoop)) }

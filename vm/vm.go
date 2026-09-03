@@ -71,6 +71,11 @@ type VM struct {
 	builtinIdx map[string]int
 	builtins   map[string]*object.Builtin
 
+	// num e a arena de Numeros DESTA VM. Fica por valor (nao ponteiro) pra nao
+	// custar indirecao no hot path, e e por-VM porque ArenaNum nao e
+	// thread-safe: cada VM roda numa goroutine so.
+	num object.ArenaNum
+
 	// subVMs reusa as VMs das chamadas SINCRONAS vindas do interpreter
 	// (mapeia/filtra/reduz/ordena_com chamam a gambiarra do usuario uma vez por
 	// elemento). Compartilhado entre a VM raiz e os clones; um sync.Pool porque
@@ -488,7 +493,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			if !ok || !n.EhInt {
 				panic(VMError{err: &object.Erro{Message: "~ espera inteiro", Kind: "runtime"}})
 			}
-			vm.push(object.NumInt(^n.Int))
+			vm.push(vm.num.Int(^n.Int))
 			ip++
 		case code.OpMostra:
 			fmt.Fprintln(vm.out, vm.pop().Inspect())
@@ -881,7 +886,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				vm.push(valor)    // valor
 			} else {
 				// lista: 1o nome = indice (i), 2o = elemento (mid)
-				vm.push(object.NumInt(int64(i)))
+				vm.push(vm.num.Int(int64(i)))
 				vm.push(mid)
 			}
 			ip++
@@ -1049,16 +1054,16 @@ func (vm *VM) execBinario(op code.Opcode) {
 				}
 				panic(VMError{err: &object.Erro{Message: msg, Kind: "runtime"}})
 			}
-			r, _ := vmExecBinarioBitwise(op, ln.Int, rn.Int)
+			r, _ := vm.execBinarioBitwise(op, ln.Int, rn.Int)
 			vm.push(r)
 			return
 		}
 		// fast path inteiros exatos
-		if r, ok := vmExecBinarioIntShort(op, ln, rn); ok {
+		if r, ok := vm.execBinarioIntShort(op, ln, rn); ok {
 			vm.push(r)
 			return
 		}
-		vm.push(vmExecBinarioNumero(op, ln.Value, rn.Value))
+		vm.push(vm.execBinarioNumero(op, ln.Value, rn.Value))
 		return
 	}
 	if op == code.OpAdd && (left.Type() == object.TEXTO_OBJ || right.Type() == object.TEXTO_OBJ) {
@@ -1120,7 +1125,7 @@ func ehShift(op code.Opcode) bool {
 	return op == code.OpLShift || op == code.OpRShift
 }
 
-func vmExecBinarioNumero(op code.Opcode, l, r float64) object.Object {
+func (vm *VM) execBinarioNumero(op code.Opcode, l, r float64) object.Object {
 	if op == code.OpDiv && r == 0 {
 		panic(VMError{err: &object.Erro{Message: "nao da pra dividir por zero, parca — nem na gambiarra", Kind: "runtime"}})
 	}
@@ -1140,14 +1145,14 @@ func vmExecBinarioNumero(op code.Opcode, l, r float64) object.Object {
 	case code.OpMod:
 		res = math.Mod(l, r)
 	}
-	return &object.Numero{Value: res}
+	return vm.num.Float(res)
 }
 
 // vmExecBinarioIntShort usa aritmetica int64 exata quando AMBOS operandos
 // sao inteiros exatos (EhInt=true) e o operador e inteiro-aware (+,-,*,%).
 // Divisao continua float (pois pode dar nao-inteiro). Cresce pra int128
 // apenas no limite via overflow detection: se passa int64, cai pra float64.
-func vmExecBinarioIntShort(op code.Opcode, lo, ro *object.Numero) (object.Object, bool) {
+func (vm *VM) execBinarioIntShort(op code.Opcode, lo, ro *object.Numero) (object.Object, bool) {
 	if !lo.EhInt || !ro.EhInt {
 		return nil, false
 	}
@@ -1158,23 +1163,23 @@ func vmExecBinarioIntShort(op code.Opcode, lo, ro *object.Numero) (object.Object
 		if (lo.Int > 0 && ro.Int > 0 && r < 0) || (lo.Int < 0 && ro.Int < 0 && r > 0) {
 			return nil, false
 		}
-		return object.NumInt(r), true
+		return vm.num.Int(r), true
 	case code.OpSub:
 		r := lo.Int - ro.Int
 		if (lo.Int > 0 && ro.Int < 0 && r < 0) || (lo.Int < 0 && ro.Int > 0 && r > 0) {
 			return nil, false
 		}
-		return object.NumInt(r), true
+		return vm.num.Int(r), true
 	case code.OpMul:
 		// deteccao simples: se |lo|*|ro| > max int64
 		if lo.Int == 0 || ro.Int == 0 {
-			return object.NumInt(0), true
+			return vm.num.Int(0), true
 		}
 		r := lo.Int * ro.Int
 		if r/ro.Int != lo.Int {
 			return nil, false
 		}
-		return object.NumInt(r), true
+		return vm.num.Int(r), true
 	}
 	return nil, false
 }
@@ -1218,9 +1223,9 @@ func (vm *VM) execMinus() {
 		// preserva a inteireza exata: -1 tem que continuar EhInt, senao vira
 		// float e escapa de checagens como o shift por valor negativo.
 		if n.EhInt {
-			vm.push(object.NumInt(-n.Int))
+			vm.push(vm.num.Int(-n.Int))
 		} else {
-			vm.push(&object.Numero{Value: -n.Value})
+			vm.push(vm.num.Float(-n.Value))
 		}
 		return
 	}
@@ -1229,24 +1234,24 @@ func (vm *VM) execMinus() {
 
 // vmExecBinarioBitwise trata operacoes bitwise. Devolve (r, true) se o op
 // for bitwise; (nil, false) caso contrario — caller segue o fluxo normal.
-func vmExecBinarioBitwise(op code.Opcode, l, r int64) (object.Object, bool) {
+func (vm *VM) execBinarioBitwise(op code.Opcode, l, r int64) (object.Object, bool) {
 	switch op {
 	case code.OpBAnd:
-		return object.NumInt(l & r), true
+		return vm.num.Int(l & r), true
 	case code.OpBOr:
-		return object.NumInt(l | r), true
+		return vm.num.Int(l | r), true
 	case code.OpBXor:
-		return object.NumInt(l ^ r), true
+		return vm.num.Int(l ^ r), true
 	case code.OpLShift:
 		if r < 0 {
 			panic(VMError{err: &object.Erro{Message: "<< por valor negativo? naoiedade", Kind: "runtime"}})
 		}
-		return object.NumInt(l << uint(r)), true
+		return vm.num.Int(l << uint(r)), true
 	case code.OpRShift:
 		if r < 0 {
 			panic(VMError{err: &object.Erro{Message: ">> por valor negativo? naoiedade", Kind: "runtime"}})
 		}
-		return object.NumInt(l >> uint(r)), true
+		return vm.num.Int(l >> uint(r)), true
 	}
 	return nil, false
 }

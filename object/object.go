@@ -88,6 +88,52 @@ func NumInt(i int64) *Numero {
 // NumFloat cria um numero de ponto flutuante.
 func NumFloat(f float64) *Numero { return &Numero{Value: f} }
 
+// arenaBloco e quantos Numeros vem de cada malloc da arena. Trade-off: bloco
+// maior amortiza mais o malloc, mas um unico Numero vivo segura o bloco
+// inteiro. Em 32 a alocacao fica ~2,8x mais barata e a retencao no pior caso
+// (guardar um numero a cada bloco) e limitada a 32x — com 128 seria 128x, por
+// so mais 20% de velocidade.
+const arenaBloco = 32
+
+// ArenaNum aloca Numeros em blocos em vez de um malloc por numero. Toda
+// aritmetica que sai do cache de inteiros pequenos passava por um malloc
+// individual: num laco apertado isso era 99,9% das alocacoes da VM.
+//
+// NAO e thread-safe de proposito: cada VM (e cada clone do `bora`) tem a sua,
+// e uma VM roda numa goroutine so — assim a arena dispensa lock, que comeria
+// o ganho. Nunca compartilhe uma ArenaNum entre goroutines.
+type ArenaNum struct {
+	bloco []Numero
+	i     int
+}
+
+// Int devolve um numero inteiro exato, do cache de pequenos ou da arena.
+func (a *ArenaNum) Int(v int64) *Numero {
+	if v >= intCacheMin && v <= intCacheMax {
+		return intCache[v-intCacheMin]
+	}
+	if a.i == len(a.bloco) {
+		a.bloco = make([]Numero, arenaBloco)
+		a.i = 0
+	}
+	n := &a.bloco[a.i]
+	a.i++
+	n.Value, n.Int, n.EhInt = float64(v), v, true
+	return n
+}
+
+// Float devolve um numero de ponto flutuante vindo da arena.
+func (a *ArenaNum) Float(f float64) *Numero {
+	if a.i == len(a.bloco) {
+		a.bloco = make([]Numero, arenaBloco)
+		a.i = 0
+	}
+	n := &a.bloco[a.i]
+	a.i++
+	n.Value, n.Int, n.EhInt = f, 0, false
+	return n
+}
+
 // RangeMax e o limite de elementos de um range `..` — evita estourar a memoria
 // com algo tipo `1..999999999999`.
 const RangeMax = 100_000_000
