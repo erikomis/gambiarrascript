@@ -1,7 +1,9 @@
 package interpreter
 
 import (
+	"bytes"
 	"encoding/json"
+	"strconv"
 
 	"gambiarrascript/object"
 )
@@ -14,91 +16,95 @@ func builtinDeJson(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("de_json() espera texto, veio %s", args[0].Type())
 	}
-	var v interface{}
-	if err := json.Unmarshal([]byte(t.Value), &v); err != nil {
+	// parser proprio (json_parser.go): preserva a ordem das chaves do documento
+	// — coisa que json.Unmarshal num map perde — e sem o custo do json.Decoder
+	// por token, que ficou 66% mais lento que o Unmarshal.
+	v, err := parseJson(t.Value)
+	if err != nil {
 		return erroBuiltin("esse json ta quebrado, parca: %v", err)
 	}
-	return deGo(v)
-}
-
-// deGo converte a arvore interface{} do encoding/json em valores GambiarraScript.
-func deGo(v interface{}) object.Object {
-	switch val := v.(type) {
-	case nil:
-		return NADA
-	case bool:
-		return boolDoNativo(val)
-	case float64:
-		return &object.Numero{Value: val}
-	case string:
-		return &object.Texto{Value: val}
-	case []interface{}:
-		elems := make([]object.Object, len(val))
-		for i, e := range val {
-			elems[i] = deGo(e)
-		}
-		return &object.Lista{Elements: elems}
-	case map[string]interface{}:
-		pares := map[object.HashKey]object.ParDic{}
-		for k, e := range val {
-			chave := &object.Texto{Value: k}
-			pares[chave.ChaveHash()] = object.ParDic{Chave: chave, Valor: deGo(e)}
-		}
-		return &object.Dicionario{Pares: pares}
-	}
-	return NADA
+	return v
 }
 
 func builtinPraJson(args []object.Object) object.Object {
 	if len(args) != 1 {
 		return erroBuiltin("pra_json() quer 1 argumento, veio %d", len(args))
 	}
-	v, erro := paraGo(args[0])
-	if erro != nil {
+	var buf bytes.Buffer
+	if erro := escreveJson(&buf, args[0]); erro != nil {
 		return erro
 	}
-	bs, err := json.Marshal(v)
-	if err != nil {
-		return erroBuiltin("nao consegui virar json: %v", err)
-	}
-	return &object.Texto{Value: string(bs)}
+	return &object.Texto{Value: buf.String()}
 }
 
-// paraGo converte um valor GambiarraScript numa arvore interface{} serializavel;
-// devolve um *object.Erro se algo nao for serializavel.
-func paraGo(o object.Object) (interface{}, *object.Erro) {
+// escreveJson serializa o valor direto no buffer. E escrito na mao (em vez de
+// montar um map[string]interface{} e chamar json.Marshal) porque o Marshal
+// ordena as chaves de map alfabeticamente — o dicionario tem que sair na ordem
+// de insercao, igual JSON.stringify do JS e json.dumps do Python.
+func escreveJson(buf *bytes.Buffer, o object.Object) *object.Erro {
 	switch val := o.(type) {
 	case *object.Nada:
-		return nil, nil
+		buf.WriteString("null")
 	case *object.Booleano:
-		return val.Value, nil
+		if val.Value {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
 	case *object.Numero:
-		return val.Value, nil
+		// inteiro exato sai como inteiro: float64 perde precisao acima de 2^53,
+		// e de_json ja devolve inteiro exato pra numero sem ponto.
+		if val.EhInt {
+			buf.WriteString(strconv.FormatInt(val.Int, 10))
+			break
+		}
+		bs, err := json.Marshal(val.Value)
+		if err != nil {
+			return erroBuiltin("nao consegui virar json: %v", err)
+		}
+		buf.Write(bs)
 	case *object.Texto:
-		return val.Value, nil
+		escreveTextoJson(buf, val.Value)
 	case *object.Lista:
-		arr := make([]interface{}, len(val.Elements))
+		buf.WriteByte('[')
 		for i, e := range val.Elements {
-			conv, erro := paraGo(e)
-			if erro != nil {
-				return nil, erro
+			if i > 0 {
+				buf.WriteByte(',')
 			}
-			arr[i] = conv
+			if erro := escreveJson(buf, e); erro != nil {
+				return erro
+			}
 		}
-		return arr, nil
+		buf.WriteByte(']')
 	case *object.Dicionario:
-		obj := map[string]interface{}{}
-		for _, par := range val.Pares {
-			conv, erro := paraGo(par.Valor)
-			if erro != nil {
-				return nil, erro
+		buf.WriteByte('{')
+		for i, k := range val.Chaves() {
+			par := val.Pares[k]
+			if i > 0 {
+				buf.WriteByte(',')
 			}
-			obj[chaveJson(par.Chave)] = conv
+			escreveTextoJson(buf, chaveJson(par.Chave))
+			buf.WriteByte(':')
+			if erro := escreveJson(buf, par.Valor); erro != nil {
+				return erro
+			}
 		}
-		return obj, nil
+		buf.WriteByte('}')
 	default:
-		return nil, erroBuiltin("nao da pra virar json: %s", o.Type())
+		return erroBuiltin("nao da pra virar json: %s", o.Type())
 	}
+	return nil
+}
+
+// escreveTextoJson escreve uma string ja escapada (aspas incluidas), usando o
+// mesmo escaping do encoding/json.
+func escreveTextoJson(buf *bytes.Buffer, s string) {
+	bs, err := json.Marshal(s)
+	if err != nil { // string sempre serializa; fallback defensivo
+		buf.WriteString(`""`)
+		return
+	}
+	buf.Write(bs)
 }
 
 // chaveJson devolve a forma textual de uma chave de dicionario (JSON exige string).
