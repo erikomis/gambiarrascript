@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"strings"
+	"sync"
 
 	"gambiarrascript/code"
 	"gambiarrascript/compiler"
@@ -13,9 +14,18 @@ import (
 )
 
 const (
-	StackSize  = 16384
+	// StackInicial e o tamanho com que a pilha NASCE; ela cresce sob demanda
+	// (append no push, dobrando no garanteEspaco). Antes toda VM ja nascia com os
+	// 16k slots — 256 KB por VM — o que fazia cada goroutine do `bora` e cada
+	// chamada de gambiarra vinda de mapeia/filtra custar um quarto de mega.
+	StackInicial = 512
+	// GlobalsMin e o piso do array de globais. O tamanho real vem do
+	// compilador (Bytecode.NumGlobals): reservar MaxGlobals de cara custava
+	// 1 MB zerado em toda VM, mesmo pra um script de tres linhas.
+	GlobalsMin = 16
+	StackSize  = 16384 // mantido pra compatibilidade; a pilha nao tem mais teto fixo
 	MaxFrames  = 1024
-	MaxGlobals = 65536
+	MaxGlobals = 65536 // teto de globais que o compilador endereça (indice de 2 bytes)
 )
 
 var (
@@ -60,6 +70,12 @@ type VM struct {
 
 	builtinIdx map[string]int
 	builtins   map[string]*object.Builtin
+
+	// subVMs reusa as VMs das chamadas SINCRONAS vindas do interpreter
+	// (mapeia/filtra/reduz/ordena_com chamam a gambiarra do usuario uma vez por
+	// elemento). Compartilhado entre a VM raiz e os clones; um sync.Pool porque
+	// o `bora` pode disparar essas chamadas de varias goroutines.
+	subVMs *sync.Pool
 }
 
 func New(bytecode *compiler.Bytecode, out io.Writer) *VM {
@@ -78,9 +94,10 @@ func NovaComInterp(bytecode *compiler.Bytecode, out io.Writer, interp *interpret
 		constants:  bytecode.Constants,
 		inst:       bytecode.Instructions,
 		linhas:     bytecode.Linhas,
-		stack:      make([]object.Object, StackSize),
-		globals:    make([]object.Object, MaxGlobals),
-		frames:     make([]*Frame, MaxFrames),
+		stack:      make([]object.Object, StackInicial),
+		globals:    make([]object.Object, tamanhoGlobals(bytecode.NumGlobals)),
+		frames:     novosFrames(),
+		subVMs:     &sync.Pool{},
 		builtinIdx: bidx,
 		builtins:   interp.BuiltinsVisiveis(),
 		out:        out,
@@ -102,17 +119,24 @@ func (vm *VM) chamaCompilada(cf *object.CompiledFunction, args []object.Object) 
 			Kind:    "runtime",
 		}
 	}
-	clone := vm.clone()
+	sub := vm.pegaSubVM()
+	defer vm.devolveSubVM(sub)
+	topo := cf.NumLocals
+	if topo < len(args) {
+		topo = len(args)
+	}
+	sub.garanteEspaco(topo)
 	for i, a := range args {
-		clone.stack[i] = a
+		sub.stack[i] = a
 	}
 	// reserva os slots de locals (igual OpCall)
-	clone.sp = cf.NumLocals
-	if clone.sp < len(args) {
-		clone.sp = len(args)
-	}
-	clone.frames[0] = &Frame{fn: cf, ip: 0, basePointer: 0}
-	clone.framesIdx = 1
+	sub.sp = topo
+	fr0 := sub.frameEm(0)
+	fr0.fn = cf
+	fr0.ip = 0
+	fr0.basePointer = 0
+	fr0.callPos = 0
+	sub.framesIdx = 1
 	defer func() {
 		if r := recover(); r != nil {
 			if vme, ok := r.(VMError); ok {
@@ -122,33 +146,126 @@ func (vm *VM) chamaCompilada(cf *object.CompiledFunction, args []object.Object) 
 			res = &object.Erro{Message: fmt.Sprintf("panico na gambiarra: %v", r), Kind: "runtime"}
 		}
 	}()
-	if err := clone.execFrame(clone.currentFrame()); err != nil {
+	if err := sub.execFrame(sub.currentFrame()); err != nil {
 		if enc, ok := err.(erroNaoCapturado); ok {
 			return enc.err // preserva Line/Kind do erro original
 		}
 		return &object.Erro{Message: err.Error(), Kind: "runtime"}
 	}
 	// apos OpReturn/OpReturnNada o valor fica em stack[sp]
-	clone.sp--
-	return clone.stack[clone.sp]
+	sub.sp--
+	return sub.stack[sub.sp]
+}
+
+// pegaSubVM tira uma VM do pool (ou clona uma nova) pra rodar UMA chamada
+// sincrona de gambiarra vinda de um builtin de ordem superior. Antes cada
+// chamada clonava — mapear 5 mil elementos alocava mais de 1 GB so de pilhas.
+func (vm *VM) pegaSubVM() *VM {
+	if v, ok := vm.subVMs.Get().(*VM); ok {
+		return v
+	}
+	return vm.clone()
+}
+
+// devolveSubVM limpa o estado da sub-VM (pra nao segurar referencia viva dos
+// valores da chamada anterior) e devolve pro pool.
+func (vm *VM) devolveSubVM(sub *VM) {
+	clear(sub.stack)
+	sub.sp = 0
+	sub.framesIdx = 0
+	sub.errStack = sub.errStack[:0]
+	vm.subVMs.Put(sub)
 }
 
 func (vm *VM) LastPoppedStackElem() object.Object {
 	return vm.stack[vm.sp]
 }
 
-func (vm *VM) push(o object.Object) { vm.stack[vm.sp] = o; vm.sp++ }
-func (vm *VM) pop() object.Object   { vm.sp--; return vm.stack[vm.sp] }
+// push empilha um valor, crescendo a pilha quando ela enche. O crescimento usa
+// append DE PROPOSITO: o Go trata append como builtin (custo 30 no orcamento de
+// inline), enquanto chamar um metodo de crescimento custa 57 e levava o corpo a
+// 81 — um ponto acima do limite de 80. Com isso o push, que e o hot path da VM,
+// deixava de ser inlinado e o fib ficava ~30% mais lento.
+func (vm *VM) push(o object.Object) {
+	if vm.sp >= len(vm.stack) {
+		vm.stack = append(vm.stack, o)
+		vm.sp++
+		return
+	}
+	vm.stack[vm.sp] = o
+	vm.sp++
+}
+
+// tamanhoGlobals decide o tamanho do array de globais a partir do que o
+// compilador contou. Bytecode antigo (cache .gsc gravado por uma versao sem o
+// campo) vem com 0 — cai no teto, que e o comportamento de antes.
+func tamanhoGlobals(n int) int {
+	if n <= 0 {
+		return MaxGlobals
+	}
+	if n < GlobalsMin {
+		return GlobalsMin
+	}
+	if n > MaxGlobals {
+		return MaxGlobals
+	}
+	return n
+}
+
+// garanteEspaco cresce a pilha (dobrando) ate caber `topo` slots — usado pelos
+// pontos que sobem o sp de uma vez (reserva dos locals num OpCall/OpTailCall e
+// o unwind pos-catch), onde o push nao passa. Nao tem teto rigido: quem limita
+// recursao infinita e o MaxFrames, que ja da erro limpo.
+func (vm *VM) garanteEspaco(topo int) {
+	if topo <= len(vm.stack) {
+		return
+	}
+	novo := len(vm.stack) * 2
+	for novo < topo {
+		novo *= 2
+	}
+	nova := make([]object.Object, novo)
+	copy(nova, vm.stack)
+	vm.stack = nova
+}
+func (vm *VM) pop() object.Object { vm.sp--; return vm.stack[vm.sp] }
 
 func (vm *VM) currentFrame() *Frame { return vm.frames[vm.framesIdx-1] }
-func (vm *VM) pushFrame(f *Frame) {
+func (vm *VM) popFrame() *Frame     { vm.framesIdx--; return vm.frames[vm.framesIdx] }
+
+// novosFrames devolve o array de slots de frame (ponteiros nil). Os *Frame sao
+// alocados sob demanda por frameEm e REUSADOS nas chamadas seguintes na mesma
+// profundidade — assim so alocamos ate a profundidade maxima de chamada do
+// programa (nao os 1024 slots de uma vez).
+func novosFrames() []*Frame {
+	return make([]*Frame, MaxFrames)
+}
+
+// frameEm devolve o *Frame do slot, alocando na primeira vez e reusando depois.
+func (vm *VM) frameEm(idx int) *Frame {
+	fr := vm.frames[idx]
+	if fr == nil {
+		fr = &Frame{}
+		vm.frames[idx] = fr
+	}
+	return fr
+}
+
+// empurraFrame reusa o *Frame do topo (aloca so na primeira visita aquela
+// profundidade), setando seus campos sem alocar por chamada. Faz o bounds-check
+// de overflow (recursao funda demais).
+func (vm *VM) empurraFrame(fn *object.CompiledFunction, bp, callPos int) *Frame {
 	if vm.framesIdx >= MaxFrames {
 		panic(VMError{err: &object.Erro{Message: fmt.Sprintf("recursao funda demais (passou de %d chamadas) — usa recursao em cauda (funciona f(...)) ou um laco", MaxFrames), Kind: "runtime"}})
 	}
-	vm.frames[vm.framesIdx] = f
+	fr := vm.frameEm(vm.framesIdx)
+	fr.fn = fn
+	fr.ip = 0
+	fr.basePointer = bp
+	fr.callPos = callPos
 	vm.framesIdx++
+	return fr
 }
-func (vm *VM) popFrame() *Frame     { vm.framesIdx--; return vm.frames[vm.framesIdx] }
 
 // clone devolve uma VM nova pronta pra rodar em goroutine: compartilha
 // constants/globals/builtins/out com a original (igual o tree-walker, que
@@ -158,10 +275,11 @@ func (vm *VM) clone() *VM {
 		constants:  vm.constants,
 		inst:       vm.inst,
 		linhas:     vm.linhas,
-		stack:      make([]object.Object, StackSize),
+		stack:      make([]object.Object, StackInicial),
 		sp:         0,
 		globals:    vm.globals, // slice compartilhado — pagadores por concorrencia
-		frames:     make([]*Frame, MaxFrames),
+		frames:     novosFrames(),
+		subVMs:     vm.subVMs,
 		builtinIdx: vm.builtinIdx,
 		builtins:   vm.builtins,
 		out:        vm.out,
@@ -234,7 +352,11 @@ func (vm *VM) execBoraCall(argc int) {
 // Run executa o bytecode. frame e ip reciclados entre chamadas via execFrame.
 func (vm *VM) Run() error {
 	main := &object.CompiledFunction{Name: "<main>", Bytecode: vm.inst, NumLocals: 0, Linhas: vm.linhas}
-	vm.frames[0] = &Frame{fn: main, ip: 0, basePointer: 0}
+	fr0 := vm.frameEm(0)
+	fr0.fn = main
+	fr0.ip = 0
+	fr0.basePointer = 0
+	fr0.callPos = 0
 	vm.framesIdx = 1
 
 	err := vm.execFrame(vm.frames[0])
@@ -374,7 +496,13 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 		case code.OpGetGlobal:
 			idx := int(code.ReadUint16(fn.Bytecode[ip+1:]))
 			ip += 3
-			vm.push(vm.globals[idx])
+			if idx >= len(vm.globals) {
+				// global enderecada mas nunca escrita (ex.: so atribuida num
+				// ramo que nao rodou): vale `nada`, igual ao tree-walker.
+				vm.push(NADA)
+			} else {
+				vm.push(vm.globals[idx])
+			}
 		case code.OpSetGlobal:
 			idx := int(code.ReadUint16(fn.Bytecode[ip+1:]))
 			ip += 3
@@ -408,7 +536,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 		case code.OpHash:
 			n := int(code.ReadUint16(fn.Bytecode[ip+1:]))
 			ip += 3
-			pares := map[object.HashKey]object.ParDic{}
+			dic := object.NovoDicionario()
 			base := vm.sp - 2*n
 			for i := 0; i < n; i++ {
 				chave := vm.stack[base+2*i]
@@ -417,10 +545,10 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				if !ok {
 					panic(VMError{err: &object.Erro{Message: "chave de dicionario inaceitavel: " + string(chave.Type()), Kind: "runtime"}})
 				}
-				pares[c.ChaveHash()] = object.ParDic{Chave: chave, Valor: valor}
+				dic.Bota(c.ChaveHash(), object.ParDic{Chave: chave, Valor: valor})
 			}
 			vm.sp = base
-			vm.push(&object.Dicionario{Pares: pares})
+			vm.push(dic)
 		case code.OpIndex:
 			idx := vm.pop()
 			cont := vm.pop()
@@ -485,9 +613,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				vm.push(c)
 			case *object.Dicionario:
 				chaves := make([]object.Object, 0, len(c.Pares))
-				for _, par := range c.Pares {
-					chaves = append(chaves, par.Chave)
-				}
+				c.Itera(func(par object.ParDic) { chaves = append(chaves, par.Chave) })
 				vm.push(&object.Lista{Elements: chaves})
 			default:
 				panic(VMError{err: &object.Erro{Message: fmt.Sprintf("pra_cada ... em ... so funciona com lista ou dicionario, e isso ai e %s", it.Type()), Kind: "runtime"}})
@@ -554,6 +680,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					}
 				}
 				bp := vm.sp - 1 - argc
+				vm.garanteEspaco(bp + cf.NumLocals)
 				// varargs: coleta extras numa lista (antes de ajustar sp)
 				if cf.Variadic && argc >= cf.NumArgs {
 					variadicIdx := cf.NumArgs - 1
@@ -576,11 +703,9 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					}
 					argc = cf.NumArgs
 				}
-				newFrame := &Frame{fn: cf, ip: 0, basePointer: bp, callPos: opPos}
 				vm.sp = bp + cf.NumLocals
 				frame.ip = ip
-				vm.pushFrame(newFrame)
-				frame = newFrame
+				frame = vm.empurraFrame(cf, bp, opPos)
 				fn = cf
 				ip = 0
 				continue
@@ -624,6 +749,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					}
 				}
 				bpCall := vm.sp - 1 - argc
+				vm.garanteEspaco(bpCall + cf.NumLocals)
 				if cf.Variadic && argc >= cf.NumArgs {
 					variadicIdx := cf.NumArgs - 1
 					nExtras := argc - variadicIdx
@@ -646,6 +772,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				// corrente e troca a funcao, sem empilhar. Recursao em cauda roda em
 				// profundidade constante de frames.
 				bp := frame.basePointer
+				vm.garanteEspaco(bp + cf.NumLocals)
 				copy(vm.stack[bp:bp+cf.NumArgs], vm.stack[bpCall:bpCall+cf.NumArgs])
 				vm.sp = bp + cf.NumLocals
 				frame.fn = cf
@@ -871,6 +998,7 @@ func (vm *VM) handleVMError(e *object.Erro) {
 	}
 	alvo := vm.currentFrame()
 	// descarta operandos pendentes e restabelece o espaco de locals
+	vm.garanteEspaco(alvo.basePointer + alvo.fn.NumLocals)
 	vm.sp = alvo.basePointer + alvo.fn.NumLocals
 	vm.push(e)
 	alvo.ip = h.catchAddr
@@ -1178,7 +1306,7 @@ func vmIndexSet(cont, idx, val object.Object) error {
 		if !ok {
 			return fmt.Errorf("chave de dicionario invalida")
 		}
-		c.Pares[chave.ChaveHash()] = object.ParDic{Chave: idx, Valor: val}
+		c.Bota(chave.ChaveHash(), object.ParDic{Chave: idx, Valor: val})
 	default:
 		return fmt.Errorf("nao da pra atribuir indice em %s", cont.Type())
 	}

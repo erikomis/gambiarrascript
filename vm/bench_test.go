@@ -70,3 +70,14 @@ mostra "ok"`
 func BenchmarkFib(b *testing.B)  { rodaBench(b, compilaBench(b, fonteFib)) }
 func BenchmarkSort(b *testing.B) { rodaBench(b, compilaBench(b, fonteSort)) }
 func BenchmarkJson(b *testing.B) { rodaBench(b, compilaBench(b, fonteJson)) }
+
+// fonteMapeia exercita a ponte interpreter->VM: `mapeia` e um builtin do
+// interpreter que chama a gambiarra do usuario (CompiledFunction) uma vez por
+// elemento, via ChamaCompilada. E o caminho que mais custava por chamada.
+const fonteMapeia = `bota xs = 1..5000
+gambiarra dobra(x)
+    funciona x * 2
+acabou_finalmente
+mostra mapeia(xs, dobra)[4999]`
+
+func BenchmarkMapeia(b *testing.B) { rodaBench(b, compilaBench(b, fonteMapeia)) }

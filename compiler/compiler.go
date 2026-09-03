@@ -38,6 +38,16 @@ type SymbolTable struct {
 	free    []Symbol // freeVars coletadas
 }
 
+// NumGlobais conta os simbolos do escopo mais externo (as globais). Chamada no
+// fim da compilacao, quando c.scope ja voltou pro topo.
+func (s *SymbolTable) NumGlobais() int {
+	topo := s
+	for topo.outer != nil {
+		topo = topo.outer
+	}
+	return topo.count
+}
+
 func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{symbols: map[string]Symbol{}}
 }
@@ -230,6 +240,11 @@ type Bytecode struct {
 	// Linhas e a tabela pc->linha do fluxo principal (funcoes carregam a
 	// propria tabela dentro da CompiledFunction).
 	Linhas []object.LinhaPC
+	// NumGlobals e quantas variaveis globais o programa declara. A VM aloca
+	// EXATAMENTE isso: o slice de globais e compartilhado com os clones do
+	// `bora`, entao ele nao pode ser realocado depois (os clones ficariam com
+	// o array velho e as escritas parariam de se enxergar).
+	NumGlobals int
 }
 
 func (c *Compiler) Bytecode() *Bytecode {
@@ -238,6 +253,7 @@ func (c *Compiler) Bytecode() *Bytecode {
 		Constants:    c.constants,
 		Functions:    c.compiledFns,
 		Linhas:       c.linhas,
+		NumGlobals:   c.scope.NumGlobais(),
 	}
 }
 

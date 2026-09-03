@@ -60,8 +60,30 @@ type Numero struct {
 	EhInt bool
 }
 
-// NumInt cria um numero inteiro exato.
-func NumInt(i int64) *Numero { return &Numero{Value: float64(i), Int: i, EhInt: true} }
+// Cache de inteiros pequenos: como Numero e imutavel, inteiros comuns viram
+// singletons compartilhados (estilo Python/Java), eliminando a maior fonte de
+// alocacao da VM (aritmetica inteira em loops/recursao).
+const (
+	intCacheMin = -256
+	intCacheMax = 1024
+)
+
+var intCache = func() [intCacheMax - intCacheMin + 1]*Numero {
+	var c [intCacheMax - intCacheMin + 1]*Numero
+	for i := range c {
+		v := int64(i) + intCacheMin
+		c[i] = &Numero{Value: float64(v), Int: v, EhInt: true}
+	}
+	return c
+}()
+
+// NumInt cria um numero inteiro exato (reusa o cache pra inteiros pequenos).
+func NumInt(i int64) *Numero {
+	if i >= intCacheMin && i <= intCacheMax {
+		return intCache[i-intCacheMin]
+	}
+	return &Numero{Value: float64(i), Int: i, EhInt: true}
+}
 
 // NumFloat cria um numero de ponto flutuante.
 func NumFloat(f float64) *Numero { return &Numero{Value: f} }
@@ -340,14 +362,78 @@ type ParDic struct {
 
 type Dicionario struct {
 	Pares map[HashKey]ParDic
+	// Ordem guarda as chaves na ordem em que ENTRARAM. Sem ela a iteracao usava
+	// a ordem do map do Go, que e embaralhada de proposito e muda a cada
+	// execucao — `pra_cada k em d` saia diferente toda vez que voce rodava.
+	// Igual Python 3.7+ e JS: quem chega primeiro, sai primeiro.
+	Ordem []HashKey
+}
+
+// NovoDicionario cria um dicionario vazio pronto pra receber Bota.
+func NovoDicionario() *Dicionario {
+	return &Dicionario{Pares: map[HashKey]ParDic{}}
+}
+
+// Bota insere ou atualiza um par mantendo a ordem de insercao. Sobrescrever
+// chave que ja existe NAO muda o lugar dela na ordem (igual Python/JS).
+func (d *Dicionario) Bota(k HashKey, par ParDic) {
+	if _, ja := d.Pares[k]; !ja {
+		d.Ordem = append(d.Ordem, k)
+	}
+	d.Pares[k] = par
+}
+
+// Tira remove a chave do dicionario e da ordem.
+func (d *Dicionario) Tira(k HashKey) {
+	if _, ja := d.Pares[k]; !ja {
+		return
+	}
+	delete(d.Pares, k)
+	for i, o := range d.Ordem {
+		if o == k {
+			d.Ordem = append(d.Ordem[:i], d.Ordem[i+1:]...)
+			break
+		}
+	}
+}
+
+// Chaves devolve as chaves na ordem de insercao. Se alguem escreveu direto no
+// mapa (sem passar por Bota), a chave orfa entra no fim em vez de sumir — a
+// iteracao pode perder a ORDEM, nunca um par.
+func (d *Dicionario) Chaves() []HashKey {
+	if len(d.Ordem) == len(d.Pares) {
+		return d.Ordem
+	}
+	vistas := make(map[HashKey]bool, len(d.Ordem))
+	ordem := make([]HashKey, 0, len(d.Pares))
+	for _, k := range d.Ordem {
+		if _, existe := d.Pares[k]; existe && !vistas[k] {
+			vistas[k] = true
+			ordem = append(ordem, k)
+		}
+	}
+	for k := range d.Pares {
+		if !vistas[k] {
+			ordem = append(ordem, k)
+		}
+	}
+	d.Ordem = ordem
+	return d.Ordem
+}
+
+// Itera roda a funcao em cada par, na ordem de insercao.
+func (d *Dicionario) Itera(f func(ParDic)) {
+	for _, k := range d.Chaves() {
+		f(d.Pares[k])
+	}
 }
 
 func (d *Dicionario) Type() ObjectType { return DICIONARIO_OBJ }
 func (d *Dicionario) Inspect() string {
 	partes := make([]string, 0, len(d.Pares))
-	for _, par := range d.Pares {
+	d.Itera(func(par ParDic) {
 		partes = append(partes, inspectComAspas(par.Chave)+": "+inspectComAspas(par.Valor))
-	}
+	})
 	return "{" + strings.Join(partes, ", ") + "}"
 }
 

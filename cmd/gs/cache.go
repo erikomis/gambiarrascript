@@ -31,6 +31,7 @@ type cacheGSC struct {
 	Constants    []object.Object
 	Instructions []byte
 	Linhas       []object.LinhaPC // tabela pc->linha do fluxo principal
+	NumGlobals   int              // quantas globais o programa declara
 }
 
 // carregaCache tenta ler um .gsc valido pro arquivo/fonte. Devolve nil se
@@ -55,6 +56,7 @@ func carregaCache(caminhoGSC string, fonte []byte) *compiler.Bytecode {
 		Instructions: code.Instructions(c.Instructions),
 		Constants:    c.Constants,
 		Linhas:       c.Linhas,
+		NumGlobals:   c.NumGlobals,
 	}
 }
 
@@ -74,6 +76,7 @@ func gravaCache(caminhoGSC string, fonte []byte, bc *compiler.Bytecode) {
 		Constants:    bc.Constants,
 		Instructions: []byte(bc.Instructions),
 		Linhas:       bc.Linhas,
+		NumGlobals:   bc.NumGlobals,
 	}
 	if err := gob.NewEncoder(f).Encode(&c); err != nil {
 		fmt.Fprintf(os.Stderr, "aviso: cache nao gravado: %v\n", err)
