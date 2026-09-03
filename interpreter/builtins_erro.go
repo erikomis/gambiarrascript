@@ -86,12 +86,12 @@ func builtinErroPilha(args []object.Object) object.Object {
 	}
 	elems := make([]object.Object, 0, len(e.Stack))
 	for _, f := range e.Stack {
-		pares := map[object.HashKey]object.ParDic{}
+		dic := object.NovoDicionario()
 		k1 := &object.Texto{Value: "funcao"}
-		pares[k1.ChaveHash()] = object.ParDic{Chave: k1, Valor: &object.Texto{Value: f.Funcao}}
+		dic.Bota(k1.ChaveHash(), object.ParDic{Chave: k1, Valor: &object.Texto{Value: f.Funcao}})
 		k2 := &object.Texto{Value: "linha"}
-		pares[k2.ChaveHash()] = object.ParDic{Chave: k2, Valor: &object.Numero{Value: float64(f.Line)}}
-		elems = append(elems, &object.Dicionario{Pares: pares})
+		dic.Bota(k2.ChaveHash(), object.ParDic{Chave: k2, Valor: &object.Numero{Value: float64(f.Line)}})
+		elems = append(elems, dic)
 	}
 	return &object.Lista{Elements: elems}
 }

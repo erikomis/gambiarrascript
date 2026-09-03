@@ -51,15 +51,15 @@ func builtinRodaComando(args []object.Object) object.Object {
 		}
 	}
 
-	pares := map[object.HashKey]object.ParDic{}
+	dic := object.NovoDicionario()
 	set := func(chave string, valor object.Object) {
 		k := &object.Texto{Value: chave}
-		pares[k.ChaveHash()] = object.ParDic{Chave: k, Valor: valor}
+		dic.Bota(k.ChaveHash(), object.ParDic{Chave: k, Valor: valor})
 	}
 	set("saida", &object.Texto{Value: stdout.String()})
 	set("erro", &object.Texto{Value: stderr.String()})
 	set("codigo", object.NumInt(int64(codigo)))
-	return &object.Dicionario{Pares: pares}
+	return dic
 }
 
 // builtinSai encerra o script com um codigo de saida (default 0). Devolve o

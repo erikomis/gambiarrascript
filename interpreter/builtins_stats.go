@@ -176,7 +176,7 @@ func (i *Interpreter) builtinAgrupaPor(args []object.Object) object.Object {
 		return erroBuiltin("agrupa_por: 1o arg tem que ser lista, veio %s", args[0].Type())
 	}
 	fn := args[1]
-	dic := &object.Dicionario{Pares: map[object.HashKey]object.ParDic{}}
+	dic := object.NovoDicionario()
 	for _, e := range lst.Elements {
 		chaveObj := i.applyFunction(fn, []object.Object{e}, 0, "<agrupa_por>")
 		if isError(chaveObj) {
@@ -194,7 +194,7 @@ func (i *Interpreter) builtinAgrupaPor(args []object.Object) object.Object {
 		grupo := par.Valor.(*object.Lista)
 		grupo.Elements = append(grupo.Elements, e)
 		par.Valor = grupo
-		dic.Pares[hk] = par
+		dic.Bota(hk, par)
 	}
 	return dic
 }

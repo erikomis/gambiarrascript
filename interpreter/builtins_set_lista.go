@@ -37,9 +37,7 @@ func builtinConjunto(args []object.Object) object.Object {
 			c.Adiciona(&object.Texto{Value: string(r)})
 		}
 	case *object.Dicionario:
-		for _, p := range v.Pares {
-			c.Adiciona(p.Chave)
-		}
+		v.Itera(func(p object.ParDic) { c.Adiciona(p.Chave) })
 	case *object.Conjunto:
 		for _, e := range v.Items {
 			c.Adiciona(e)

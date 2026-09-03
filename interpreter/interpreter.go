@@ -645,7 +645,7 @@ func (i *Interpreter) evalAtribuiIndice(alvo *ast.IndexExpression, val object.Ob
 		if !ok {
 			return newError(linha, "essa chave (%s) nao da pra usar num dicionario", idx.Type())
 		}
-		c.Pares[chave.ChaveHash()] = object.ParDic{Chave: idx, Valor: val}
+		c.Bota(chave.ChaveHash(), object.ParDic{Chave: idx, Valor: val})
 		return NADA
 	default:
 		return newError(linha, "so da pra atribuir indice em lista ou dicionario, e isso ai e %s", cont.Type())
@@ -653,7 +653,7 @@ func (i *Interpreter) evalAtribuiIndice(alvo *ast.IndexExpression, val object.Ob
 }
 
 func (i *Interpreter) evalDicionario(node *ast.DicionarioLiteral, env *object.Environment) object.Object {
-	pares := map[object.HashKey]object.ParDic{}
+	dic := object.NovoDicionario()
 	for _, par := range node.Pares {
 		chave := i.Eval(par.Chave, env)
 		if isError(chave) {
@@ -667,9 +667,9 @@ func (i *Interpreter) evalDicionario(node *ast.DicionarioLiteral, env *object.En
 		if isError(valor) {
 			return valor
 		}
-		pares[chaveavel.ChaveHash()] = object.ParDic{Chave: chave, Valor: valor}
+		dic.Bota(chaveavel.ChaveHash(), object.ParDic{Chave: chave, Valor: valor})
 	}
-	return &object.Dicionario{Pares: pares}
+	return dic
 }
 
 func (i *Interpreter) evalIndex(left, index object.Object, linha int) object.Object {
@@ -908,7 +908,8 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 			}
 		}
 	case *object.Dicionario:
-		for _, par := range c.Pares {
+		for _, ch := range c.Chaves() {
+			par := c.Pares[ch]
 			if doisNomes {
 				env.Set(node.Vars[0].Value, par.Chave)
 				env.Set(node.Vars[1].Value, par.Valor)
@@ -968,14 +969,13 @@ func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Enviro
 			return res
 		}
 		// Cria um dicionario com todas as definicoes do modulo
-		pares := map[object.HashKey]object.ParDic{}
+		modulo := object.NovoDicionario()
 		for _, nome := range modEnv.Locais() {
 			if v, ok := modEnv.Get(nome); ok {
 				chave := &object.Texto{Value: nome}
-				pares[chave.ChaveHash()] = object.ParDic{Chave: chave, Valor: v}
+				modulo.Bota(chave.ChaveHash(), object.ParDic{Chave: chave, Valor: v})
 			}
 		}
-		modulo := &object.Dicionario{Pares: pares}
 		env.Set(node.Alias.Value, modulo)
 		return NADA
 	}

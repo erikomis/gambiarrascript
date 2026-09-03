@@ -3,6 +3,7 @@ package interpreter
 import (
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -109,7 +110,8 @@ func opcaoCabecalhos(d *object.Dicionario) (map[string]string, *object.Erro) {
 	if !ok {
 		return nil, erroBuiltin("a opcao \"cabecalhos\" tem que ser um dicionario, veio %s", par.Valor.Type())
 	}
-	for _, p := range dic.Pares {
+	for _, ch := range dic.Chaves() {
+		p := dic.Pares[ch]
 		chave, ok := p.Chave.(*object.Texto)
 		if !ok {
 			return nil, erroBuiltin("nome de cabecalho tem que ser texto, veio %s", p.Chave.Type())
@@ -136,21 +138,33 @@ func opcaoTimeout(d *object.Dicionario) (time.Duration, *object.Erro) {
 }
 
 func montaResposta(resp *http.Response, corpo string) object.Object {
-	pares := map[object.HashKey]object.ParDic{}
+	dic := object.NovoDicionario()
 	set := func(chave string, valor object.Object) {
 		k := &object.Texto{Value: chave}
-		pares[k.ChaveHash()] = object.ParDic{Chave: k, Valor: valor}
+		dic.Bota(k.ChaveHash(), object.ParDic{Chave: k, Valor: valor})
 	}
 	set("status", &object.Numero{Value: float64(resp.StatusCode)})
 	set("ok", boolDoNativo(resp.StatusCode >= 200 && resp.StatusCode <= 299))
 	set("corpo", &object.Texto{Value: corpo})
 
-	cab := map[object.HashKey]object.ParDic{}
-	for nome, valores := range resp.Header {
+	cab := object.NovoDicionario()
+	for _, nome := range chavesOrdenadas(resp.Header) {
 		k := &object.Texto{Value: nome}
-		cab[k.ChaveHash()] = object.ParDic{Chave: k, Valor: &object.Texto{Value: strings.Join(valores, ", ")}}
+		cab.Bota(k.ChaveHash(), object.ParDic{Chave: k, Valor: &object.Texto{Value: strings.Join(resp.Header[nome], ", ")}})
 	}
-	set("cabecalhos", &object.Dicionario{Pares: cab})
+	set("cabecalhos", cab)
 
-	return &object.Dicionario{Pares: pares}
+	return dic
+}
+
+// chavesOrdenadas devolve os nomes de um multimap (cabecalhos, query) em ordem
+// alfabetica. O map do Go entrega ordem embaralhada, e cabecalho/query viram
+// dicionario da linguagem — que agora tem ordem estavel.
+func chavesOrdenadas(m map[string][]string) []string {
+	nomes := make([]string, 0, len(m))
+	for k := range m {
+		nomes = append(nomes, k)
+	}
+	sort.Strings(nomes)
+	return nomes
 }

@@ -183,9 +183,7 @@ func builtinChaves(args []object.Object) object.Object {
 		return erroBuiltin("chaves() so funciona com dicionario, veio %s", args[0].Type())
 	}
 	elems := make([]object.Object, 0, len(d.Pares))
-	for _, par := range d.Pares {
-		elems = append(elems, par.Chave)
-	}
+	d.Itera(func(par object.ParDic) { elems = append(elems, par.Chave) })
 	return &object.Lista{Elements: elems}
 }
 

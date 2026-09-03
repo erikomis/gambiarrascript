@@ -112,28 +112,28 @@ func (s *servidorEstado) montaPedido(r *http.Request) (*object.Dicionario, error
 		return nil, err
 	}
 
-	pares := map[object.HashKey]object.ParDic{}
+	dic := object.NovoDicionario()
 	set := func(chave string, valor object.Object) {
 		k := &object.Texto{Value: chave}
-		pares[k.ChaveHash()] = object.ParDic{Chave: k, Valor: valor}
+		dic.Bota(k.ChaveHash(), object.ParDic{Chave: k, Valor: valor})
 	}
 	set("metodo", &object.Texto{Value: r.Method})
 	set("caminho", &object.Texto{Value: r.URL.Path})
 	set("corpo", &object.Texto{Value: string(corpo)})
 	set("cabecalhos", dicDeMultimap(r.Header))
 	set("query", dicDeMultimap(r.URL.Query()))
-	return &object.Dicionario{Pares: pares}, nil
+	return dic, nil
 }
 
 // dicDeMultimap converte um map[string][]string (header/query) num dicionario
 // texto->texto, juntando multiplos valores com ", ".
 func dicDeMultimap(m map[string][]string) *object.Dicionario {
-	pares := map[object.HashKey]object.ParDic{}
-	for nome, valores := range m {
+	dic := object.NovoDicionario()
+	for _, nome := range chavesOrdenadas(m) {
 		k := &object.Texto{Value: nome}
-		pares[k.ChaveHash()] = object.ParDic{Chave: k, Valor: &object.Texto{Value: strings.Join(valores, ", ")}}
+		dic.Bota(k.ChaveHash(), object.ParDic{Chave: k, Valor: &object.Texto{Value: strings.Join(m[nome], ", ")}})
 	}
-	return &object.Dicionario{Pares: pares}
+	return dic
 }
 
 func (s *servidorEstado) escreveResposta(w http.ResponseWriter, resultado object.Object) {
@@ -157,13 +157,13 @@ func (s *servidorEstado) escreveRespostaDict(w http.ResponseWriter, d *object.Di
 	// cabecalhos primeiro (antes de WriteHeader)
 	if par, ok := d.Pares[(&object.Texto{Value: "cabecalhos"}).ChaveHash()]; ok {
 		if cab, ok := par.Valor.(*object.Dicionario); ok {
-			for _, p := range cab.Pares {
+			cab.Itera(func(p object.ParDic) {
 				nome, nok := p.Chave.(*object.Texto)
 				valor, vok := p.Valor.(*object.Texto)
 				if nok && vok {
 					w.Header().Set(nome.Value, valor.Value)
 				}
-			}
+			})
 		}
 	}
 	// status (default 200); clamp: valores fora de 100-599 viram 500

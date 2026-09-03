@@ -46,16 +46,16 @@ func builtinLeCsv(args []object.Object) object.Object {
 	cabecalho := records[0]
 	linhas := make([]object.Object, 0, len(records)-1)
 	for _, rec := range records[1:] {
-		d := &object.Dicionario{Pares: map[object.HashKey]object.ParDic{}}
+		d := object.NovoDicionario()
 		for i, val := range rec {
 			if i >= len(cabecalho) {
 				break
 			}
 			chave := &object.Texto{Value: cabecalho[i]}
-			d.Pares[chave.ChaveHash()] = object.ParDic{
+			d.Bota(chave.ChaveHash(), object.ParDic{
 				Chave: chave,
 				Valor: &object.Texto{Value: val},
-			}
+			})
 		}
 		linhas = append(linhas, d)
 	}
@@ -94,11 +94,11 @@ func builtinEscreveCsv(args []object.Object) object.Object {
 	}
 	if cabecalhos == nil && len(lista.Elements) > 0 {
 		if primeiro, ok := lista.Elements[0].(*object.Dicionario); ok {
-			for _, par := range primeiro.Pares {
+			primeiro.Itera(func(par object.ParDic) {
 				if t, ok := par.Chave.(*object.Texto); ok {
 					cabecalhos = append(cabecalhos, t.Value)
 				}
-			}
+			})
 		}
 	}
 

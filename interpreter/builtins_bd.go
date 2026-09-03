@@ -153,12 +153,12 @@ func builtinConsulta(args []object.Object) object.Object {
 		if err := rows.Scan(ptrs...); err != nil {
 			return erroBuiltin("escanear linha: %v", err)
 		}
-		pares := map[object.HashKey]object.ParDic{}
+		dic := object.NovoDicionario()
 		for i, c := range cols {
 			chave := &object.Texto{Value: c}
-			pares[chave.ChaveHash()] = object.ParDic{Chave: chave, Valor: goParaObj(valores[i])}
+			dic.Bota(chave.ChaveHash(), object.ParDic{Chave: chave, Valor: goParaObj(valores[i])})
 		}
-		linhas = append(linhas, &object.Dicionario{Pares: pares})
+		linhas = append(linhas, dic)
 	}
 	if err := rows.Err(); err != nil {
 		return erroBuiltin("iteracao: %v", err)
