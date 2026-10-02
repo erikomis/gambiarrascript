@@ -154,3 +154,28 @@ mostra nada == 0      # deu_ruim
 mostra nada == nada   # deu_bom
 mostra "" == nada     # deu_ruim
 ```
+
+## Ordem de avaliacao na chamada muda entre os motores
+
+Numa chamada `f(args)`, o tree-walker (`gs roda --tree`) avalia **primeiro** o
+que vai ser chamado e **depois** os argumentos; a VM (o padrao) faz o
+contrario. So aparece quando as duas partes tem efeito colateral (imprimem,
+mexem em estado...):
+
+```gambiarrascript
+gambiarra pega_f()
+    mostra "pegou a funcao"
+    funciona gambiarra(x) funciona x acabou_finalmente
+acabou_finalmente
+
+gambiarra arg()
+    mostra "calculou o argumento"
+    funciona 1
+acabou_finalmente
+
+pega_f()(arg())
+# gs roda:        calculou o argumento / pegou a funcao
+# gs roda --tree: pegou a funcao / calculou o argumento
+```
+
+Nao dependa dessa ordem: se importa, separa em dois `bota` antes de chamar.

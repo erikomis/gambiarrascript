@@ -41,6 +41,51 @@ mostra pra_json(de_json(`{"z": 1, "a": 2}`))                     # {"z":1,"a":2}
 
 O ida-e-volta `de_json` → `pra_json` preserva a ordem das chaves.
 
+## Validando o que chegou
+
+JSON que vem de fora pode ser qualquer coisa: um array onde voce esperava
+objeto, `"dois"` onde era pra ser numero, campo faltando. O `tipo(x)` devolve
+o nome do tipo em texto, entao da pra conferir antes de usar (campo que nao
+existe vira `nada`, e `tipo(nada)` e `"nada"`):
+
+```gambiarrascript
+gambiarra valida_pedido(json)
+    bota p = de_json(json)
+    se_colar tipo(p) != "dicionario"
+        quebra("esperava um objeto, veio ${tipo(p)}")
+    acabou_finalmente
+    se_colar tipo(p.item) != "texto"
+        quebra("item tem que ser texto, veio ${tipo(p.item)}")
+    acabou_finalmente
+    se_colar tipo(p.qtd) != "numero"
+        quebra("qtd tem que ser numero, veio ${tipo(p.qtd)}")
+    acabou_finalmente
+    funciona p
+acabou_finalmente
+
+bota entradas = [
+    `{"item": "cafe", "qtd": 2}`,
+    `[1, 2]`,
+    `{"item": "pao", "qtd": "dois"}`,
+    `{"qtd": 1}`
+]
+pra_cada entrada em entradas
+    arruma
+        bota p = valida_pedido(entrada)
+        mostra "ok: ${p.qtd}x ${p.item}"
+    quebrou erro
+        mostra "recusado: " + erro_msg(erro)
+    acabou_finalmente
+acabou_finalmente
+# ok: 2x cafe
+# recusado: quebra: esperava um objeto, veio lista
+# recusado: quebra: qtd tem que ser numero, veio texto
+# recusado: quebra: item tem que ser texto, veio nada
+```
+
+Num [servidor](/docs/servidor), o `quebrou` e o lugar de devolver um `400`
+com a mensagem.
+
 ## API REST
 
 Junto com `rota` e `escuta`, da pra escrever uma API JSON inteira:

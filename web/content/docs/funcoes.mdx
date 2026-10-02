@@ -65,6 +65,70 @@ mostra soma_tudo(1)             # 1
 mostra soma_tudo(1, 2, 3, 4)    # 10
 ```
 
+## Espalhando lista na chamada (`f(...lista)`)
+
+O caminho inverso do varargs: `...lista` **dentro da chamada** espalha os
+itens da lista como argumentos separados. Da pra misturar com argumento
+normal, usar mais de um `...` na mesma chamada, e vale pra builtin tambem:
+
+```gambiarrascript
+gambiarra soma3(a, b, c)
+    funciona a + b + c
+acabou_finalmente
+
+bota xs = [1, 2, 3]
+mostra soma3(...xs)                  # 6
+mostra soma3(10, ...[20, 30])        # 60
+mostra max(...xs)                    # 3
+mostra max(0, ...xs, 9, ...[4, 5])   # 9
+
+bota args = ["%s tem %d anos", "Erik", 25]
+mostra formata(...args)              # Erik tem 25 anos
+```
+
+Funciona em qualquer coisa chamavel — gambiarra com nome, lambda, chamada com
+ponto (`modulo.f(...xs)`), `bora` — e conversa direitinho com varargs e
+parametro padrao (a aridade e conferida **depois** de espalhar):
+
+```gambiarrascript
+gambiarra soma_tudo(primeiro, ...resto)
+    bota total = primeiro
+    pra_cada x em resto
+        total += x
+    acabou_finalmente
+    funciona total
+acabou_finalmente
+
+gambiarra cumprimenta(nome, saudacao = "salve")
+    funciona saudacao + ", " + nome
+acabou_finalmente
+
+bota dobra = gambiarra(x) funciona x * 2 acabou_finalmente
+bota ops = {"soma": soma_tudo}
+
+mostra soma_tudo(...[1, 2], ...[3, 4])     # 10
+mostra cumprimenta(...["Erik"])            # salve, Erik
+mostra cumprimenta(...["Erik", "fala"])    # fala, Erik
+mostra dobra(...[21])                      # 42
+mostra ops.soma(...[5, 5])                 # 10
+mostra espera(bora soma_tudo(...[1, 2, 3]))   # 6
+```
+
+So da pra espalhar **lista**. Qualquer outra coisa e erro de runtime (que o
+`arruma` pega):
+
+```gambiarrascript
+arruma
+    mostra max(...42)
+quebrou erro
+    mostra erro_msg(erro)    # deu ruim na linha 2: so da pra espalhar lista, veio numero
+acabou_finalmente
+```
+
+E o `...` so existe nesses dois lugares — no ultimo parametro da declaracao
+(`gambiarra f(...resto)`) e dentro dos parenteses da chamada. Fora disso
+(`[...xs]`, `bota y = ...xs`) e erro de sintaxe antes de rodar.
+
 ## Aridade
 
 Fora os opcionais e o `...resto`, o numero de argumentos tem que bater.

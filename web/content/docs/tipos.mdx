@@ -6,25 +6,48 @@ description: Numeros, textos, booleanos, colecoes e companhia - e como operar el
 GambiarraScript e dinamica: o tipo e o que voce guarda no runtime, nao tem
 declaracao de tipo nenhuma.
 
-| Tipo        | Literal / como nasce                       | `mostra` imprime |
-| ----------- | ------------------------------------------ | ---------------- |
-| Numero      | `25`, `3.14`, `-1`, `0xFF`, `0o17`, `0b1010` | `25`, `3.14`, `255` |
-| Texto       | `"ola"`, `"oi ${nome}"` ou `` `ola` ``     | `ola` |
-| Booleano    | `deu_bom` / `deu_ruim`                     | `deu_bom` / `deu_ruim` |
-| Nada        | `nada`                                     | `nada` |
-| Lista       | `[1, 2, 3]`, `1..3`                        | `[1, 2, 3]` |
-| Dicionario  | `{"nome": "Erik", "idade": 25}`            | `{"nome": "Erik", "idade": 25}` |
-| Conjunto    | `conjunto([1, 2, 2])`                      | `{1, 2}` |
-| Gambiarra   | `gambiarra f(x) ...` ou lambda `gambiarra(x) ...` | `gambiarra(x)` |
-| Futuro      | `bora f()`                                 | `<futuro em andamento>` |
-| Cano        | `cano()`                                   | `<cano sincrono>` |
-| Erro        | o que o `quebrou` captura                  | a mensagem |
+| Tipo        | Literal / como nasce                       | `mostra` imprime | `tipo(x)` |
+| ----------- | ------------------------------------------ | ---------------- | --------- |
+| Numero      | `25`, `3.14`, `-1`, `0xFF`, `0o17`, `0b1010` | `25`, `3.14`, `255` | `"numero"` |
+| Texto       | `"ola"`, `"oi ${nome}"` ou `` `ola` ``     | `ola` | `"texto"` |
+| Booleano    | `deu_bom` / `deu_ruim`                     | `deu_bom` / `deu_ruim` | `"booleano"` |
+| Nada        | `nada`                                     | `nada` | `"nada"` |
+| Lista       | `[1, 2, 3]`, `1..3`                        | `[1, 2, 3]` | `"lista"` |
+| Dicionario  | `{"nome": "Erik", "idade": 25}`            | `{"nome": "Erik", "idade": 25}` | `"dicionario"` |
+| Conjunto    | `conjunto([1, 2, 2])`                      | `{1, 2}` | `"conjunto"` |
+| Gambiarra   | `gambiarra f(x) ...` ou lambda `gambiarra(x) ...` | `gambiarra(x)` | `"funcao"` |
+| Futuro      | `bora f()`                                 | `<futuro em andamento>` | `"futuro"` |
+| Cano        | `cano()`                                   | `<cano sincrono>` | `"cano"` |
+| Erro        | o que o `quebrou` captura                  | a mensagem | `"erro"` |
+| Nativo      | `conecta(...)` (conexao de banco)          | `<nativo: conexao sqlite>` | `"nativo"` |
 
 `nada` e o unico valor nulo — nao tem `null`/`undefined` separados.
 
 Repara que, **dentro de uma lista**, texto aparece sem aspas (`[a, b]`), mas
 dentro de um dicionario aparece com (`{"a": "x"}`). Se precisar de um formato
 estavel pra maquina ler, use `pra_json`.
+
+## Qual e o tipo disso? `tipo(x)`
+
+`tipo(valor)` devolve o nome do tipo como **texto** (a ultima coluna da tabela
+acima). Todo chamavel — gambiarra com nome, lambda ou builtin — e `"funcao"`;
+inteiro e real sao os dois `"numero"`.
+
+```gambiarrascript
+mostra tipo(42)                  # numero
+mostra tipo(3.14)                # numero
+mostra tipo("oi")                # texto
+mostra tipo(nada)                # nada
+mostra tipo({"a": 1})            # dicionario
+mostra tipo(tamanho)             # funcao (builtin tambem conta)
+mostra tipo(gambiarra(x) funciona x acabou_finalmente)   # funcao
+mostra mapeia([1, "a", [2], deu_ruim], tipo)             # [numero, texto, lista, booleano]
+```
+
+Serve pra validar coisa que vem de fora (JSON, argumento de gambiarra) antes de
+usar — tem um exemplo em [JSON](/docs/json#validando-o-que-chegou). `tipo` e
+builtin, nao palavra-chave: se voce declarar uma `gambiarra tipo(...)` ou
+`bota tipo = ...`, o seu nome sombreia o builtin dali pra frente.
 
 ## Numeros
 
@@ -115,7 +138,8 @@ que sombreia o de fora. Mais em [Pegadinhas](/docs/pegadinhas#crava-nao-e-por-bl
 
 Tres jeitos de escrever:
 - `"..."` com escapes `\n`, `\t`, `\"`, `\\` (qualquer outro `\x` fica literal);
-- `"... ${expr} ..."` — **interpolacao**, avalia a expressao e cola no texto;
+- `"... ${expr} ..."` — **interpolacao**, avalia a expressao e cola no texto
+  (com formato opcional: `"${preco:.2f}"`);
 - `` `...` `` crase: string crua, multiline, sem escape.
 
 `+` concatena se qualquer lado for texto. Da pra indexar e fatiar texto como
@@ -241,7 +265,8 @@ Dao erro em runtime:
 
 | De -> Para | Como |
 | --- | --- |
-| qualquer -> texto | `texto(v)`, interpolacao `"${v}"` ou concatenando com texto |
+| qualquer -> texto | `texto(v)`, interpolacao `"${v}"` (com formato: `"${v:.2f}"`) ou concatenando com texto |
+| qualquer -> nome do tipo | `tipo(v)` — `"numero"`, `"texto"`, `"lista"`... |
 | texto -> numero | `numero(t)` — texto que nao e numero **da erro** (use `arruma` se vier de fora) |
 | texto -> lista | `separa(t, sep)` |
 | lista -> texto | `junta(lista, sep)` |

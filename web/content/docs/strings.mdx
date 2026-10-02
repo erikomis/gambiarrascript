@@ -50,8 +50,57 @@ mostra "conta: ${2 + 3 * 4}"               # conta: 14
 mostra "preco: \${nao interpola}"          # preco: ${nao interpola}
 ```
 
-`\${` escapa (sai `${` literal). Pra formato com casas decimais e alinhamento,
-tem o `formata` (printf) — veja [Biblioteca padrao](/docs/biblioteca#texto).
+`\${` escapa (sai `${` literal). O que vier dentro do `${...}` tem que ser
+**uma** expressao so: sobrou coisa (`"${x y}"`) e erro de sintaxe —
+`sobrou "y" depois da expressao em ${...}`.
+
+## Formato na interpolacao
+
+Casas decimais, zero a esquerda, alinhamento: bota `:formato` no fim do
+`${...}`. O formato e o mesmo verbo do [`formata`](/docs/biblioteca#texto)
+(printf), **sem o `%`**:
+
+```gambiarrascript
+bota preco = 4.5
+bota n = 7
+bota item = "cafe"
+
+mostra "R$ ${preco:.2f}"                  # R$ 4.50
+mostra "pedido #${n:05d}"                 # pedido #00007
+mostra "|${item:-8}|${preco:6.2f}|"       # |cafe    |  4.50|
+mostra "|${item:8}|"                      # |    cafe|
+mostra "${255:x} ${255:X} ${255:b}"       # ff FF 11111111
+mostra "${10:+d} ${"oi":q}"               # +10 "oi"
+mostra "${3:.2f}"                         # 3.00 (inteiro no f converte)
+mostra "total: ${preco * 3:.1f}"          # total: 13.5
+```
+
+- Sem verbo no fim (`${item:-8}`, `${item:8}`), o verbo e `v`: so largura e
+  alinhamento — negativo encosta na esquerda, positivo na direita.
+- O valor e convertido pro verbo, igual no `formata`: inteiro com `.2f` vira
+  `3.00`.
+- Vale na crase tambem: `` `${x:.3f}` ``.
+
+O formato e o que vem depois do **ultimo** `:` que esta fora de `()`, `[]`,
+`{}` e de texto. Entao `:` de dicionario, de fatia ou dentro de string nao
+confunde nada:
+
+```gambiarrascript
+mostra "${[1, 2, 3][1:]}"                 # [2, 3]
+mostra "${{"x": 1}}"                      # {"x": 1}
+mostra "${"a:b"}"                         # a:b
+mostra "|${"a:b":6}|"                     # |   a:b|
+```
+
+Formato que nao existe e erro de sintaxe, antes de rodar:
+
+```gambiarrascript
+bota x = 1
+mostra "${x:zz}"
+# formato "zz" invalido em ${...}: usa os verbos do formata sem o %, tipo ${x:.2f}, ${n:05d}, ${t:-8}
+```
+
+(`${x:%d}` tambem: o `%` fica de fora.)
 
 ## Concatenacao
 
@@ -107,7 +156,7 @@ definidos pra texto (so pra numero). Pra ordenar textos, use `ordena(lista)`.
 | `contem(t, pedaco)` | `(texto, texto)` | `booleano` | |
 | `comeca_com(t, prefixo)` | `(texto, texto)` | `booleano` | |
 | `termina_com(t, sufixo)` | `(texto, texto)` | `booleano` | |
-| `formata(modelo, ...)` | `(texto, qualquer...)` | `texto` | printf: `%v %s %d %f %x`, `%05d`, `%.2f`, `%-10s` |
+| `formata(modelo, ...)` | `(texto, qualquer...)` | `texto` | printf: `%v %s %d %f %x`, `%05d`, `%.2f`, `%-10s`; converte o valor pro verbo (`formata("%.2f", 3)` → `3.00`). Na interpolacao: `"${x:.2f}"` |
 | `numero(t)` | `(texto)` | `numero` | texto que nao e numero **da erro** |
 | `texto(v)` | `(qualquer)` | `texto` | conversao universal |
 

@@ -13,8 +13,21 @@ A extensao empacota tudo: highlight, snippets, comando de rodar, LSP.
 
 ### Instalar
 
-Precisa do `gs` no `PATH` (veja [Instalacao](/docs/instalacao)). Pra compilar
-a extensao:
+Precisa do `gs` no `PATH` (veja [Instalacao](/docs/instalacao)).
+
+O jeito mais facil: toda
+[release no GitHub](https://github.com/erikomis/gambiarrascript/releases) traz
+o `.vsix` da extensao pronto (`gambiarrascript-<versao>.vsix`), junto dos
+binarios. Baixa ele e, dentro do VSCode: `Extensions` → menu `...` →
+`Install from VSIX...` → escolhe o arquivo. Ou pelo terminal:
+
+```bash
+code --install-extension gambiarrascript-<versao>.vsix
+```
+
+#### Compilando do repo
+
+Prefere gerar na mao? Pra compilar a extensao:
 
 ```bash
 ./scripts/build-extension
@@ -40,7 +53,10 @@ aponta o `gambiarrascript-0.1.0.vsix`.
 - **Rodar arquivo**: tecla `F5` ou `cmd/Ctrl+R`, command palette
   `GambiarraScript: Rodar arquivo`.
 - **Abrir REPL**: command `GambiarraScript: Abrir REPL`.
-- **LSP integrado** (diagnosticos, autocomplete, hover).
+- **LSP integrado**: diagnosticos, autocomplete, hover, ir pra definicao
+  (`F12`), achar referencias (`Shift+F12`), renomear (`F2`), outline do
+  arquivo, ajuda de assinatura enquanto digita a chamada e formatar documento
+  (`Shift+Alt+F`) — detalhes na secao [LSP](#lsp-gs-lsp) abaixo.
 - Icone `.gs` customizado.
 
 ### Config
@@ -52,14 +68,17 @@ aponta o `gambiarrascript-0.1.0.vsix`.
 
 O servidor LSP usa stdin/stdout em JSON-RPC. Suporta:
 
-| feature | sim/nao |
+| feature | o que faz |
 | --- | --- |
-| Diagnosticos | sim, em `didOpen`/`didChange`: erros de sintaxe com linha/coluna + avisos do lint |
-| Autocomplete | sim — palavras-chave, builtins, identificadores |
-| Hover | sim — descricao curta de palavras-chave e builtins |
-| Go-to-definition | nao (ainda) |
-| Rename | nao |
-| Document symbols | nao |
+| Diagnosticos | em `didOpen`/`didChange`: erros de sintaxe com linha/coluna + avisos do lint |
+| Autocomplete | palavras-chave, builtins, identificadores |
+| Hover | descricao curta de palavras-chave e builtins |
+| Ir pra definicao | pula pra onde o nome foi declarado (`bota`, `crava`, `gambiarra`, parametro...), inclusive em **outro arquivo** quando o nome veio de um `importa`; com o cursor no caminho do `importa "x.gs"`, abre o arquivo |
+| Referencias | lista todo uso do nome; nome de topo e procurado tambem nos arquivos que importam ele (`importa "x.gs"` e `importa "x.gs" como m` → `m.nome`) |
+| Renomear | troca o nome em todas as referencias, entre arquivos tambem. Recusa palavra-chave, builtin, nome invalido e nome que ja existe no escopo (ou que mudaria o significado de outra referencia) |
+| Outline (document symbols) | gambiarras (com as aninhadas dentro), variaveis e constantes de topo e os `importa ... como` |
+| Ajuda de assinatura | ao digitar `(` ou `,` numa chamada, mostra os parametros (com padrao e `...resto`) e destaca o atual — pra gambiarra sua (o comentario `#` de cima vira a doc) e pra builtin |
+| Formatar documento | o mesmo formatter do [`gs formata`](#formatter-gs-formata); arquivo com erro de sintaxe nao e mexido |
 
 Os avisos do lint sao os mesmos do `gs check`: nome que nao existe (nao e
 builtin, palavra-chave, variavel, parametro nem `quebrou`), variavel `bota`

@@ -53,6 +53,35 @@ mostra soma_tudo(1, 2, 3, 4)          # 10
 A default may refer to earlier parameters (`gambiarra f(a, b = a * 2)`).
 `...rest` collects the leftover arguments into a list.
 
+## Spreading a list into a call (`f(...list)`)
+
+The other way around: `...list` **inside a call** spreads the list's items as
+separate arguments. You can mix it with plain arguments, use several spreads
+in one call, and it works with builtins too:
+
+```gambiarrascript
+gambiarra soma3(a, b, c)
+    funciona a + b + c
+acabou_finalmente
+
+bota xs = [1, 2, 3]
+mostra soma3(...xs)                  # 6
+mostra soma3(10, ...[20, 30])        # 60
+mostra max(...xs)                    # 3
+mostra max(0, ...xs, 9, ...[4, 5])   # 9
+
+bota args = ["%s tem %d anos", "Erik", 25]
+mostra formata(...args)              # Erik tem 25 anos
+```
+
+It works with anything callable — named functions, lambdas, dot-calls
+(`module.f(...xs)`), `bora` — and plays well with varargs and defaults (arity
+is checked **after** spreading). Only lists can be spread; anything else is a
+runtime error you can catch with `arruma` (`so da pra espalhar lista, veio
+numero`). `...` is only valid in those two places — the last parameter of a
+declaration and inside call parentheses; anywhere else (`[...xs]`) is a syntax
+error.
+
 ## Arity
 
 Apart from optional parameters and `...rest`, the argument count must match.

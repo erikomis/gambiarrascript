@@ -20,13 +20,27 @@ no tree-walker (`gs roda --tree`).
   dentro de um `arruma`. Veja [Arruma / quebrou](/docs/erros).
 </Callout>
 
-## Conversao e tamanho
+## Conversao, tamanho e tipo
 
 | Builtin | Assinatura | Devolve |
 | --- | --- | --- |
 | `texto(v)` | `(qualquer)` | `texto` — conversao universal (o mesmo que o `mostra` imprime) |
 | `numero(t)` | `(texto)` | `numero` — aceita `"42"`, `" 3.5 "`, `"1e3"`; texto nao-numerico **da erro** |
 | `tamanho(x)` | `(texto, lista ou dicionario)` | `numero` — em texto conta caracteres (UTF-8), nao bytes |
+| `tipo(x)` | `(qualquer)` | `texto` — `"numero"`, `"texto"`, `"booleano"`, `"nada"`, `"lista"`, `"dicionario"`, `"conjunto"`, `"funcao"`, `"erro"`, `"futuro"`, `"cano"` ou `"nativo"` |
+
+```gambiarrascript
+mostra tipo(3.14)                # numero
+mostra tipo([1, 2])              # lista
+mostra tipo(maiusculo)           # funcao
+mostra tipo(de_json(`null`))     # nada
+```
+
+Gambiarra com nome, lambda e builtin sao todas `"funcao"`; `"nativo"` e o que
+o `conecta` devolve (conexao de banco). Inteiro e real sao os dois
+`"numero"`. Uso tipico: validar JSON que veio de fora — veja
+[JSON](/docs/json#validando-o-que-chegou). Mais em
+[Tipos](/docs/tipos#qual-e-o-tipo-disso-tipox).
 
 ## Texto
 
@@ -40,16 +54,20 @@ no tree-walker (`gs roda --tree`).
 | `fatia(t, inicio, [fim])` | `(texto, numero, [numero])` | `texto` — limites sao ajustados pro tamanho do texto |
 | `contem(t, pedaco)` | `(texto, texto)` | `booleano` |
 | `comeca_com(t, prefixo)` / `termina_com(t, sufixo)` | `(texto, texto)` | `booleano` |
-| `formata(modelo, valores...)` | `(texto, qualquer...)` | `texto` — printf com os verbos do Go (`%v %s %d %f %x`, `%05d`, `%.2f`, `%-10s`) |
+| `formata(modelo, valores...)` | `(texto, qualquer...)` | `texto` — printf com os verbos do Go (`%v %s %d %f %x`, `%05d`, `%.2f`, `%-10s`); o valor e convertido pro verbo (`%.2f` aceita inteiro, `%d` aceita real inteiro) |
 
 ```gambiarrascript
 mostra formata("%-8s|%5.2f|%03d", "cafe", 3.14159, 7)   # cafe    | 3.14|007
 mostra formata("%v e %v", deu_bom, nada)                 # deu_bom e nada
 mostra formata("%x", 255)                                # ff
+mostra formata("%.2f", 3)                                # 3.00 (inteiro no %f funciona)
+mostra formata("%5.1f%%", 12)                            #  12.0%
 ```
 
 Na maior parte do tempo, a [interpolacao](/docs/strings#interpolacao) `"${expr}"`
-resolve sem `formata`. Indexar e fatiar texto direto (`t[0]`, `t[1:3]`) tambem
+resolve sem `formata` — inclusive com formato: `"${preco:.2f}"`, `"${n:05d}"`,
+`"${nome:-10}"` usam os mesmos verbos, so que sem o `%`
+(veja [formato na interpolacao](/docs/strings#formato-na-interpolacao)). Indexar e fatiar texto direto (`t[0]`, `t[1:3]`) tambem
 funciona — veja [Textos](/docs/strings).
 
 ## Regex
@@ -146,7 +164,7 @@ aceita conjunto — se precisar contar, faca `unicos(lista)` e conte a lista.
 | `abs(n)` | `(numero)` | `numero` | valor absoluto |
 | `arredonda(n)` | `(numero)` | `numero` | meio vai pra longe do zero (`2.5` → `3`, `-2.5` → `-3`) |
 | `teto(n)` / `chao(n)` | `(numero)` | `numero` | arredonda pra cima / pra baixo |
-| `min(n1, n2, ...)` / `max(n1, n2, ...)` | `(numero...)` | `numero` | pelo menos 1 numero (nao aceita lista — pra lista use `ordena` ou `reduz`) |
+| `min(n1, n2, ...)` / `max(n1, n2, ...)` | `(numero...)` | `numero` | pelo menos 1 numero (nao aceita lista direto — espalhe: `max(...xs)`) |
 | `seno(x)` / `cosseno(x)` / `tangente(x)` | `(numero)` | `numero` | angulo em **radianos** |
 | `log(x)` | `(numero)` | `numero` | logaritmo natural; `x <= 0` da erro |
 | `log10(x)` | `(numero)` | `numero` | logaritmo na base 10; `x <= 0` da erro |

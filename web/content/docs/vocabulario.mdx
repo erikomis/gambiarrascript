@@ -52,8 +52,8 @@ existe e o sentimento: `acabou_finalmente` fecha qualquer bloco aberto.
 | Atribuicao   | `bota x = ...`, `crava X = ...`; compostos `+= -= *= /= %= **= &= \|= ^= <<= >>=` sem `bota` |
 | Indice/fatia | `xs[i]`, `xs[-1]`, `xs[1:3]`, `xs[:2]`, `xs[2:]` |
 | Campo        | `dic.campo` (atalho pra `dic["campo"]`) |
-| Chamada      | `f(args)`; na declaracao: `f(a, b = 10, ...resto)` |
-| Texto        | `"oi ${nome}"` (interpolacao) |
+| Chamada      | `f(args)`; espalhando lista: `f(1, ...xs)`; na declaracao: `f(a, b = 10, ...resto)` |
+| Texto        | `"oi ${nome}"` (interpolacao), `"${preco:.2f}"` (com formato) |
 
 ### Precedencia (do mais fraco pro mais forte)
 
@@ -101,7 +101,7 @@ para referencia rapida:
 
 | Categoria | Funcoes |
 | --------- | -------- |
-| Conversao | `texto` `numero` `tamanho` |
+| Conversao / inspecao | `texto` `numero` `tamanho` `tipo` |
 | Texto | `maiusculo` `minusculo` `tira_espaco` `substitui` `separa` `junta` `fatia` `contem` `comeca_com` `termina_com` `formata` |
 | Regex | `busca_regex` `acha_regex` `combina_regex` `substitui_regex` `separa_regex` |
 | Lista | `adiciona` `remove` `ordena` `ordena_com` `inverte` `mapeia` `filtra` `reduz` `acha` `acha_indice` `unicos` `achatada` `ordena_por` `agrupa_por` `zip` `enumera` `soma` `media` |

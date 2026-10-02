@@ -52,8 +52,8 @@ that exists is the feeling: `acabou_finalmente` closes any open block.
 | Assignment  | `bota x = ...`, `crava X = ...`; compound `+= -= *= /= %= **= &= \|= ^= <<= >>=` without `bota` |
 | Index/slice | `xs[i]`, `xs[-1]`, `xs[1:3]`, `xs[:2]`, `xs[2:]` |
 | Field       | `dict.field` (shorthand for `dict["field"]`) |
-| Call        | `f(args)`; in a declaration: `f(a, b = 10, ...rest)` |
-| String      | `"hi ${name}"` (interpolation) |
+| Call        | `f(args)`; spreading a list: `f(1, ...xs)`; in a declaration: `f(a, b = 10, ...rest)` |
+| String      | `"hi ${name}"` (interpolation), `"${price:.2f}"` (with a format spec) |
 
 ### Precedence (weakest to strongest)
 
@@ -102,7 +102,7 @@ The [Standard library](/docs/biblioteca) (pt) has the full reference. Quick map:
 
 | Category | Functions |
 | -------- | --------- |
-| Conversion | `texto` `numero` `tamanho` |
+| Conversion / inspection | `texto` `numero` `tamanho` `tipo` (type name as text: `"numero"`, `"lista"`, `"funcao"`...) |
 | String | `maiusculo` `minusculo` `tira_espaco` `substitui` `separa` `junta` `fatia` `contem` `comeca_com` `termina_com` `formata` |
 | Regex | `busca_regex` `acha_regex` `combina_regex` `substitui_regex` `separa_regex` |
 | List | `adiciona` `remove` `ordena` `ordena_com` `inverte` `mapeia` `filtra` `reduz` `acha` `acha_indice` `unicos` `achatada` `ordena_por` `agrupa_por` `zip` `enumera` `soma` `media` |
