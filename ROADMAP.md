@@ -595,13 +595,23 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
 - [ ] **multi-catch** — já listado no Tier 2; com `tipo()` e `erro_tipo` fica
       natural: `quebrou erro se erro_tipo(erro) == "rede"`.
 
-**Editor / LSP** — hoje o LSP só tem completion, hover e diagnostics:
+**Editor / LSP**
 
-- [ ] **Ir pra definição** e **achar referências** (gambiarra, `bota`,
-      `crava`, `importa`).
-- [ ] **Renomear símbolo** e **formatar documento** pelo LSP (o `formatter`
-      já existe; falta expor `textDocument/formatting`).
-- [ ] **Signature help** — mostra `formata(modelo, valores...)` enquanto digita.
+- [x] **Ir pra definição** e **achar referências** — resolve igual ao runtime
+      (só gambiarra/lambda abre escopo), inclusive dentro de `${...}` e entre
+      arquivos (`importa`, `importa ... como m` + `m.f`). Referências de
+      símbolo de topo varrem os `.gs` abertos e o workspace.
+- [x] **Renomear** (com prepareRename; recusa keyword, builtin, nome que
+      já existe no escopo ou que capturaria outra referência), **outline do
+      documento** e **signature help** (`(` e `,`, funciona com a linha pela
+      metade, inclusive `m.f(`).
+- [~] **Formatar documento** pelo LSP — exposto, mas devolve nada em arquivo
+      com comentário: o `formatter` joga comentário e linha em branco fora
+      (ver bug abaixo). Posições em UTF-16 nas features novas; diagnostics e
+      hover ainda contam runa (erra depois de emoji na mesma linha).
+- [ ] **`gs formata` apaga comentários e linhas em branco** — o formatter
+      reimprime a AST, que não guarda comentário. Com `-w`, sobrescreve o
+      arquivo sem eles. Precisa o lexer guardar comentário como trivia.
 - [ ] **Publicar a extensão** no VS Marketplace e no Open VSX (hoje
       `"publisher": "local"`, só instala por `.vsix`).
 

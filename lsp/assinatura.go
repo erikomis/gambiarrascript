@@ -134,10 +134,22 @@ func declDaChamada(a *analise, ch *chamadaAberta) *ocorrencia {
 		}
 		return nil // builtin, ou resolveu pra algo que nao e gambiarra (param, var...)
 	}
+	// o parse falhou bem na chamada (digitando)
 	if ch.alias != "" {
+		// `m.f(`: resolve o m pelo `importa ... como m` e acha f no modulo
+		for _, imp := range a.importacoes {
+			if imp.alias == nil || imp.alias.nome != ch.alias || imp.resolvido == "" {
+				continue
+			}
+			if mod := a.ctx.modulo(imp.resolvido); mod != nil {
+				if sb := mod.simboloDeTopo(ch.nome, map[string]bool{}); sb != nil && sb.decl != nil && sb.decl.ehFunc {
+					return sb.decl
+				}
+			}
+		}
 		return nil
 	}
-	// o parse falhou bem na chamada (digitando): procura pelo nome
+	// procura pelo nome
 	var melhor *ocorrencia
 	for _, o := range a.ocorrencias {
 		if o.nome == ch.nome && o.ehFunc && (melhor == nil || o.linha <= ch.linha) {
