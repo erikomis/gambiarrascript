@@ -3,15 +3,26 @@
 O que falta pra linguagem ficar **realmente usável** no dia a dia. A base
 (parser, avaliador, funções, closures, erros, HTTP cliente/servidor, JSON,
 REPL multiline, LSP e extensão VSCode) já está pronta — e agora também
-**VM completa** (freevars, `importa`, `bora`, builtins de ordem superior),
-**libs padrão** (regex / tempo / crypto / banco / set / fs / `formata`),
-**sintaxe moderna** (interpolação, range, bitwise, atribuição composta,
-lambdas, destructuring, `escolhe`/`caso`, dot access) e **tooling**
-(`gs check/init/bench/get/build/testa/formata -w`, cache `.gsc`).
+**VM como motor padrão** (freevars, `importa`, `bora`, builtins de ordem
+superior, REPL incremental), **libs padrão** (regex / tempo / crypto / banco /
+set / fs / csv / gzip / processos / `formata` / matemática com `pi`),
+**sintaxe moderna** (interpolação, range, bitwise, atribuição composta, `**`,
+`crava`, lambdas, destructuring, `escolhe`/`caso`, ternário, `?.`/`??`,
+fatias, dot access), **tooling** (`gs check/init/bench/get/build/testa/doc/
+formata -w`, cache `.gsc`) e **distribuição** (release com binários,
+`install.sh`, playground + doc no GitHub Pages).
 
-Tiers 1–3 estão entregues; o backlog vivo agora são os **Tiers 4–8**
-(qualidade de vida, stdlib, ecossistema, motor e **POO no estilo Go**) + os
-itens grandes que ficaram pra levas próprias (DAP, FFI, multi-catch).
+Tiers 1–5 estão entregues. O backlog vivo:
+
+| Onde | O que sobra |
+|---|---|
+| Tier 2/3 | DAP (debug), multi-catch, FFI — itens grandes, levas próprias |
+| Tier 5b | libs: logging, flags, AES/senha, TCP/WebSocket, body binário no `busca` |
+| Bugs abertos | concorrência em dict, overflow, `importa`, erro entre engines |
+| Tier 6 | `gs instala` + lock, `build --alvo`, Homebrew, cobertura, sombreamento |
+| Tier 7 | MaxStack por função |
+| Tier 8 | POO no estilo Go (`treta`/`combinado`) — tem decisões em aberto |
+| Tier 9 | sugestões novas: `tipo()`, spread, `//`, LSP completo, marketplace, LICENSE |
 
 ---
 
@@ -44,9 +55,8 @@ itens grandes que ficaram pra levas próprias (DAP, FFI, multi-catch).
 - [x] **VM completa** (fase 6f): freevars em closures (1, 2 e 3 níveis),
       `importa`, `bora`/`OpBoraCall` (concorrência na VM), `pra_cada em`
       lista/dicionário (`OpIterSeq`), atribuição por índice (`OpIndexSet`),
-      bitwise e range (`OpRange`). A maioria dos exemplos roda igual no
-      tree-walker e no `gs roda --vm` — **falta** só builtins de ordem superior
-      (ver Tier 3 abaixo).
+      bitwise e range (`OpRange`). Builtins de ordem superior vieram no Tier 3;
+      hoje a VM é o motor padrão (Tier 7).
 - [x] **Typechecker básico no LSP** — warnings pra uso de identificador não
       resolvível (não é builtin, keyword, var `bota`, param ou `quebrou`).
 
@@ -143,7 +153,7 @@ itens grandes que ficaram pra levas próprias (DAP, FFI, multi-catch).
       Detalhes na seção abaixo.
 - [ ] FFI / integração com Go (cgo `importa_go`) — grande; leva própria.
 
-### Tier 4 — Qualidade de vida (curto prazo, alto impacto)
+### Tier 4 — Qualidade de vida ✅ entregue
 
 Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 
@@ -163,21 +173,33 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 - [x] **Fatia sintática** — `xs[1:3]`, `xs[:2]`, `xs[2:]` pra lista e texto
       (o builtin `fatia` existe, mas a sintaxe é mais gostosa).
 - [x] **`pra_cada` com índice/chave+valor** — `pra_cada i, v em lista` e
-      `pra_cada chave, valor em dict`. Hoje só itera um nome.
+      `pra_cada chave, valor em dict`.
 - [x] **Parâmetros com valor padrão** — `gambiarra f(x, y = 10)`.
 - [x] **Varargs** — `gambiarra f(primeiro, ...resto)` (resto vira lista).
-- [x] **Ternário / `se_colar` como expressão** — algo tipo
-      `bota x = se_colar cond entao a se_nao_colar b` (sintaxe a decidir).
+- [x] **Ternário / `se_colar` como expressão** —
+      `bota x = se_colar cond entao a se_nao_colar b` (sem `acabou_finalmente`).
 - [x] **Navegação segura** — `obj?.campo` (nada se obj for nada) e coalescing
       `x ?? padrao`. Roda nos 2 engines; corrigido bug de underflow de pilha
       na VM (OpPop espúrio no ramo não-nada do `?.`).
 - [x] **`importa ... como`** — `importa "util.gs" como util` →
-      `util.funcao()`. Hoje o importa despeja tudo no escopo global (colisão
-      de nome é silenciosa).
-- [ ] **Constantes** — declaração que não pode ser reatribuída
-      (`crava PI = 3.14`? nome a decidir).
+      `util.funcao()`, em vez de despejar tudo no escopo global (colisão de
+      nome silenciosa). Ver bug aberto: na VM o `como` ainda vaza nomes.
+- [x] **Constantes** — `crava NOME = valor`. Checagem estática compartilhada
+      (`ast.ChecaCravadas`, pela ordem do fonte) roda antes da execução nos 2
+      engines e no linter (`gs check`/LSP acusam como erro): `bota`, compostas,
+      destructuring, `pra_cada`, `gambiarra`/`quebrou`/`importa como` com o nome
+      cravado dão "`X` foi cravada, nao da pra mudar". Escopo de função igual
+      ao `bota` (gambiarra pode sombrear); o conteúdo de lista/dict cravado
+      ainda muda (igual const do JS). `examples/constantes.gs`.
+- [x] **Potência e matemática** — operador `**` (associa à direita, prende
+      mais que o menos unário: `-2 ** 2 == -4`) e `**=`; inteiro elevado a
+      inteiro continua inteiro (`object.Potencia`, compartilhado pelos 2
+      engines, `OpPow` + `OpBinConst` na VM, `.gsc` formato 2). Builtins
+      `seno`/`cosseno`/`tangente`/`log`/`log10`/`exp` e o valor `pi`
+      (`object.Predefinidas`). Sem `potencia`/`dorme`: `**` e `espera_ms`
+      já cobrem (uma pegada por conceito). `examples/matematica2.gs`.
 
-### Tier 5 — Stdlib que ainda falta
+### Tier 5 — Stdlib ✅ entregue
 
 - [x] **Processos** — `roda_comando(cmd, [args])` devolvendo
       `{saida, erro, codigo}` (código != 0 é dado, não erro; só não-iniciar é
@@ -208,17 +230,57 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 - [x] **Compressão** — `gzip_comprime(texto)` → base64 dos bytes gzipped,
       `gzip_descomprime(base64)` → texto original. Veja `examples/compressao.gs`.
 
-## Deve libs para essa linguagem
-      - [ ] **HTTP cliente turbinado** — `busca` com verbo custom (PUT/DELETE/PATCH),
-            headers, timeout e body binário. Hoje cobre o básico.
-      - [ ] **Rede baixo nível** — TCP/UDP (`conecta_tcp`, `escuta_tcp`) e
-            WebSocket (cliente e servidor).
-      - [ ] **Crypto parte 2** — AES (`encripta`/`decripta`) e hash de senha
-            (bcrypt/argon2) — md5/sha são pra checksum, não pra senha.
-      - [ ] **Logging** — `log_info` / `log_aviso` / `log_erro` com timestamp,
-            nível configurável por env e saída em stderr.
-      - [ ] **Parser de flags** — `opcoes({"porta": 8080, "verboso": deu_ruim})`
-            lendo `--porta 9090 --verboso` dos argumentos.
+### Tier 5b — Libs que ainda faltam
+
+- [~] **HTTP cliente turbinado** — feito: `busca(url, {metodo, corpo,
+      cabecalhos, timeout})` com GET/POST/PUT/DELETE/PATCH. Falta: **body
+      binário** (upload de arquivo, resposta não-texto) e `HEAD`/`OPTIONS`.
+- [ ] **Rede baixo nível** — TCP/UDP (`conecta_tcp`, `escuta_tcp`) e
+      WebSocket (cliente e servidor).
+- [ ] **Crypto parte 2** — AES (`encripta`/`decripta`) e hash de senha
+      (bcrypt/argon2) — md5/sha são pra checksum, não pra senha.
+- [ ] **Logging** — `log_info` / `log_aviso` / `log_erro` com timestamp,
+      nível configurável por env e saída em stderr.
+- [ ] **Parser de flags** — `opcoes({"porta": 8080, "verboso": deu_ruim})`
+      lendo `--porta 9090 --verboso` dos argumentos.
+- [ ] **Servidor parte 2** — servir pasta estática (`serve_pasta("/", "./public")`),
+      helper de resposta JSON (`{"status", "corpo"}` + `Content-Type` montados
+      a partir de um valor) e middleware simples (gambiarra que roda antes de
+      toda rota: log, auth).
+
+### Bugs de motor — corrigidos e abertos
+
+Achados rodando todo exemplo da doc nos 2 engines; testes em
+`vm/correcoes_paridade_test.go` (saída exata nos dois, não só paridade).
+
+- [x] `??` derrubava a VM (panic) quando o lado esquerdo não era `nada`.
+- [x] `arruma`/`quebrou`/`finalmente` dentro de gambiarra não enxergavam os
+      locais da função na VM ("freevar fora do range"); `funciona`/`vaza`/
+      `continua` saíam sem rodar o `finalmente`; tail call dentro de `arruma`
+      escapava do try.
+- [x] `finalmente` sem `quebrou` engolia o erro (2 engines) — agora relança.
+- [x] Fatia `xs[a:b]` compartilhava memória com a lista original.
+- [x] `pra_cada de..ate` deixava a variável em fim+1 na VM; `pra_cada ... em`
+      aninhado quebrava o laço de fora na VM.
+- [x] Linter: blocos agora dividem o escopo da função (fim dos falsos
+      "nunca usada"/"pode estar indefinido" em reatribuição dentro de bloco).
+
+Ainda abertos (pedem decisão de semântica):
+
+- [ ] Escrita concorrente no mesmo dicionário (`bora` / handlers do `rota`)
+      mata o processo com "concurrent map writes" do Go.
+- [ ] Overflow de inteiro: VM satura, tree-walker dá a volta; `de_json`
+      corta inteiro gigante em silêncio.
+- [ ] `importa`: na VM o `como` também vaza nomes pro global; import repetido
+      roda 1x na VM e 2x no tree-walker; import circular trava o tree-walker.
+- [ ] Valor de erro difere entre engines (`erro_causa`, `mostra erro`).
+- [ ] VM não imprime traço de pilha em erro de builtin não pego no top-level.
+- [ ] Interpolação engole lixo calado: `"${3.14159:.2f}"` imprime `3.14159`
+      — o `:.2f` some sem erro. Ou vira erro de parse, ou vira formato de
+      verdade (ver `${x:.2f}` no Tier 9).
+- [ ] Miudezas: `tamanho()` não aceita conjunto; ordem de impressão do
+      conjunto é aleatória; falha de conexão do `busca` vem com tipo
+      `"builtin"` em vez de `"rede"`; REPL na VM lista temporários `__*` no TAB.
 
 ### Tier 6 — Tooling / ecossistema
 
@@ -231,20 +293,29 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 - [x] **`gs doc`** — novo subcomando: extrai a assinatura de cada `gambiarra`
       e os comentários `#` acima dela, gerando markdown de referência no stdout
       (aceita arquivo ou diretório).
-- [ ] **`gs instala`** — baixa todas as dependências do `gambiarra.tomcat` de
+- [ ] **`gs instala`** — baixa todas as dependências do `gambiarra.json` de
       uma vez; `gambiarra.lock` com hash pra build reprodutível; `gs get`
       com versão/tag na URL.
 - [ ] **`gs build --alvo`** — cross-compile do standalone (linux/windows a
-      partir do mac): precisa de binários `gs` pré-compilados por plataforma
-      embutidos ou baixáveis.
+      partir do mac). Destravado: a release já publica o `gs` de cada
+      plataforma — o `build --alvo` baixa o da mesma versão (conferindo o
+      `checksums.txt`) e embute o script nele.
 - [x] **REPL parte 2** — modo rico via `golang.org/x/term` quando a entrada é
       um TTY: histórico com setas ↑/↓, edição de linha, autocomplete no TAB
       (builtins + keywords + variáveis do escopo) e comandos `:ajuda`/`:limpa`.
       Cai no modo simples linha-a-linha em pipes/testes.
-- [ ] **Release CI** — GitHub Actions gerando binários mac/linux/windows a
-      cada tag + fórmula do Homebrew (`brew install gambiarrascript`).
-- [ ] **Playground web** — o build wasm já existe (`cmd/wasm`); falta o
-      playground no site com editor, saída ao vivo e botão de compartilhar.
+- [~] **Release CI** — feito: `.github/workflows/release.yml` gera binários
+      mac/linux/windows (CGO_ENABLED=0, versão via `-X main.Versao`) +
+      checksums + `.vsix` numa GitHub Release a cada tag `v*`
+      (`scripts/release`); `install.sh` (`curl | sh`, confere sha256, sem
+      sudo); CI de `go vet`/`go test` em push/PR. Falta: publicar o tap
+      `erikomis/homebrew-tap` (fórmula modelo em `packaging/homebrew/`, a
+      release imprime a pronta no job summary).
+- [x] **Playground web** — docs + playground estáticos no GitHub Pages
+      (`.github/workflows/pages.yml`, `scripts/build-web`). Roda num Web
+      Worker (botão Parar + timeout, laço infinito não trava a aba), link de
+      compartilhar (código comprimido no `#hash`), highlight próprio no
+      CodeMirror e na doc (gramática TextMate da extensão), wasm gzipado.
 - [~] **Lint parte 2** — feito no typechecker (`gs check` + LSP): **código
       morto** depois de `funciona`/`vaza`/`continua` e **variável `bota`
       declarada e nunca usada** (top-level isento). Sombreamento ficou de fora
@@ -499,6 +570,59 @@ Onde mexe (fonte da verdade — mesma disciplina da migração EN mais abaixo):
    snippets.
 8. `examples/poo.gs` — exemplo cobrindo treta, método, combinado e puxadinho.
 9. `README.md` — documentar o modelo POO.
+
+### Tier 9 — Próxima leva (sugestões novas, conferidas no código)
+
+Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
+
+**Linguagem / stdlib (curto, alto impacto)**
+
+- [ ] **`tipo(x)`** — hoje **não tem como perguntar o tipo** de um valor em
+      runtime (`"numero"`, `"texto"`, `"lista"`, `"dicionario"`, `"funcao"`,
+      `"nada"`...). Base pro type switch do Tier 8 e pra validar entrada de
+      API (`de_json` devolve qualquer coisa).
+- [ ] **Spread na chamada** — `f(...lista)` (o `...resto` já existe na
+      declaração; falta o lado de quem chama).
+- [ ] **Divisão inteira `//`** — hoje `7 / 2` dá `3.5` e o jeito é
+      `chao(7 / 2)`. Avaliar contra a regra de uma pegada por conceito.
+- [ ] **Formato na interpolação** — `"${preco:.2f}"` reaproveitando os verbos
+      do `formata` (resolve também o bug do lixo engolido acima).
+- [ ] **multi-catch** — já listado no Tier 2; com `tipo()` e `erro_tipo` fica
+      natural: `quebrou erro se erro_tipo(erro) == "rede"`.
+
+**Editor / LSP** — hoje o LSP só tem completion, hover e diagnostics:
+
+- [ ] **Ir pra definição** e **achar referências** (gambiarra, `bota`,
+      `crava`, `importa`).
+- [ ] **Renomear símbolo** e **formatar documento** pelo LSP (o `formatter`
+      já existe; falta expor `textDocument/formatting`).
+- [ ] **Signature help** — mostra `formata(modelo, valores...)` enquanto digita.
+- [ ] **Publicar a extensão** no VS Marketplace e no Open VSX (hoje
+      `"publisher": "local"`, só instala por `.vsix`).
+
+**Projeto / distribuição**
+
+- [ ] **LICENSE** — repo público sem licença: ninguém pode usar legalmente, e
+      Homebrew/vsce pedem uma (MIT é o caminho comum).
+- [ ] **Tap do Homebrew** — criar `erikomis/homebrew-tap` e colar a fórmula
+      que a release imprime (item do Tier 6).
+- [ ] **gofmt na árvore + gate no CI** — `ast.go`, `vm.go`, `parser.go`,
+      `object.go` e outros não estão formatados; formatar num commit só de
+      formatação e ligar `gofmt -l` no `ci.yml`.
+- [ ] **CHANGELOG** a partir dos commits, publicado nas notas da release.
+
+**Site / playground**
+
+- [ ] **Botão "rodar no playground"** em todo bloco de código da doc (o link
+      de compartilhar já carrega código pelo `#hash`).
+- [ ] **`pergunta()` no playground** — stdin via `prompt` ou campo de
+      entrada; hoje exemplos com entrada não rodam no navegador.
+- [ ] **Testar Firefox e Safari** — só o Chromium foi exercitado (worker,
+      `DecompressionStream`, compartilhar).
+- [ ] **Doc em inglês completa** — hoje são 6 de 20 páginas.
+- [ ] **Wasm menor** — 13,8 MB cru / 3,4 MB gzip; o grosso deve ser
+      `net/http` dos builtins de rede, que nem funcionam no navegador. Build
+      tag pra tirar rede/banco/processo do `cmd/wasm`.
 
 ---
 
