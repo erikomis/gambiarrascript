@@ -4,30 +4,60 @@ description: de_json e pra_json — parse e serializacao de JSON.
 ---
 
 ```gambiarrascript
-bota dados = de_json(`{"nome": "Erik"}`)
+bota dados = de_json(`{"nome": "Erik", "langs": ["go", "gs"]}`)
 mostra dados["nome"]                          # Erik
+mostra dados.langs[0]                         # go
 mostra pra_json({"ok": deu_bom, "n": 42})     # {"ok":true,"n":42}
 ```
 
+Escreva o JSON entre crases (`` `...` ``) pra nao ter que escapar as aspas.
+
 ## de_json(texto)
 
-Transforma JSON em dicionario / lista / texto / numero / booleano / `nada`.
-Strings com aspas viram crase pra escapar internamente, mas pra voce e texto.
+Transforma JSON em valor da linguagem:
+
+| JSON | GambiarraScript |
+| --- | --- |
+| objeto | dicionario (chaves sempre **texto**, na ordem do documento) |
+| array | lista |
+| string | texto |
+| numero sem ponto | numero inteiro exato |
+| numero com ponto | numero real |
+| `true` / `false` | `deu_bom` / `deu_ruim` |
+| `null` | `nada` |
+
+JSON malformado da erro (pegue com `arruma` se vier de fora).
 
 ## pra_json(valor)
 
-Faz o caminho inverso — saida **compacta** (sem espacos). Junto com `busca`,
-`rota` e `escuta`, da pra escrever uma API REST inteira:
+Faz o caminho inverso — saida **compacta** (sem espacos), respeitando a ordem
+de insercao do dicionario. Chave numero/booleano vira string (`{1: "x"}` →
+`{"1":"x"}`). Conjunto, gambiarra, cano e futuro nao viram JSON (da erro).
 
 ```gambiarrascript
-gambiarra handler(pedido)
+mostra pra_json({"nada": nada, "pi": 3.14, "lista": [1, "a"]})   # {"nada":null,"pi":3.14,"lista":[1,"a"]}
+mostra pra_json(de_json(`{"z": 1, "a": 2}`))                     # {"z":1,"a":2}
+```
+
+O ida-e-volta `de_json` → `pra_json` preserva a ordem das chaves.
+
+## API REST
+
+Junto com `rota` e `escuta`, da pra escrever uma API JSON inteira:
+
+```gambiarrascript
+gambiarra eco(pedido)
     bota corpo = de_json(pedido["corpo"])
-    funciona pra_json({"echo": corpo["msg"]})
+    funciona {
+        "status": 200,
+        "corpo": pra_json({"eco": corpo["msg"]}),
+        "cabecalhos": {"Content-Type": "application/json"}
+    }
 acabou_finalmente
 
-rota("POST", "/echo", handler)
+rota("POST", "/eco", eco)
 escuta(8080)
 ```
 
 Lembre de setar o header `Content-Type: application/json` na resposta quando
-quiser que o cliente entenda.
+quiser que o cliente entenda. Mais em [Servidor HTTP](/docs/servidor).

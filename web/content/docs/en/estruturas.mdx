@@ -1,6 +1,6 @@
 ---
 title: Control flow
-description: se_colar, enquanto, pra_cada and closing blocks with acabou_finalmente.
+description: se_colar, enquanto, pra_cada, escolhe/caso, the ternary and closing blocks with acabou_finalmente.
 ---
 
 Every opened block is closed with `acabou_finalmente`. Indentation is free
@@ -23,6 +23,37 @@ acabou_finalmente
 `se_nao_colar` chains as `else if`. The last `se_nao_colar` without a condition
 is the final `else`.
 
+## Ternary
+
+With `entao`, `se_colar` becomes an **expression** (no `acabou_finalmente`):
+
+```gambiarrascript
+bota idade = 15
+mostra se_colar idade >= 18 entao "pode entrar" se_nao_colar "volta daqui a pouco"
+# volta daqui a pouco
+```
+
+## escolhe / caso (switch)
+
+Compares the value with each `caso` using `==`. A `caso` can list several
+values; there is no fallthrough. `se_nao_colar` is the default.
+
+```gambiarrascript
+gambiarra clima(condicao)
+    escolhe condicao
+    caso "sol", "calor"
+        funciona "bora pra praia"
+    caso "chuva"
+        funciona "fica em casa"
+    se_nao_colar
+        funciona "sei la, olha pela janela"
+    acabou_finalmente
+acabou_finalmente
+
+mostra clima("calor")      # bora pra praia
+mostra clima("neblina")    # sei la, olha pela janela
+```
+
 ## enquanto (while)
 
 ```gambiarrascript
@@ -41,11 +72,15 @@ pra_cada i de 1 ate 10
 acabou_finalmente
 ```
 
-The range is inclusive on both ends (`de 1 ate 10` includes 10).
+The range is inclusive on both ends (`de 1 ate 10` includes 10) and only
+counts up: `de 10 ate 7` runs zero times. To count down, iterate a range:
+`pra_cada i em 10..7`.
 
 ## pra_cada em (for-each)
 
-Works with lists and dicts (iterates the **keys** of the dict):
+Works with lists and dicts (iterates the **keys** of the dict, in insertion
+order). With two names you get pairs: index + item for lists, key + value for
+dicts.
 
 ```gambiarrascript
 bota frutas = ["abacaxi", "goiaba", "caju"]
@@ -56,6 +91,14 @@ acabou_finalmente
 bota dic = {"a": 1, "b": 2}
 pra_cada chave em dic
     mostra chave + " = " + dic[chave]
+acabou_finalmente
+
+pra_cada chave, valor em dic
+    mostra "${chave} -> ${valor}"
+acabou_finalmente
+
+pra_cada n em 3..1
+    mostra n               # 3, 2, 1
 acabou_finalmente
 ```
 
@@ -74,4 +117,7 @@ acabou_finalmente
 ```
 
 `vaza` breaks out of the loop, `continua` skips to the next iteration. Outside
-a loop, both become a runtime error.
+a loop, both are an error — `gs roda` reports it before running anything.
+
+`sai(code)` ends the whole script right away, from anywhere, with that exit
+code.

@@ -4,6 +4,8 @@
 
 GambiarraScript é uma linguagem onde você não fecha bloco com `}` nem com `end` — você fecha com **`acabou_finalmente`**, porque programar no Brasil é isso: deu trabalho, mas graças a Deus acabou.
 
+**Testa sem instalar nada:** [playground no navegador](https://erikomis.github.io/gambiarrascript/playground/) · [documentação](https://erikomis.github.io/gambiarrascript/docs/)
+
 ## Salve, tropa
 
 ```
@@ -24,6 +26,7 @@ acabou_finalmente
 | GambiarraScript     | O que faz           |
 |---------------------|---------------------|
 | `bota`              | declara variável    |
+| `crava`             | declara constante   |
 | `mostra`            | imprime na tela     |
 | `se_colar` / `se_nao_colar` | if / else / else-if |
 | `enquanto`          | while               |
@@ -100,6 +103,20 @@ várias linhas. Pra escapes (`\n`, `\t`, `\"`) use aspas duplas `"..."`.
 - **`e` / `ou` sempre devolvem booleano**: ao contrário de JS ou Python, `deu_bom e deu_bom` retorna `deu_bom` (booleano normalizado), nunca o operando original.
 - **Escapes em textos**: as sequências `\"` (aspas), `\\` (barra invertida), `\n` (quebra de linha) e `\t` (tab) funcionam dentro das aspas — qualquer outro `\x` é mantido literal, barra e tudo.
 
+## Constantes e matemática
+
+```
+crava TAXA = 0.1               # constante: `bota TAXA = 0.2` nem roda
+bota r = 3
+mostra pi * r ** 2             # ** é potência (2 ** 3 ** 2 == 512)
+mostra seno(pi / 2)            # 1 — também tem cosseno, tangente, log, log10, exp
+```
+
+`crava` fixa o nome, não o conteúdo: uma lista cravada ainda muda por dentro
+(igual `const` do JS). A checagem é estática — `gs check` e o editor acusam a
+reatribuição antes de rodar. Veja `examples/constantes.gs` e
+`examples/matematica2.gs`.
+
 ## Quando deu ruim, a gente arruma
 
 ```
@@ -112,7 +129,19 @@ acabou_finalmente
 
 ## Instalação e uso
 
-Dois caminhos, escolhe o que rolar na sua máquina:
+### Jeito rápido — binário pronto (macOS / Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | sh
+gs roda examples/fizzbuzz.gs
+```
+
+Baixa o binário da última release, confere o sha256 e instala em
+`/usr/local/bin` (ou `~/.local/bin` se não tiver permissão — nunca usa sudo).
+`GS_VERSAO=0.2.0` fixa uma versão, `GS_DIR=~/bin` escolhe a pasta. No Windows,
+baixa o `.zip` direto da [página de releases](https://github.com/erikomis/gambiarrascript/releases).
+
+Quer compilar você mesmo? Dois caminhos:
 
 - **Tem Go?** roda direto, sem Docker.
 - **Não tem Go, mas tem Docker?** roda tudo num container, sem instalar nada.
@@ -185,6 +214,15 @@ Roda `gs` sem argumentos (ou `gs --help`) pra ver a ajuda completa.
 go test ./...                 # com Go instalado
 ./scripts/dgo test ./...      # via Docker
 ```
+
+## Site, playground e releases
+
+- `./scripts/build-web` gera o runtime WASM do playground (`web/public/gs.wasm`);
+  depois `cd web && npm run dev`. Com `--site` builda o site estático em `web/out/`.
+- Todo push na `main` publica docs + playground no GitHub Pages
+  (`.github/workflows/pages.yml`).
+- Toda tag `v*` gera binários mac/linux/windows + checksums numa GitHub Release
+  (`.github/workflows/release.yml`): `git tag v0.2.0 && git push origin v0.2.0`.
 
 ## Extensão do VSCode
 

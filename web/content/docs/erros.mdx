@@ -1,28 +1,149 @@
 ---
 title: Arruma / quebrou
-description: Tratamento de erros com arruma...quebrou.
+description: Tratamento de erros com arruma...quebrou...finalmente, quebra e os builtins erro_*.
 ---
 
-Erro se trata do jeitinho brasileiro: **arruma** tenta, **quebrou** pega.
+Erro se trata do jeitinho brasileiro: **arruma** tenta, **quebrou** pega,
+**finalmente** limpa a bagunca.
 
 ```gambiarrascript
 arruma
     bota resultado = 10 / 0
 quebrou erro
-    mostra "deu ruim, parca: " + erro
+    mostra "deu ruim, parca: " + erro_msg(erro)
+acabou_finalmente
+# deu ruim, parca: deu ruim na linha 2: nao da pra dividir por zero, parca — nem na gambiarra
+```
+
+Qualquer erro dentro do `arruma` e capturado: divisao por zero, indice fora da
+lista, builtin reclamando, `quebra(...)` do teu codigo, erro dentro de uma
+gambiarra chamada la dentro (em qualquer profundidade).
+
+`erro` (o nome e livre — so nao pode ser palavra-chave como `e`) recebe um
+valor do tipo **erro**. Concatenar com texto ou passar pra `texto()` da a
+mensagem; os builtins `erro_*` abrem o resto.
+
+## Sem arruma
+
+Erro que ninguem pega derruba o script: imprime a mensagem e o traco de pilha
+no terminal e sai com codigo `1`.
+
+```
+deu ruim na linha 2: nao da pra dividir por zero, parca — nem na gambiarra
+Traço de pilha:
+  em a (linha 5)
+```
+
+## finalmente
+
+`finalmente` roda **sempre** — deu erro ou nao — depois do `arruma`/`quebrou`.
+O `quebrou` e opcional quando tem `finalmente` (mas `arruma` sozinho, sem
+nenhum dos dois, e erro de sintaxe).
+
+```gambiarrascript
+gambiarra saca(saldo, valor)
+    se_colar valor > saldo
+        quebra("saldo insuficiente")
+    acabou_finalmente
+    funciona saldo - valor
+acabou_finalmente
+
+arruma
+    mostra saca(100, 30)                   # 70
+    mostra saca(100, 500)
+    mostra "nunca chega aqui"
+quebrou erro
+    mostra "deu ruim: " + erro_msg(erro)   # deu ruim: quebra: saldo insuficiente
+    mostra "tipo: " + erro_tipo(erro)      # tipo: usuario
+finalmente
+    mostra "fecha o caixa"                 # sempre roda
 acabou_finalmente
 ```
 
-`erro` e uma variavel texto com a mensagem de erro. Qualquer erro de runtime
-dentro do bloco `arruma` e capturado: divisao por zero, indice fora da lista,
-chamada de nao-funcao, etc.
+Sem `quebrou`, o `finalmente` roda e o erro **continua subindo** pro
+`arruma` de fora (ou derruba o script, se ninguem pegar):
 
-## Sem quebrou
+```gambiarrascript
+arruma
+    arruma
+        quebra("caiu la dentro")
+    finalmente
+        mostra "fecha o arquivo"                # roda primeiro
+    acabou_finalmente
+quebrou erro
+    mostra "pegou aqui fora: " + erro_msg(erro) # pegou aqui fora: quebra: caiu la dentro
+acabou_finalmente
+```
 
-Se nao tiver clausula `quebrou`, o erro propaga normalmente.
+O `finalmente` tambem roda quando o bloco sai cedo com `funciona`, `vaza` ou
+`continua`.
+
+## Lancando: quebra
+
+`quebra(mensagem)` lanca um erro do tipo `"usuario"`. A mensagem chega com o
+prefixo `quebra: `. Opcionalmente recebe uma causa: `quebra(msg, erro_original)`.
+
+## Inspecionando o erro
+
+| Builtin | Devolve |
+| --- | --- |
+| `erro_msg(e)` | a mensagem (`texto`) |
+| `erro_tipo(e)` | `"runtime"`, `"builtin"`, `"io"`, `"rede"`, `"parse"`, `"usuario"`, ou o tipo que voce deu no `envolve_erro` |
+| `erro_linha(e)` | a linha onde estourou (`0` quando nao se sabe, ex.: `quebra`) |
+| `erro_pilha(e)` | lista de `{"funcao", "linha"}`, de fora pra dentro |
+| `erro_causa(e)` | o erro embrulhado, ou `nada` |
+
+```gambiarrascript
+gambiarra a()
+    funciona 1 / 0
+acabou_finalmente
+gambiarra b()
+    funciona a()
+acabou_finalmente
+
+arruma
+    b()
+quebrou erro
+    mostra erro_tipo(erro)                       # runtime
+    mostra erro_linha(erro)                      # 2
+    pra_cada f em erro_pilha(erro)
+        mostra "em ${f.funcao} (linha ${f.linha})"
+    acabou_finalmente
+    # em b (linha 9)
+    # em a (linha 5)
+acabou_finalmente
+```
+
+Erro de leitura/escrita de arquivo vem com tipo `"io"`; o resto dos builtins
+costuma vir como `"builtin"`.
+
+## Embrulhando: envolve_erro
+
+`envolve_erro(tipo, mensagem, causa)` lanca um erro novo, com o tipo que voce
+escolher, guardando o original como causa — bom pra dar contexto sem perder o
+detalhe:
+
+```gambiarrascript
+arruma
+    arruma
+        le_arquivo("config_que_nao_existe.json")
+    quebrou erro
+        envolve_erro("config", "nao rolou carregar a config", erro)
+    acabou_finalmente
+quebrou erro
+    mostra erro_tipo(erro)        # config
+    mostra erro_msg(erro)         # envolve: nao rolou carregar a config :: deu ruim: nao consegui ler ...
+acabou_finalmente
+```
 
 ## Sinais de controle
 
-`funciona`, `vaza` e `continua` dentro de um `arruma` nao sao capturados pelo
-`quebrou` — eles passam direto pro escopo de cima (retorno/loop continuam
-funcionando).
+`funciona`, `vaza`, `continua` e `sai(...)` dentro de um `arruma` **nao** sao
+erros e nao caem no `quebrou` — passam direto (o retorno/loop continua
+funcionando normal).
+
+## Erro em goroutine
+
+Erro dentro de uma `bora fn()` fica guardado no futuro e estoura no
+`espera(futuro)` — da pra pegar com `arruma` em volta do `espera`. Veja
+[Concorrencia](/docs/concorrencia#erros-em-goroutines).

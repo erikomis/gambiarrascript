@@ -1,53 +1,136 @@
 ---
 title: Tipos e operadores
-description: Numeros, textos, booleanos, listas e dicionarios - e como operar eles.
+description: Numeros, textos, booleanos, colecoes e companhia - e como operar eles.
 ---
 
-GambiarraScript tem seis tipos:
+GambiarraScript e dinamica: o tipo e o que voce guarda no runtime, nao tem
+declaracao de tipo nenhuma.
 
-| Tipo        | Literal                                  | Inspect |
-| ----------- | ----------------------------------------- | ------- |
-| Numero      | `25`, `3.14`, `-1`                       | `25`, `3.14` |
-| Texto       | `"ola"` ou `` `ola` ``                    | `"ola"` |
-| Booleano    | `deu_bom` / `deu_ruim`                    | `deu_bom` / `deu_ruim` |
-| Nada        | `nada`                                    | `nada` |
-| Lista       | `[1, 2, 3]`                               | `[1, 2, 3]` |
-| Dicionario  | `{"nome": "Erik", "idade": 25}`           | `{"nome": "Erik", "idade": 25}` |
+| Tipo        | Literal / como nasce                       | `mostra` imprime |
+| ----------- | ------------------------------------------ | ---------------- |
+| Numero      | `25`, `3.14`, `-1`, `0xFF`, `0o17`, `0b1010` | `25`, `3.14`, `255` |
+| Texto       | `"ola"`, `"oi ${nome}"` ou `` `ola` ``     | `ola` |
+| Booleano    | `deu_bom` / `deu_ruim`                     | `deu_bom` / `deu_ruim` |
+| Nada        | `nada`                                     | `nada` |
+| Lista       | `[1, 2, 3]`, `1..3`                        | `[1, 2, 3]` |
+| Dicionario  | `{"nome": "Erik", "idade": 25}`            | `{"nome": "Erik", "idade": 25}` |
+| Conjunto    | `conjunto([1, 2, 2])`                      | `{1, 2}` |
+| Gambiarra   | `gambiarra f(x) ...` ou lambda `gambiarra(x) ...` | `gambiarra(x)` |
+| Futuro      | `bora f()`                                 | `<futuro em andamento>` |
+| Cano        | `cano()`                                   | `<cano sincrono>` |
+| Erro        | o que o `quebrou` captura                  | a mensagem |
 
-Nao e estaticamente tipada; o tipo e o que voce guarda no runtime. Nao tem
-`null` nao-tipado separado de `nada` — `nada` e o unico valor nulo.
+`nada` e o unico valor nulo — nao tem `null`/`undefined` separados.
+
+Repara que, **dentro de uma lista**, texto aparece sem aspas (`[a, b]`), mas
+dentro de um dicionario aparece com (`{"a": "x"}`). Se precisar de um formato
+estavel pra maquina ler, use `pra_json`.
 
 ## Numeros
 
-Sempre `float64` por baixo. Inteiros sao numeros com parte zero (sao impressos
-sem casa decimal pela tag; `5` mostra `5`, nao `5.0`).
+Por baixo tem dois sabores, e a linguagem escolhe sozinha:
 
-Operadores: `+ - * / %`. Comparacao: `== != < > <= >=`.
+- **inteiro exato** (64 bits) — `25`, `0xFF`, o resultado de `2 + 3`, `6 / 3`;
+- **real** (`float64`) — `3.14`, `7 / 2`, qualquer conta que envolva um real.
+
+Inteiro nao vira `25.0` nem perde precisao em numero grande; real se comporta
+como em qualquer linguagem (`0.1 + 0.2 == 0.3` e `deu_ruim`).
+
+```gambiarrascript
+mostra 7 / 2          # 3.5
+mostra 6 / 3          # 2
+mostra 2 * 3.0        # 6
+mostra 10 % 3         # 1
+mostra -7 % 3         # -1 (sinal do dividendo)
+mostra 1 == 1.0       # deu_bom
+mostra 0xFF + 0b11    # 258
+```
 
 - `/` e `%` por zero dao **erro de runtime** (nao `Inf`/`NaN`).
-- `%` e `math.Mod` (sinal do dividendo).
-- Nao existe exponenciacao (`**`); faca uma `gambiarra potencia(base, exp)`.
-- Builtins matematicos: `raiz`, `abs`, `arredonda`, `teto`, `chao`, `min`, `max`,
-  `aleatorio` — veja [Biblioteca padrao](/docs/biblioteca#numeros-e-matematica).
+- Literais em outras bases: `0x` (hex), `0o` (octal), `0b` (binario).
+- Builtins matematicos: `raiz`, `abs`, `arredonda`, `teto`, `chao`, `min`,
+  `max`, `seno`, `cosseno`, `tangente`, `log`, `log10`, `exp`, `aleatorio`, e o
+  valor `pi` — veja [Biblioteca padrao](/docs/biblioteca#numeros-e-matematica).
+
+### Potencia
+
+`a ** b` eleva `a` a `b`. Inteiro elevado a inteiro nao-negativo continua
+**inteiro exato**; expoente negativo ou quebrado da real (e se o inteiro
+estourar 64 bits, vira real tambem).
+
+```gambiarrascript
+mostra 2 ** 10        # 1024
+mostra 2 ** -1        # 0.5
+mostra 2 ** 0.5       # 1.4142135623730951
+mostra 2 ** 3 ** 2    # 512 (associa pela direita: 2 ** 9)
+mostra -2 ** 2        # -4 (o ** prende mais que o menos)
+mostra (-2) ** 2      # 4
+mostra 2 * 3 ** 2     # 18
+
+bota lado = 4
+lado **= 2            # composto tambem rola
+mostra lado           # 16
+```
+
+`0 ** -1` da erro ("zero elevado a negativo e divisao por zero disfarcada"), e
+`**` com algo que nao e numero tambem (`"a" ** 2`).
+
+### Bitwise
+
+So com inteiros: `&` (e), `|` (ou), `^` (xor), `~` (nao, prefixo), `<<` e `>>`.
+
+```gambiarrascript
+mostra 12 & 10        # 8
+mostra 12 | 2         # 14
+mostra 12 ^ 15        # 3
+mostra ~0             # -1
+mostra 1 << 4         # 16
+mostra 256 >> 4       # 16
+```
+
+## Constantes: crava
+
+`crava NOME = valor` declara um nome que **nao muda mais**. A checagem e
+feita antes de rodar (no `gs roda`, no `--tree`, no `gs check` e no editor):
+depois do `crava`, qualquer `bota NOME`, `NOME += ...`, desestruturacao, uso
+como variavel de `pra_cada`/`quebrou`, `gambiarra NOME` ou `importa ... como
+NOME` e erro — e um segundo `crava NOME` no mesmo escopo tambem.
+
+```gambiarrascript
+crava TAXA = 0.1
+crava DIAS = ["seg", "ter", "qua"]
+
+mostra "taxa: ${TAXA}"     # taxa: 0.1
+adiciona(DIAS, "qui")      # o conteudo ainda muda (igual const do JS)
+mostra DIAS                # [seg, ter, qua, qui]
+
+# bota TAXA = 0.2          -> erro: `TAXA` foi cravada, nao da pra mudar
+```
+
+O escopo e o mesmo do `bota` (o da funcao). `crava` dentro de uma gambiarra
+vale so la dentro; e uma gambiarra pode criar um `bota TAXA` local proprio,
+que sombreia o de fora. Mais em [Pegadinhas](/docs/pegadinhas#crava-nao-e-por-bloco).
 
 ## Textos
 
-Dois literais:
-- `"..."` com escapes limitados: `\n`, `\t`, `\"`, `\\`. Outros `\x` ficam literal.
-- `` `...` `` crase: string crua, multiline, sem escape nenhum.
+Tres jeitos de escrever:
+- `"..."` com escapes `\n`, `\t`, `\"`, `\\` (qualquer outro `\x` fica literal);
+- `"... ${expr} ..."` — **interpolacao**, avalia a expressao e cola no texto;
+- `` `...` `` crase: string crua, multiline, sem escape.
 
-Concatenacao com `+` se qualquer lado for texto. Mais em [Textos](/docs/strings).
+`+` concatena se qualquer lado for texto. Da pra indexar e fatiar texto como
+lista (`t[0]`, `t[-1]`, `t[1:3]`). Tudo em [Textos](/docs/strings).
 
 ## Booleanos
 
-`deu_bom` / `deu_ruim` sao singleton. `e` e `ou` **sempre devolvem booleano**
-(normalizam o operando), ao contrario de JS/Python:
+`deu_bom` / `deu_ruim`. `e` e `ou` fazem curto-circuito e **sempre devolvem
+booleano** (normalizam o operando), ao contrario de JS/Python:
 
 ```gambiarrascript
-mostra deu_bom e "texto"   # deu_ruim (nao devolve "texto")
+mostra deu_bom e "texto"   # deu_bom (nao devolve "texto")
 mostra 5 ou 0              # deu_bom
 mostra nada ou "ok"        # deu_bom
-mostra "x" e "y"           # deu_bom
+mostra nada e "ok"         # deu_ruim
 ```
 
 `nao` e prefixo e devolve booleano: `nao deu_bom` → `deu_ruim`.
@@ -58,32 +141,72 @@ So `nada` e `deu_ruim` sao **falsy**. Tudo o mais e truthy: `0`, `""`, `[]`,
 `{}` inclusive. Se quiser checar vazio, faca explicito (`tamanho(x) == 0`,
 `x == ""`). Veja [Pegadinhas](/docs/pegadinhas#truthiness).
 
-## Nada
+## Nada, navegacao segura e coalescing
 
-`nada` e o unico valor "sem nada". Tentar operar aritmeticamente com `nada`
-(e `+ 1` por ex.) da erro de runtime, exceto concatenar `nada` como operando
-nao-texto (e raro acertar). Comparar `nada == 0` e `deu_ruim`, `nada == nada`
-e `deu_bom`, `nada == ""` e `deu_ruim`.
+`nada` e o "sem valor". Fazer conta com ele (`nada + 1`) da erro de runtime;
+concatenar com texto vira o texto `"nada"`. `nada == 0` e `deu_ruim`,
+`nada == nada` e `deu_bom`.
 
-## Listas e Dicionarios
+Pra lidar com `nada` sem encher de `se_colar`:
 
-Os tipos compostos. Listas indexadas por inteiro, dicionarios por
-texto/numero/booleano. Ambos mutaveis, ambos iteraveis com `pra_cada`. Detalhes
-em [Listas e dicionarios](/docs/colecoes).
+- `obj?.campo` — se `obj` for `nada`, da `nada` em vez de erro;
+- `x ?? padrao` — devolve `x`, ou `padrao` se `x` for `nada` (so `nada`: `0`
+  e `deu_ruim` passam direto).
 
-## Operadores logicos
+```gambiarrascript
+bota usuario = {"nome": "Ze", "endereco": nada}
+mostra usuario?.endereco?.rua        # nada
+mostra usuario.endereco ?? "sem endereco"   # sem endereco
+```
 
-- `e` — and (curto-circuito, devolve booleano)
-- `ou` — or (curto-circuito, devolve booleano)
-- `nao` — not (prefixo, devolve booleano)
+## Listas, dicionarios e conjuntos
 
-Precedencia: `ou` < `e` < comparacao < `+ -` < `* / %` < prefix < chamada < index.
+Os tipos compostos. Listas indexadas por inteiro (aceita negativo: `xs[-1]`),
+dicionarios por texto/numero/booleano (e com atalho `d.campo`). Ambos
+mutaveis e passados por referencia. Detalhes em
+[Listas e dicionarios](/docs/colecoes).
+
+## Operadores
+
+| Categoria   | Simbolos |
+| ----------- | -------- |
+| Aritmeticos | `+ - * / % **` |
+| Bitwise     | `& \| ^ ~ << >>` |
+| Comparacao  | `== != < > <= >=` |
+| Logicos     | `e`, `ou`, `nao` |
+| Nada        | `?.` e `??` |
+| Range       | `a..b` (lista inclusiva) |
+| Acesso      | `x[i]`, `x[i:j]`, `x.campo`, `f(args)` |
+| Atribuicao  | `bota x = ...`, `crava X = ...` (constante), e `+= -= *= /= %= **= &= \|= ^= <<= >>=` (sem `bota`) |
+
+### Precedencia (do mais fraco pro mais forte)
+
+1. `ou`, `??`
+2. `e`
+3. `..`
+4. `|`
+5. `^`
+6. `&`
+7. `== !=`
+8. `< > <= >=`
+9. `<< >>`
+10. `+ -`
+11. `* / %`
+12. prefixo (`-x`, `nao x`, `~x`)
+13. `**` (associa pela **direita**)
+14. chamada `f(args)`
+15. indice `x[i]`, `x.campo`, `x?.campo`
+
+O `**` fica acima do menos unario: `-2 ** 2` e `-(2 ** 2)`, igual Python.
+Igual em C: `&`, `|` e `^` ficam **abaixo** do `==`. Entao `x & 1 == 1` vira
+`x & (1 == 1)` e da erro — use parenteses: `(x & 1) == 1`. Ja o `..` fica
+abaixo da aritmetica: `0..n - 1` e `0..(n - 1)`.
 
 ## Igualdade
 
 `==` e `!=` fazem **comparacao estrutural**:
 
-- Numeros: valor exato (`float64 ==`).
+- Numeros: valor (`1 == 1.0` e `deu_bom`).
 - Textos: caractere a caractere.
 - Booleanos: valor.
 - `nada` so e igual a `nada`.
@@ -94,30 +217,33 @@ Precedencia: `ou` < `e` < comparacao < `+ -` < `* / %` < prefix < chamada < inde
 ```gambiarrascript
 mostra [1, 2, 3] == [1, 2, 3]                # deu_bom
 mostra [[1, 2], [3]] == [[1, 2], [3]]        # deu_bom
-mostra {"a": 1} == {"a": 1}                 # deu_bom
+mostra {"a": 1} == {"a": 1}                  # deu_bom
 mostra {"a": 1, "b": 2} == {"b": 2, "a": 1}  # deu_bom (ordem nao importa)
-mostra {"1": 1} == {1: 1}                   # deu_ruim (chave texto vs numero)
+mostra {"1": 1} == {1: 1}                    # deu_ruim (chave texto vs numero)
 ```
 
 Instancias diferentes mas mesmo conteudo sao **iguais**. Nao existe
 "identidade" (`is`) nem `===`.
 
-## Operadores invalidos
+## Operacoes invalidas
 
-Tentativas que dao erro em runtime:
+Dao erro em runtime:
 
-- `texto < texto` — comparacao so pra numero.
-- `lista + lista` — `+` so concatena texto e soma numero (nao lista).
-- `nada + 1` — erro.
-- `numero == texto` (`1 == "1"`) — erro? nao: devolve `deu_ruim` (tipos
-  diferentes, comparacao estrutural).
+- `"a" < "b"` — `< > <= >=` so pra numero.
+- `[1] + [2]` — `+` so soma numero e concatena texto (nao lista).
+- `nada + 1`.
+- `3 > 2 > 1` — vira `deu_bom > 1`, e booleano nao compara com numero.
+- `1.5 & 1` — bitwise so com inteiro.
+
+`1 == "1"` **nao** da erro: devolve `deu_ruim` (tipos diferentes).
 
 ## Conversao entre tipos
 
 | De -> Para | Como |
 | --- | --- |
-| numero -> texto | `texto(n)` ou concatena com `""` (`"" + n`) |
-| texto -> numero | `numero(t)` (NaN se nao for numerico) |
-| booleano -> texto | `texto(deu_bom)` ou na concatenacao automatica |
-| qualquer -> texto | `texto(v)` |
-| dicionario -> texto | `pra_json(d)` (formato JSON) |
+| qualquer -> texto | `texto(v)`, interpolacao `"${v}"` ou concatenando com texto |
+| texto -> numero | `numero(t)` — texto que nao e numero **da erro** (use `arruma` se vier de fora) |
+| texto -> lista | `separa(t, sep)` |
+| lista -> texto | `junta(lista, sep)` |
+| lista -> conjunto | `conjunto(lista)` |
+| qualquer -> JSON | `pra_json(v)`; volta com `de_json(t)` |

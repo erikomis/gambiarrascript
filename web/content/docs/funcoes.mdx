@@ -1,6 +1,6 @@
 ---
 title: Gambiarra (funcoes)
-description: Como declarar e chamar funcoes no GambiarraScript.
+description: Como declarar e chamar funcoes no GambiarraScript - parametros padrao, varargs, lambdas e closures.
 ---
 
 Funcao e Gambiarra. `gambiarra` declara, `funciona` devolve. O fechamento obvio
@@ -26,12 +26,49 @@ acabou_finalmente
 mostra dobra(21)        # 42
 ```
 
-`funciona` sem expressao devolve `nada`.
+`funciona` sempre leva uma expressao — pra devolver "nada", escreva
+`funciona nada`. Gambiarra que termina sem `funciona` devolve `nada`.
+
+## Parametros com valor padrao
+
+`nome = valor` deixa o parametro opcional. O padrao pode usar os parametros
+anteriores:
+
+```gambiarrascript
+gambiarra cumprimenta(nome, saudacao = "salve")
+    funciona saudacao + ", " + nome
+acabou_finalmente
+
+mostra cumprimenta("Erik")            # salve, Erik
+mostra cumprimenta("Erik", "fala")    # fala, Erik
+
+gambiarra retangulo(largura, altura = largura)
+    funciona largura * altura
+acabou_finalmente
+mostra retangulo(3)                   # 9 (quadrado)
+```
+
+## Varargs
+
+`...resto` no ultimo parametro junta os argumentos que sobrarem numa lista:
+
+```gambiarrascript
+gambiarra soma_tudo(primeiro, ...resto)
+    bota total = primeiro
+    pra_cada x em resto
+        total += x
+    acabou_finalmente
+    funciona total
+acabou_finalmente
+
+mostra soma_tudo(1)             # 1
+mostra soma_tudo(1, 2, 3, 4)    # 10
+```
 
 ## Aridade
 
-O numero de argumentos tem que bater. Se a gambiarra quer 2 parametros e voce
-passa 3, da erro de runtime.
+Fora os opcionais e o `...resto`, o numero de argumentos tem que bater.
+Faltou ou sobrou, e erro de runtime:
 
 ```gambiarrascript
 gambiarra soma(a, b)
@@ -39,19 +76,94 @@ gambiarra soma(a, b)
 acabou_finalmente
 
 mostra soma(2, 3)       # 5
+mostra soma(2)          # erro: essa gambiarra quer 2 parametro(s), voce mandou 1
 ```
 
-## Funcoes como valores
+## Lambdas (gambiarra anonima)
 
-Funcoes sao first-class: podem entrar em listas, dicionarios e serem passadas
-como argumento (usado por `mapeia`, `filtra`, `rota`).
+Sem nome, `gambiarra(params) ... acabou_finalmente` e uma **expressao**: da pra
+guardar em variavel, lista, dicionario, ou passar direto pra outro builtin.
+Cabe numa linha so:
 
 ```gambiarrascript
+bota dobra = gambiarra(x) funciona x * 2 acabou_finalmente
+mostra dobra(4)                                  # 8
+
 bota ops = [gambiarra(x) funciona x + 1 acabou_finalmente,
             gambiarra(x) funciona x * 2 acabou_finalmente]
+mostra ops[1](10)                                # 20
 
-# sao inline: nao tem nome, so roda chamando
-mostra ops[0](10)       # 11
+mostra mapeia([1, 2, 3], gambiarra(n) funciona n * n acabou_finalmente)   # [1, 4, 9]
+```
+
+Funcoes sao first-class: gambiarra com nome tambem e valor (`mapeia(xs, dobra)`,
+`rota("GET", "/", handler)`).
+
+## Closures
+
+Uma gambiarra criada dentro de outra enxerga as variaveis de fora, mesmo depois
+que a de fora ja terminou:
+
+```gambiarrascript
+gambiarra multiplicador(fator)
+    funciona gambiarra(x) funciona x * fator acabou_finalmente
+acabou_finalmente
+
+bota triplica = multiplicador(3)
+mostra triplica(5)          # 15
+```
+
+<Callout type="warn" title="Atribuir dentro da funcao cria variavel local">
+  Ler variavel de fora funciona; **atribuir** (`bota x = ...` ou `x += ...`)
+  dentro de uma gambiarra cria uma variavel **local**, igual Python sem
+  `nonlocal`. A de fora nao muda. Pra estado compartilhado, guarde num
+  dicionario ou lista (eles sao passados por referencia) e mude o conteudo:
+</Callout>
+
+```gambiarrascript
+gambiarra contador()
+    bota estado = {"n": 0}
+    funciona gambiarra()
+        estado.n += 1          # muda o dicionario, nao a variavel
+        funciona estado.n
+    acabou_finalmente
+acabou_finalmente
+
+bota proximo = contador()
+proximo()
+proximo()
+mostra proximo()            # 3
+```
+
+## Recursao
+
+Recursao normal funciona ate **1024** chamadas empilhadas; passou disso, da um
+erro limpo ("recursao funda demais"). Se a chamada recursiva for a ultima coisa
+(`funciona f(...)` chamando a propria gambiarra), ela vira **chamada em cauda**
+e nao empilha — pode ir fundo a vontade:
+
+```gambiarrascript
+gambiarra fatorial(n, acc = 1)
+    se_colar n <= 1
+        funciona acc
+    acabou_finalmente
+    funciona fatorial(n - 1, acc * n)    # chamada em cauda
+acabou_finalmente
+
+mostra fatorial(20)         # 2432902008176640000
+```
+
+## Documentando
+
+Comentarios `#` logo acima de uma `gambiarra` (ou de um `crava` de topo) viram
+documentacao no `gs doc arquivo.gs` (gera markdown com a assinatura e o comentario). Veja
+[Linha de comando](/docs/cli#gs-doc).
+
+```gambiarrascript
+# devolve o dobro de n
+gambiarra dobra(n)
+    funciona n * 2
+acabou_finalmente
 ```
 
 <Callout type="warn" title="Escopo do pra_cada">

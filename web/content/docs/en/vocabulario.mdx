@@ -10,58 +10,74 @@ Memorize this table and you know the language.
 
 | Keyword             | Equivalent          | What it does |
 | ------------------- | ------------------ | ------------ |
-| `bota`              | `let` / `var`      | declares (or re-assigns) a variable |
+| `bota`              | `let` / `var`      | declares (or re-assigns) a variable; also `bota [a, b] = list` / `bota {x, y} = dict` |
+| `crava`             | `const`            | declares a constant: the name can't be reassigned |
 | `mostra`            | `print`            | prints to stdout (statement, not a function) |
 | `se_colar`          | `if`               | opens a conditional |
 | `se_nao_colar`      | `else` / `else if`  | clause of `se_colar`; takes a condition (else-if) or not (final else) |
+| `se_colar c entao a se_nao_colar b` | `c ? a : b` | ternary (an expression, no `acabou_finalmente`) |
+| `escolhe` / `caso`  | `switch` / `case`  | compares with `==`, no fallthrough; `se_nao_colar` is the default |
 | `enquanto`          | `while`            | loops while the condition is true |
-| `pra_cada ... de A ate B` | `for i in range(A, B+1)` | inclusive numeric loop |
-| `pra_cada x em colecao`   | `for x in ...` | for-each over a list or dict (iterates **keys** of a dict) |
-| `gambiarra`         | `func` / `fn` / `def`| declares a function |
+| `pra_cada i de A ate B` | `for i in range(A, B+1)` | inclusive numeric loop (counts up only) |
+| `pra_cada x em colecao` | `for x in ...` | for-each over a list or dict (iterates the **keys** of a dict) |
+| `pra_cada i, v em colecao` | `enumerate` / `.items()` | index + item for lists, key + value for dicts |
+| `gambiarra`         | `func` / `fn` / `def`| declares a function (named) or a lambda (anonymous) |
 | `funciona`          | `return`           | returns a value from a function |
 | `arruma`            | `try`              | opens a try block |
-| `quebrou <nome>`    | `catch <e>`        | catches an error into a text variable |
+| `quebrou <nome>`    | `catch <e>`        | catches the error into a variable |
+| `finalmente`        | `finally`          | always runs, error or not |
 | `vaza`              | `break`            | breaks out of a loop |
 | `continua`          | `continue`         | skips to the next iteration |
-| `importa`           | `import`           | imports a relative `.gs` module |
-| `deu_bom` / `deu_ruim` | `true` / `false`  | boolean singletons |
+| `importa "x.gs" [como nome]` | `import`  | imports a `.gs` module (with `como`, it becomes a dict) |
+| `bora`              | `go` (goroutine)   | launches a function in parallel; returns a future |
+| `deu_bom` / `deu_ruim` | `true` / `false`  | booleans |
 | `nada`              | `null` / `None`    | the single null value |
-| `acabou_finalmente` | `}`                | closes **any** block (`se_colar`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`) |
-| `bora`              | `go` (goroutine)   | launches a function in parallel; returns a `Futuro` |
 | `e` / `ou` / `nao`  | `and` / `or` / `not` | logical operators (always return a boolean) |
+| `acabou_finalmente` | `}`                | closes **any** block (`se_colar`, `escolhe`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`) |
 
-Keywords are fixed: there is no alias to pick your favorite. The only thing
+Keywords are fixed: there is no alias to pick your favorite (and none of them
+can be used as a variable name — not even `e`, `de` or `em`). The only thing
 that exists is the feeling: `acabou_finalmente` closes any open block.
 
 ## Operators
 
 | Category    | Symbols |
 | ----------- | ------- |
-| Arithmetic  | `+ - * / %` |
+| Arithmetic  | `+ - * / %`, power `**` (right-associative) |
+| Bitwise     | `& \| ^ ~ << >>` (integers only) |
 | Comparison  | `== != < > <= >=` |
 | Logical     | `e` (and), `ou` (or), `nao` (not prefix) |
-| Assignment  | `=` (always preceded by `bota`) |
-| Indexing    | `expr[expr]` |
-| Call        | `expr(args)` |
-
-There is no exponentiation (`**`) and no compound assignment (`+=`, `-=`, ...).
-For powers, write a `gambiarra potencia(base, exp)` or multiply manually.
+| Nil-safety  | `x?.field` (safe navigation), `x ?? default` (coalescing) |
+| Range       | `1..5` → `[1, 2, 3, 4, 5]` |
+| Assignment  | `bota x = ...`, `crava X = ...`; compound `+= -= *= /= %= **= &= \|= ^= <<= >>=` without `bota` |
+| Index/slice | `xs[i]`, `xs[-1]`, `xs[1:3]`, `xs[:2]`, `xs[2:]` |
+| Field       | `dict.field` (shorthand for `dict["field"]`) |
+| Call        | `f(args)`; in a declaration: `f(a, b = 10, ...rest)` |
+| String      | `"hi ${name}"` (interpolation) |
 
 ### Precedence (weakest to strongest)
 
-1. `ou`
+1. `ou`, `??`
 2. `e`
-3. `== !=`
-4. `< > <= >=`
-5. `+ -`
-6. `* / %`
-7. prefix (`-`, `nao`)
-8. call `f(args)`
-9. indexing `x[i]`
+3. `..`
+4. `|`
+5. `^`
+6. `&`
+7. `== !=`
+8. `< > <= >=`
+9. `<< >>`
+10. `+ -`
+11. `* / %`
+12. prefix (`-`, `nao`, `~`)
+13. `**` (so `-2 ** 2` is `-4`)
+14. call `f(args)`
+15. index `x[i]`, field `x.field` / `x?.field`
+
+Like C, `&`, `|` and `^` bind **looser** than `==`: write `(x & 1) == 1`.
 
 ## Booleans and null
 
-`deu_bom` and `deu_ruim` are `true`/`false`. `nada` is the null singleton
+`deu_bom` and `deu_ruim` are `true`/`false`. `nada` is the null value
 (null/None). The logical operators `e` and `ou` **always return a boolean**
 (they normalize the operand), unlike JS/Python. `nao` inverts.
 
@@ -70,35 +86,37 @@ bota maior = 10 > 5          # deu_bom
 bota ativo = deu_bom e maior
 bota falso = nao maior
 mostra falso                 # deu_ruim
-mostra nada
+mostra nada                  # nada
+mostra nada ?? "padrao"      # padrao
 ```
 
 ## Truthiness
 
 Only `nada` and `deu_ruim` are **falsy**. Everything else is truthy: `0`, `""`,
 `[]`, `{}` all become true in a condition. To check emptiness, do it
-explicitly: `tamanho(x) == 0`, `x == ""`, etc. See [Gotchas](/docs/en/pegadinhas).
+explicitly: `tamanho(x) == 0`, `x == ""`, etc. See [Gotchas](/docs/pegadinhas) (pt).
 
 ## Builtins at a glance
 
-The [Standard library](/docs/en/biblioteca) has the full reference. Quick map:
+The [Standard library](/docs/biblioteca) (pt) has the full reference. Quick map:
 
 | Category | Functions |
 | -------- | --------- |
-| String | `tamanho` `maiusculo` `minusculo` `fatia` `contem` `comeca_com` `termina_com` `tira_espaco` `substitui` `separa` `junta` `texto` `numero` |
-| List | `tamanho` `adiciona` `remove` `ordena` `ordena_com` `inverte` `mapeia` `filtra` `reduz` `acha` `acha_indice` `unicos` `achatada` |
+| Conversion | `texto` `numero` `tamanho` |
+| String | `maiusculo` `minusculo` `tira_espaco` `substitui` `separa` `junta` `fatia` `contem` `comeca_com` `termina_com` `formata` |
+| Regex | `busca_regex` `acha_regex` `combina_regex` `substitui_regex` `separa_regex` |
+| List | `adiciona` `remove` `ordena` `ordena_com` `inverte` `mapeia` `filtra` `reduz` `acha` `acha_indice` `unicos` `achatada` `ordena_por` `agrupa_por` `zip` `enumera` `soma` `media` |
 | Dict | `chaves` `tem` |
 | Set | `conjunto` `contem_conjunto` `adiciona_conjunto` `remove_conjunto` `uniao` `intersecao` `diferenca` |
-| Number | `raiz` `abs` `arredonda` `teto` `chao` `min` `max` `aleatorio` |
-| Time | `agora` `agora_num` `agora_ns` `formata_tempo` `parse_tempo` `duracao` `espera_ms` |
-| Regex | `busca_regex` `acha_regex` `combina_regex` `substitui_regex` `separa_regex` |
-| Crypto | `md5` `sha1` `sha256` `sha512` `hmac_sha256` `base64_*` `base32_*` `hex_*` |
-| Filesystem | `le_arquivo` `escreve_arquivo` `anexa_arquivo` `existe` `eh_dir` `deleta` `cria_dir` `le_dir` `caminho_*` |
-| Database | `conecta` `fecha` `consulta` `executa` |
-| JSON | `de_json` `pra_json` |
-| HTTP | `busca` |
-| Server | `rota` `escuta` |
-| console/CLI | `pergunta` `argumentos` `escreve` `escreve_erro` `env` `le_tudo` `le_linhas` |
-| Errors | `quebra` `erro_msg` `erro_linha` `erro_tipo` `erro_pilha` `erro_causa` `envolve_erro` |
-| Concurrency | `bora` (keyword) `espera` `cano` `envia` `recebe` `fecha` `paralelo` |
-| Tests | `espera(a,b)` `afirma(cond, [msg])` |
+| Number | `raiz` `abs` `arredonda` `teto` `chao` `min` `max` `seno` `cosseno` `tangente` `log` `log10` `exp` (+ the value `pi`) |
+| Random | `aleatorio` `semente` `embaralha` `escolhe_um` `uuid` |
+| Time | `agora` `agora_num` `agora_ns` `formata_tempo` `parse_tempo` `duracao` `soma_tempo` `sub_tempo` `dia_da_semana` `diferenca_dias` `diferenca_horas` `converte_tz` `espera_ms` |
+| Crypto | `md5` `sha1` `sha256` `sha512` `hmac_sha256` `base64_*` `base32_*` `hex_*` `gzip_comprime` `gzip_descomprime` |
+| JSON / CSV | `de_json` `pra_json` `le_csv` `escreve_csv` |
+| Filesystem | `le_arquivo` `escreve_arquivo` `anexa_arquivo` `existe` `eh_dir` `cria_dir` `le_dir` `deleta` `copia` `move` `tamanho_arquivo` `modificado_em` `glob` `caminho_*` |
+| Console/process | `escreve` `escreve_erro` `pergunta` `le_tudo` `le_linhas` `argumentos` `env` `roda_comando` `sai` |
+| HTTP | `busca` `rota` `escuta` |
+| Database | `conecta` `consulta` `executa` `fecha` |
+| Errors | `quebra` `envolve_erro` `erro_msg` `erro_tipo` `erro_linha` `erro_pilha` `erro_causa` |
+| Concurrency | `espera` `cano` `envia` `recebe` `fecha` `paralelo` (+ the `bora` keyword) |
+| Tests | `espera(got, want)` `afirma(cond, [msg])` |

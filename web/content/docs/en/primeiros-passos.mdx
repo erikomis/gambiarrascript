@@ -7,6 +7,10 @@ Don't have `gs` yet? See [Install](/docs/en/instalacao) first.
 
 The fastest way to feel the language is opening the
 [playground](/playground) in the browser — no install required.
+`Ctrl/Cmd+Enter` runs, output streams live, **Parar** (stop) interrupts (and
+scripts are stopped after 10s), and the share link carries your code in the
+URL. Anything that needs the machine (databases, files, system commands, the HTTP
+server, stdin) won't work there — install `gs` for that.
 
 ## Hello world
 
@@ -33,11 +37,15 @@ bota nome = "Erik"
 bota idade = 25
 
 mostra "salve, " + nome + "!"
-mostra "ano que vem faco " + (idade + 1) + " primaveras"
+mostra "ano que vem faco ${idade + 1} primaveras"   # ${} interpolation
+
+idade += 1                                          # compound assignment
+mostra idade                                        # 26
 ```
 
-`bota` declares (and also re-assigns) a variable. Every assignment needs `bota`
-— a bare `x = 5` is a parse error. See [Types & operators](/docs/en/tipos).
+`bota` declares (and also re-assigns) a variable. A plain assignment always
+needs `bota` — a bare `x = 5` is a syntax error. Compound operators (`+=`,
+`-=`, `*=`...) don't take `bota`. See [Types & operators](/docs/tipos) (pt).
 
 ## Conditionals with `se_colar`
 
@@ -89,21 +97,27 @@ mostra x   # quick note on the same line
 
 `#` is a line comment; `/* ... */` is a block comment (does not nest — it
 closes at the first `*/`). Comments are discarded by the lexer, so the
-formatter does not preserve them (see [Editor & format](/docs/en/ferramentas)).
+formatter does not preserve them (see [Editor & format](/docs/ferramentas) (pt)).
 
 ## REPL
 
 ```bash
 gs repl
 gambiarra> bota x = 10
-gambiarra> mostra x * 2
-20
+gambiarra> x * 2
+=> 20
+gambiarra> gambiarra dobra(n)
+.........     funciona n * 2
+......... acabou_finalmente
+gambiarra> dobra(x)
+=> 20
 gambiarra> <ctrl+d>
 ```
 
-Only one line at a time. Declarations (`bota`, `gambiarra`) persist across
-lines. Expressions without `mostra` print nothing — emit `mostra X` to see a
-value. `ctrl+d` to exit.
+A bare expression shows its value (`=> 20`). An open block keeps reading on
+the next lines (prompt `.........`) until its `acabou_finalmente`.
+Declarations (`bota`, `gambiarra`) persist across lines. In a terminal you get
+history (↑/↓) and TAB completion; `:ajuda` lists the commands, `ctrl+d` exits.
 
 ## Running the examples
 
@@ -115,11 +129,11 @@ gs roda examples/fizzbuzz.gs
 gs roda examples/texto.gs
 ```
 
-Good starting point to explore the [Standard library](/docs/en/biblioteca)
-and [Recipes](/docs/en/exemplos).
+Good starting point to explore the [Standard library](/docs/biblioteca) (pt)
+and [Recipes](/docs/exemplos) (pt).
 
 ## Next steps
 
 - [Vocabulary](/docs/en/vocabulario) — quick reference of all keywords.
-- [Standard library](/docs/en/biblioteca) — every builtin.
-- [Command line](/docs/en/cli) — `gs roda`, `gs formata`, `gs lsp`, ...
+- [Standard library](/docs/biblioteca) (pt) — every builtin.
+- [Command line](/docs/cli) (pt) — `gs roda`, `gs testa`, `gs build`, `gs formata`, ...

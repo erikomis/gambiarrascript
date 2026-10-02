@@ -1,29 +1,56 @@
 ---
 title: Listas e dicionarios
-description: "Colecoes do GambiarraScript: lista (array) e dicionario (hash map)."
+description: "Colecoes do GambiarraScript: lista (array), dicionario (hash map com ordem) e conjunto."
 ---
 
-GambiarraScript tem duas colecoes: **lista** (array ordenado, indice inteiro)
-e **dicionario** (hash map, chave em texto/numero/booleano). As duas suportam
-`pra_cada`, indexacao `x[i]` e atribuicao `x[i] = v`.
+GambiarraScript tem tres colecoes: **lista** (array ordenado, indice inteiro),
+**dicionario** (hash map que lembra a ordem de insercao, chave em
+texto/numero/booleano) e **conjunto** (set). Lista e dicionario suportam
+`pra_cada`, indexacao `x[i]` e atribuicao `bota x[i] = v`.
 
 ## Listas
 
-Literal entre `[]`, separado por virgula. Indices em 0.
+Literal entre `[]`, separado por virgula. Indices em 0; **negativo conta do
+fim** (`xs[-1]` e o ultimo).
 
 ```gambiarrascript
 bota xs = [10, 20, 30]
 mostra xs[0]               # 10
+mostra xs[-1]              # 30
 mostra tamanho(xs)         # 3
 
-bota xs[1] = 99            # bota obrigatorio tambem em index assignment
-mostra xs                  # [10, 99, 30]
+bota xs[1] = 99            # atribuicao por indice
+xs[0] += 1                 # atribuicao composta dispensa o bota
+mostra xs                  # [11, 99, 30]
 ```
 
 Indice fora da lista vira erro de runtime (nao `nada`):
 
 ```gambiarrascript
-mostra xs[10]              # erro: indice 10 ta fora da lista
+bota xs = [10, 20, 30]
+mostra xs[10]              # erro: esse indice (10) ta fora da lista
+```
+
+### Fatia
+
+`xs[i:j]` devolve os itens de `i` ate antes de `j`. Qualquer ponta pode ficar
+de fora, e negativo vale:
+
+```gambiarrascript
+bota xs = [10, 20, 30, 40, 50]
+mostra xs[1:3]             # [20, 30]
+mostra xs[:2]              # [10, 20]
+mostra xs[3:]              # [40, 50]
+mostra xs[-2:]             # [40, 50]
+```
+
+### Range `..`
+
+`a..b` cria uma lista inclusiva — crescendo ou decrescendo:
+
+```gambiarrascript
+mostra 1..5                # [1, 2, 3, 4, 5]
+mostra 5..1                # [5, 4, 3, 2, 1]
 ```
 
 ### Aninhamento
@@ -41,17 +68,27 @@ mostra misto[3]["cinco"]   # 5
 
 ### Builtins de lista
 
-| Builtin | Assinatura | Devolve | Notas |
-| --- | --- | --- | --- |
-| `tamanho(lista)` | `(lista)` | `numero` | len da lista |
-| `adiciona(lista, item)` | `(lista, valor)` | `nada` | **muta in place** (push back) |
-| `remove(lista, item)` | `(lista, valor)` | `nada` | remove **primeira** ocorrencia igual (`iguais`); muta |
-| `ordena(lista)` | `(lista)` | `nada` | sort estavel in-place; so mix de Numero e/ou Texto |
-| `inverte(lista)` | `(lista)` | `nada` | in-place |
-| `mapeia(lista, fn)` | `(lista, gambiarra)` | `lista` | nova lista com `fn(elem)` — nao muta |
-| `filtra(lista, fn)` | `(lista, gambiarra)` | `lista` | nova lista com elems onde `fn(elem)` e truthy |
+| Builtin | Devolve | Notas |
+| --- | --- | --- |
+| `tamanho(lista)` | `numero` | |
+| `adiciona(lista, item)` | `nada` | **muta**: poe no fim |
+| `remove(lista, item)` | `nada` | **muta**: tira a primeira ocorrencia igual |
+| `ordena(lista)` | `nada` | **muta**: crescente; so numeros ou so textos |
+| `ordena_com(lista, fn)` | `nada` | **muta**: `fn(a, b)` diz se `a` vem antes (booleano) ou devolve `<0/0/>0` |
+| `inverte(lista)` | `nada` | **muta** |
+| `mapeia(lista, fn)` | `lista` | nova lista com `fn(item)` |
+| `filtra(lista, fn)` | `lista` | nova lista com os itens onde `fn(item)` e verdadeiro |
+| `reduz(lista, fn, [inicial])` | valor | acumula `fn(acc, item)` |
+| `acha(lista, fn)` / `acha_indice(lista, fn)` | item / indice | primeiro que casa (`nada` / `-1` se nenhum) |
+| `unicos(lista)` / `achatada(lista)` | `lista` | sem repetidos / achatada um nivel |
+| `ordena_por(lista, campo)` | `lista` | lista de dicionarios ordenada pelo campo |
+| `agrupa_por(lista, fn)` | `dicionario` | `{chave: [itens]}` |
+| `zip(a, b)` / `enumera(lista)` | `lista` | pares `[a[i], b[i]]` / `[indice, item]` |
+| `soma(lista)` / `media(lista)` | `numero` | |
+| `embaralha(lista)` / `escolhe_um(lista)` | `lista` / item | aleatorio (veja `semente`) |
 
-`junta(lista, sep)` tambem funciona em lista (veja [Textos](/docs/strings)).
+`junta(lista, sep)` cola a lista num texto (veja [Textos](/docs/strings)).
+Referencia completa em [Biblioteca padrao](/docs/biblioteca#lista).
 
 ### Exemplo
 
@@ -60,90 +97,112 @@ bota nums = [5, 2, 8, 1, 9]
 
 adiciona(nums, 3)
 ordena(nums)
-mostra "ordenados: " + junta(nums, ", ")   # "1, 2, 3, 5, 8, 9"
+mostra "ordenados: " + junta(nums, ", ")   # ordenados: 1, 2, 3, 5, 8, 9
 
 inverte(nums)
-mostra "invertidos: " + junta(nums, ", ")  # "9, 8, 5, 3, 2, 1"
+mostra "invertidos: " + junta(nums, ", ")  # invertidos: 9, 8, 5, 3, 2, 1
 
 remove(nums, 9)
-mostra "sem o 9: " + junta(nums, ", ")     # "8, 5, 3, 2, 1"
+mostra "sem o 9: " + junta(nums, ", ")     # sem o 9: 8, 5, 3, 2, 1
 
-gambiarra dobra(n)
-    funciona n * 2
-acabou_finalmente
-mostra mapeia(nums, dobra)                 # [16, 10, 6, 4, 2]
-
-gambiarra par(n)
-    funciona n % 2 == 0
-acabou_finalmente
-mostra filtra(nums, par)                   # [8, 6, 4, 2]
+mostra mapeia(nums, gambiarra(n) funciona n * 2 acabou_finalmente)    # [16, 10, 6, 4, 2]
+mostra filtra(nums, gambiarra(n) funciona n % 2 == 0 acabou_finalmente)   # [8, 2]
+mostra reduz(nums, gambiarra(acc, n) funciona acc + n acabou_finalmente)  # 19
+mostra soma(nums)                                                     # 19
+mostra acha(nums, gambiarra(n) funciona n < 4 acabou_finalmente)      # 3
+mostra unicos([1, 2, 1, 3, 2])                                        # [1, 2, 3]
+mostra achatada([[1, 2], [3], 4])                                     # [1, 2, 3, 4]
 ```
 
-<Callout type="warn" title="adiciona/remove/ordena/inverte mutam">
+<Callout type="warn" title="adiciona/remove/ordena/ordena_com/inverte mutam">
   Eles devolvem `nada`. Se voce fizer `bota y = adiciona(x, 1)`, `y` sera
-  `nada` — a mutacao acontece em `x`. Compare com `mapeia`/`filtra`, que
-  **devolvem** uma nova lista e nao tocam a original.
+  `nada` — a mutacao acontece em `x`. Compare com `mapeia`/`filtra`/
+  `ordena_por`, que **devolvem** uma lista nova e nao tocam a original.
 </Callout>
 
 ## Dicionarios
 
 Literal entre `{}`, pares `chave: valor`. Chave pode ser **texto**, **numero**
-ou **booleano** (qualquer expressao que avalie pra um desses tipos).
+ou **booleano** (qualquer expressao que avalie pra um desses tipos). O
+dicionario **lembra a ordem de insercao** — `chaves`, `pra_cada`, `mostra` e
+`pra_json` saem sempre na mesma ordem.
 
 ```gambiarrascript
 bota pessoa = {"nome": "Erik", "idade": 25, "dev": deu_bom}
 
-mostra pessoa["nome"]                          # Erik
-mostra pessoa["idade"]                          # 25
-mostra pessoa["dev"]                            # deu_bom
+mostra pessoa["nome"]                  # Erik
+mostra pessoa["idade"]                 # 25
 
-bota pessoa["cidade"] = "Sao Paulo"            # upsert
-mostra pessoa["sobrenome"]                      # nada (chave nao existe -> nao erro)
+bota pessoa["cidade"] = "Sao Paulo"    # insere ou atualiza
+mostra pessoa["sobrenome"]             # nada (chave nao existe -> nao e erro)
 ```
+
+### Acesso com ponto
+
+Pra chave texto que e um nome valido, `d.campo` e atalho pra `d["campo"]` —
+lendo, escrevendo e em atribuicao composta. Da pra guardar gambiarra no
+dicionario e chamar como "metodo" (passando o proprio objeto):
+
+```gambiarrascript
+bota jogador = {"nome": "Erik", "pontos": 0}
+jogador.pontos += 100
+bota jogador.nivel = "chefe"
+mostra "${jogador.nome}: ${jogador.pontos} (${jogador.nivel})"   # Erik: 100 (chefe)
+mostra jogador.vidas                  # nada
+
+bota cachorro = {"nome": "Rex", "late": gambiarra(eu) funciona eu.nome + " faz au au" acabou_finalmente}
+mostra cachorro.late(cachorro)        # Rex faz au au
+```
+
+Se a variavel puder ser `nada`, use `d?.campo` (veja [Tipos](/docs/tipos#nada-navegacao-segura-e-coalescing)).
 
 ### Chaves dinamicas
 
-A chave é uma expressao, entao voce pode computar:
+A chave e uma expressao, entao voce pode computar:
 
 ```gambiarrascript
+bota pessoa = {"nome": "Erik"}
 bota k = "nome"
-mostra pessoa[k]                                # Erik
+mostra pessoa[k]                       # Erik
 bota dic = {"2024": 1, "2025": 2}
-mostra dic["202" + "4"]                         # 1
+mostra dic["202" + "4"]                # 1
 ```
 
-Atencao: `{"1": "x"}` e `{1: "x"}` tem chaves **diferentes** — uma é TEXTO e a
-outra NUMERO. Eles nao colidem; sao duas chaves distintas.
+Atencao: `{"1": "x"}` e `{1: "x"}` tem chaves **diferentes** — uma e TEXTO e a
+outra NUMERO. Elas nao colidem; sao duas chaves distintas.
 
 ### Builtins de dicionario
 
 | Builtin | Assinatura | Devolve | Notas |
 | --- | --- | --- | --- |
 | `tamanho(dic)` | `(dicionario)` | `numero` | numero de pares |
-| `chaves(dic)` | `(dicionario)` | `lista` | lista de chaves (ordem nao garantida) |
+| `chaves(dic)` | `(dicionario)` | `lista` | na ordem de insercao |
 | `tem(dic, chave)` | `(dicionario, valor)` | `booleano` | confere se a chave existe |
 
 ```gambiarrascript
 bota d = {"a": 1, "b": 2, "c": 3}
 mostra tamanho(d)               # 3
-mostra chaves(d)                # ["a", "b", "c"] (ordem varia)
+mostra chaves(d)                # [a, b, c]
 mostra tem(d, "b")              # deu_bom
 mostra tem(d, "z")              # deu_ruim
 ```
 
 ### Iteracao com `pra_cada`
 
-`pra_cada k em dicionario` itera sobre as **chaves** (nao os valores):
+`pra_cada k em dicionario` itera as **chaves**; com dois nomes,
+`pra_cada k, v em dicionario` vem chave **e** valor:
 
 ```gambiarrascript
 bota d = {"a": 1, "b": 2, "c": 3}
-pra_cada chave em d
-    mostra chave + " = " + texto(d[chave])
+pra_cada chave, valor em d
+    mostra "${chave} = ${valor}"
 acabou_finalmente
-# "a = 1", "b = 2", "c = 3"
+# a = 1
+# b = 2
+# c = 3
 ```
 
-Pra iterar os valores, basta indexar `d[chave]` dentro do loop, como acima.
+Na lista, `pra_cada i, v em lista` da o indice e o item.
 
 ### Atribuicao aninhada
 
@@ -154,25 +213,26 @@ bota config = {
 }
 
 bota config["banco"]["porta"] = 5433        # funciona: config["banco"] ja existe
+config.cache.porta += 1                     # com ponto tambem
 mostra config["banco"]["porta"]             # 5433
+mostra config.cache.porta                   # 6380
 
-bota config["novos"]["x"] = 1              # ERRO: config["novos"] e nada,
-                                            # so da pra atribuir indice em lista/dic
+bota config["novos"]["x"] = 1              # ERRO: config["novos"] e nada
 ```
 
 <Callout type="warn" title="Sem auto-vivificacao">
   Atribuir em `dic["a"]["b"]` so funciona se `dic["a"]` ja for um
-  dicionario/lista. Se a chave intermediaria nao existe, da erro em runtime —
-  o interpretador nao cria dicionarios no meio do caminho automaticamente (como
-  Perl, por exemplo). Crie o aninhado explicitamente antes:
+  dicionario/lista. Se a chave intermediaria nao existe, da erro em runtime
+  ("nao da pra atribuir indice em NADA") — o interpretador nao cria
+  dicionarios no meio do caminho. Crie o aninhado antes:
   `bota dic["a"] = {}` e depois `bota dic["a"]["b"] = 1`.
 </Callout>
 
 ### Igualdade de dicionarios
 
 Dois dicionarios sao iguais se tiverem o mesmo numero de pares e, para cada
-chave em um, a outra tiver a mesma chave com o mesmo valor (recursivo). Ordem
-das chaves nao importa:
+chave em um, a outra tiver a mesma chave com o mesmo valor (recursivo). A ordem
+das chaves **nao** importa pra igualdade:
 
 ```gambiarrascript
 mostra {"a": 1, "b": 2} == {"b": 2, "a": 1}     # deu_bom
@@ -180,3 +240,30 @@ mostra {"a": 1} == {"a": 1, "b": 2}              # deu_ruim
 ```
 
 Mais sobre igualdade em [Tipos e operadores](/docs/tipos#igualdade).
+
+## Desestruturacao
+
+`bota [a, b] = lista` pega por posicao; `bota {x, y} = dic` pega pela chave de
+mesmo nome. O que faltar vira `nada` (e o que sobrar e ignorado):
+
+```gambiarrascript
+bota [primeiro, segundo] = [1, 2, 3]
+mostra "${primeiro} e ${segundo}"     # 1 e 2
+
+bota {nome, idade, cpf} = {"nome": "Erik", "idade": 25}
+mostra [nome, idade, cpf]             # [Erik, 25, nada]
+```
+
+## Conjuntos
+
+`conjunto(lista)` cria um set (sem repetidos). Operacoes: `contem_conjunto`,
+`adiciona_conjunto`, `remove_conjunto`, `uniao`, `intersecao`, `diferenca` —
+veja [Biblioteca padrao](/docs/biblioteca#conjunto). A ordem de impressao de um
+conjunto nao e garantida.
+
+```gambiarrascript
+bota vistos = conjunto(["ana", "bia", "ana"])
+adiciona_conjunto(vistos, "caio")
+mostra contem_conjunto(vistos, "ana")    # deu_bom
+mostra contem_conjunto(vistos, "duda")   # deu_ruim
+```

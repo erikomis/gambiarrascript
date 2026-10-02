@@ -3,37 +3,62 @@ title: Instalacao
 description: Como instalar o binario gs, usar Docker ou compilar do source.
 ---
 
-GambiarraScript roda em Go 1.23+. Existem tres jeitos de colocar o `gs` na sua
-maquina: compilar do source, usar Docker, ou baixar um binario pre-compilado.
+Tres jeitos de colocar o `gs` na maquina: o instalador (baixa um binario
+pronto), compilando com o teu Go, ou compilando via Docker (sem Go instalado).
 
-## 1. Compilando do source (recomendado)
+## 1. Instalador (recomendado)
 
-Se voce ja tem Go instalado:
+No Linux e no macOS:
 
 ```bash
-git clone https://github.com/erik-martins/gambiarrascript
+curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | sh
+gs --version
+```
+
+Ele baixa o binario da ultima release do GitHub, confere o sha256 e instala em
+`/usr/local/bin` (se der pra escrever la) ou em `~/.local/bin`. **Nunca usa
+`sudo`.** Da pra ajustar com variaveis de ambiente:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | GS_VERSAO=0.2.0 sh   # versao fixa
+curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | GS_DIR=~/bin sh       # outro diretorio
+```
+
+No Windows, baixe o `.zip` da pagina de
+[releases](https://github.com/erikomis/gambiarrascript/releases) e ponha o
+`gs.exe` no `PATH`.
+
+## 2. Compilando com Go
+
+Se voce ja tem Go 1.23.12+ instalado:
+
+```bash
+git clone https://github.com/erikomis/gambiarrascript
 cd gambiarrascript
 
-./scripts/build                # gera dist/gs nativo do teu sistema
+go build -o dist/gs ./cmd/gs   # gera dist/gs
 ./scripts/install              # copia pra /usr/local/bin (use --user p/ ~/.local/bin)
 gs --version
 ```
 
-Pra gerar binarios pra todas as plataformas de uma vez:
+O `scripts/install` so copia o `dist/gs` pro `PATH` (e no macOS re-assina o
+binario, senao o sistema mata ele com "Killed: 9").
+
+## 3. Com Docker (sem instalar Go)
+
+O `scripts/build` compila **dentro de um container** `golang:1.23` e deixa o
+binario nativo do teu sistema em `dist/gs`:
 
 ```bash
-./scripts/build --all          # saida em dist/ (linux, darwin, windows)
+./scripts/build                # dist/gs pro teu sistema
+./scripts/install              # poe no PATH
+./scripts/build --all          # cross-compila: linux, darwin (arm64/amd64), windows
 ```
 
-Os scripts sao so wrappers em volta de `go build`/`go install` — olha
-`scripts/` no repo se quiser ver o que estao fazendo.
-
-## 2. Com Docker (sem instalar Go)
-
-O helper `scripts/dgo` roda tudo num container:
+E o helper `scripts/dgo` roda qualquer comando `go` no container:
 
 ```bash
-# rodar um arquivo
+# rodar um arquivo sem instalar nada
 ./scripts/dgo run ./cmd/gs roda examples/fizzbuzz.gs
 
 # abrir o REPL interativo
@@ -44,22 +69,18 @@ docker run --rm -it -v "$PWD":/app -w /app golang:1.23 \
 Existe tambem o `Dockerfile` e o `docker-compose.yml` pra voce construir
 uma imagem propria (util pra CI).
 
-## 3. Binario pre-compilado
-
-Quando houver releases, o jeito sera baixar direto do GitHub Releases.
-
 ## Requisitos
 
 | O que | Versao |
 | --- | --- |
-| Go | 1.23.12 ou maior (se for compilar) |
+| Go | 1.23.12 ou maior (se for compilar com Go) |
 | Docker | qualquer versao recente (opcional) |
 | OS | Linux, macOS, Windows |
 
 ## Verificando a instalacao
 
 ```bash
-gs --version                  # gs (GambiarraScript) 0.1.0
+gs --version                  # gs (GambiarraScript) 0.1.0 (gs versao tambem vale)
 gs --help                     # lista os subcomandos
 gs roda examples/salve.gs     # Salve, tropa!
 ```

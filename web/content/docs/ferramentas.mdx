@@ -1,6 +1,6 @@
 ---
 title: Editor e formata
-description: Extensao VSCode, LSP, formatter e snippets.
+description: Extensao VSCode, LSP, formatter e highlight.
 ---
 
 GambiarraScript vem com tres ferramentas: uma extensao pro VSCode, um servidor
@@ -13,11 +13,12 @@ A extensao empacota tudo: highlight, snippets, comando de rodar, LSP.
 
 ### Instalar
 
+Precisa do `gs` no `PATH` (veja [Instalacao](/docs/instalacao)). Pra compilar
+a extensao:
+
 ```bash
-cd editors/vscode
-npm install
-npm run compile
-# gera o .vsix (ja tem um em editors/vscode/gambiarrascript-0.1.0.vsix)
+./scripts/build-extension
+# o repo tambem traz um pacote pronto: editors/vscode/gambiarrascript-0.1.0.vsix
 ```
 
 Depois instala no VSCode:
@@ -31,9 +32,11 @@ aponta o `gambiarrascript-0.1.0.vsix`.
 
 ### O que ela tem
 
-- **Syntax highlight** baseado em TextMate (`syntaxes/gambiarrascript.tmLanguage.json`).
-- **Snippets** (`snippets/gambiarrascript.json`): `gambiarra`, `se_colar`,
-  `pra_cada`, `pra_cada_em`, `enquanto`, `arruma`, `busca`, `rota`, `escuta`.
+- **Syntax highlight** baseado em TextMate (`syntaxes/gambiarrascript.tmLanguage.json`)
+  — o mesmo grammar que colore os exemplos desta documentacao.
+- **Snippets** (`snippets/gambiarrascript.json`) pros blocos e builtins mais
+  usados: `gambiarra`, `se_colar`, `pra_cada`, `pra_cada_em`, `enquanto`,
+  `arruma`, `importa`, `busca`, `rota`, `bora`, `cano`...
 - **Rodar arquivo**: tecla `F5` ou `cmd/Ctrl+R`, command palette
   `GambiarraScript: Rodar arquivo`.
 - **Abrir REPL**: command `GambiarraScript: Abrir REPL`.
@@ -51,12 +54,18 @@ O servidor LSP usa stdin/stdout em JSON-RPC. Suporta:
 
 | feature | sim/nao |
 | --- | --- |
-| Diagnosticos (parse errors com linha/col) | sim, em `didOpen`/`didChange` |
+| Diagnosticos | sim, em `didOpen`/`didChange`: erros de sintaxe com linha/coluna + avisos do lint |
 | Autocomplete | sim — palavras-chave, builtins, identificadores |
-| Hover | sim — curta descricao de palavras-chave e builtins |
+| Hover | sim — descricao curta de palavras-chave e builtins |
 | Go-to-definition | nao (ainda) |
 | Rename | nao |
 | Document symbols | nao |
+
+Os avisos do lint sao os mesmos do `gs check`: nome que nao existe (nao e
+builtin, palavra-chave, variavel, parametro nem `quebrou`), variavel `bota`
+declarada e nunca usada (fora do topo do arquivo) e codigo morto depois de
+`funciona`/`vaza`/`continua`. Reatribuir um nome cravado (`crava`) aparece como
+**erro**, igual no `gs roda`.
 
 ### Configurando o LSP em outros editores
 
@@ -121,8 +130,9 @@ args = ["lsp"]
 ## Formatter (`gs formata`)
 
 ```bash
-gs formata sujo.gs > lindo.gs
-gs formata sujo.gs | gs roda /dev/stdin
+gs formata sujo.gs > lindo.gs     # imprime formatado
+gs formata -w sujo.gs             # sobrescreve o arquivo (so se mudou)
+gs formata -w .                   # todos os .gs da pasta, recursivo
 ```
 
 O formatter re-emite o AST. Regras:
@@ -131,33 +141,34 @@ O formatter re-emite o AST. Regras:
 - Blocos: abre em linha separada, fecha com `acabou_finalmente` no nivel pai.
 - `else if` vira `se_nao_colar se_colar ...`.
 - Infix recebe parenteses so quando a precedencia exige.
-- Listas e dicionarios literais ficam inline (sem quebra de linha).
-- Texto e re-citado via `strconv.Quote` — escapamentos sao normalizados pra
-  `\"`, `\\`, etc.
+- Listas, dicionarios e lambdas ficam inline (sem quebra de linha).
+- Atribuicao composta (`x += 1`) e interpolacao (`"${x}"`) sao preservadas.
+- Texto e re-citado com aspas duplas — escapes normalizados (`\"`, `\\`, `\n`)
+  e string de crase vira string de aspas equivalente.
 - **Comentarios sao descartados**: o lexer nao emite tokens de comentario,
-  entao o formatter nao tem como preserva-los. Use o formatter com cuidado
-  em arquivos com historia nos comentarios.
+  entao o formatter nao tem como preserva-los.
 
 <Callout type="warn" title="Comentarios somem no formatter">
   Se voce rodar `gs formata` num arquivo com `#` ou `/* */`, os comentarios
-  **somem** completamente. E uma limitacao conhecida do lexer (nao emite
-  tokens de comentario). Guarde os comentarios antes, ou aceite o risco.
+  **somem** completamente (e com `-w`, somem do disco). E uma limitacao
+  conhecida do lexer. Use controle de versao, ou aceite o risco.
 </Callout>
 
 ### Indentacao
 
-Identacao visual e livre na linguagem (nao e significativa como em Python);
+Indentacao visual e livre na linguagem (nao e significativa como em Python);
 o que conta e o par `se_colar`/`acabou_finalmente`. O formatter impoe 4
 espacos pra ficar consistente.
 
-## Highlight sem editor
+## Highlight fora do editor
 
-Se so quer colorir como shell, da pra improvisar com `shiki` ou Pygments;
-nao tem grammar oficial pra eles ainda. Pra web, o [playground](/playground)
-usa CodeMirror com syntax de JavaScript como fallback (nao tenho grammar
- propria ainda).
+O grammar TextMate da extensao (`editors/vscode/syntaxes/gambiarrascript.tmLanguage.json`)
+funciona em qualquer ferramenta que fale TextMate — e o que esta documentacao
+usa (via shiki) nos blocos de codigo marcados como `gambiarrascript` (ou
+`gs`). O
+[playground](/playground) tem o highlight proprio dele, no editor do navegador.
 
 ## Proximo passo
 
-- [Linha de comando](/docs/cli) — referncia completa do `gs`.
+- [Linha de comando](/docs/cli) — referencia completa do `gs`.
 - [Biblioteca padrao](/docs/biblioteca) — todos os builtins.

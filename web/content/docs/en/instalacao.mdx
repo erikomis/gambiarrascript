@@ -3,10 +3,28 @@ title: Install
 description: Get the gs binary on your machine — build, Docker, or native install.
 ---
 
-You can run GambiarraScript three ways: build from source with Go, run inside
-Docker, or grab a prebuilt native binary.
+Three ways to get `gs`: the installer (downloads a prebuilt binary), building
+from source with Go, or building inside Docker.
 
-## Option 1 — Build from source (recommended)
+## Option 1 — Installer (recommended)
+
+On Linux and macOS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | sh
+gs --version
+```
+
+It downloads the latest GitHub Release binary, checks its sha256 and installs
+it to `/usr/local/bin` (if writable) or `~/.local/bin`. It **never uses
+`sudo`**. Set `GS_VERSAO=0.2.0` to pin a version or `GS_DIR=~/bin` to pick the
+directory (put the variable before `sh` in the pipe).
+
+On Windows, download the `.zip` from the
+[releases page](https://github.com/erikomis/gambiarrascript/releases) and put
+`gs.exe` on your `PATH`.
+
+## Option 2 — Build from source
 
 You need Go 1.23.12 or newer:
 
@@ -19,7 +37,7 @@ go build -o dist/gs ./cmd/gs
 
 Put `dist/gs` somewhere in your `PATH` (e.g. `~/bin` or `/usr/local/bin`).
 
-## Option 2 — Docker (no Go needed)
+## Option 3 — Docker (no Go needed)
 
 The helper `scripts/dgo` runs everything inside a container:
 
@@ -31,7 +49,7 @@ The helper `scripts/dgo` runs everything inside a container:
 docker run --rm -it -v "$PWD":/app -w /app golang:1.23 go run ./cmd/gs repl
 ```
 
-## Option 3 — Native binary via Docker, then install
+### Native binary via Docker, then install
 
 Build once through Docker, install into your PATH — afterwards it runs without
 Docker:
@@ -48,7 +66,7 @@ To build binaries for every supported platform: `./scripts/build --all`
 ## Verify
 
 ```bash
-gs --version
+gs --version          # or: gs versao
 # gs (GambiarraScript) 0.1.0
 
 gs roda examples/salve.gs
@@ -65,4 +83,4 @@ go test ./...                 # native Go
 ## Next
 
 - [Getting started](/docs/en/primeiros-passos) — write your first script.
-- [Command line](/docs/en/cli) — every `gs` subcommand.
+- [Command line](/docs/cli) (pt) — every `gs` subcommand.

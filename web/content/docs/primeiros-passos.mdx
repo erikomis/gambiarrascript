@@ -4,10 +4,14 @@ description: Escreve e roda o teu primeiro script GambiarraScript.
 ---
 
 Voce ja tem o `gs` na maquina? Se nao, segue [Instalacao](/docs/instalacao)
- primeiro.
+primeiro.
 
-Mantem o estilo: o jeito mais rapido de entender e abrindo o [playground](/playground)
-no navegador. Sem instalar nada.
+O jeito mais rapido de sentir a linguagem e abrindo o [playground](/playground)
+no navegador. Sem instalar nada: `Ctrl/Cmd+Enter` roda, a saida aparece ao
+vivo, o botao **Parar** interrompe (e script que passa de 10s e parado
+sozinho), e o link de compartilhar leva o codigo junto na URL. O que depende da
+maquina (banco de dados, arquivos, comandos do sistema, servidor, stdin) nao
+rola por la — pra isso, instala o `gs`.
 
 ## Hello world
 
@@ -34,11 +38,15 @@ bota nome = "Erik"
 bota idade = 25
 
 mostra "salve, " + nome + "!"
-mostra "ano que vem faco " + (idade + 1) + " primaveras"
+mostra "ano que vem faco ${idade + 1} primaveras"   # interpolacao com ${}
+
+idade += 1                                          # atribuicao composta
+mostra idade                                        # 26
 ```
 
-`bota` declara (e tambem reatribui) variavel. Toda atribuicao precisa de
-`bota` — `x = 5` puro nao funciona (erro de parse). Veja
+`bota` declara (e tambem reatribui) variavel. Atribuicao simples sempre
+precisa de `bota` — `x = 5` puro nao funciona (erro de sintaxe). Os operadores
+compostos (`+=`, `-=`, `*=`...) dispensam o `bota`. Veja
 [Tipos e operadores](/docs/tipos) pra detalhes.
 
 ## Condicao com `se_colar`
@@ -98,14 +106,20 @@ eles (leia [Editor e formata](/docs/ferramentas)).
 ```bash
 gs repl
 gambiarra> bota x = 10
-gambiarra> mostra x * 2
-20
+gambiarra> x * 2
+=> 20
+gambiarra> gambiarra dobra(n)
+.........     funciona n * 2
+......... acabou_finalmente
+gambiarra> dobra(x)
+=> 20
 gambiarra> <ctrl+d>
 ```
 
-So entra uma linha por vez. Declaracoes (`bota`, `gambiarra`) persistem
-entre as linhas. Expressoes sem `mostra` nao imprimem nada — manda
-`mostra X` explicto. `ctrl+d` pra vazar.
+Expressao solta mostra o valor (`=> 20`). Bloco aberto continua na linha de
+baixo (prompt `.........`) ate o `acabou_finalmente`. Declaracoes (`bota`,
+`gambiarra`) persistem entre as linhas. No terminal tem historico (↑/↓) e
+TAB completa nomes; `:ajuda` lista os comandos e `ctrl+d` vaza.
 
 ## Rodando os exemplos
 
@@ -120,8 +134,8 @@ gs roda examples/texto.gs
 Sao um bom ponto de partida pra fuçar [Biblioteca padrao](/docs/biblioteca)
 e [Receitas](/docs/exemplos).
 
-## proximos passos
+## Proximos passos
 
 - [Vocabulario](/docs/vocabulario) — referencia rapida das palavras-chave
 - [Biblioteca padrao](/docs/biblioteca) — todos os builtins
-- [Linha de comando](/docs/cli) — `gs roda`, `gs formata`, `gs lsp`...
+- [Linha de comando](/docs/cli) — `gs roda`, `gs testa`, `gs build`, `gs formata`...

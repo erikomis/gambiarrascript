@@ -31,7 +31,9 @@ acabou_finalmente
 ```
 
 GambiarraScript e uma linguagem interpretada escrita em Go. Tem lexer, parser,
-interpretador (tree-walking) e uma VM experimental (bytecode). Tambem tem LSP,
+compilador pra bytecode e uma **VM**, que e o motor padrao de tudo (`gs roda`,
+`gs build`, `gs testa`, REPL e playground); o interpretador tree-walking
+original continua la como fallback (`gs roda --tree`). Tambem tem LSP,
 formatter, extensao pro VSCode e um runtime WASM que roda no navegador.
 
 ## Caracteristicas
@@ -42,15 +44,18 @@ formatter, extensao pro VSCode e um runtime WASM que roda no navegador.
     "linguagem": { type: "'GambiarraScript'", description: "interpretada, dinamica, tipagem fraca" },
     "implementada_em": { type: "'Go'", description: "1.23.12+" },
     "palavras_chave": { type: "string", description: "em portugues, fixas, sem alias" },
-    "tipos": { type: "string", description: "numero, texto, booleano, nada, lista, dicionario" },
-    "modulos": { type: "boolean", default: true, description: "importa \"arquivo.gs\"" },
-    "http": { type: "boolean", default: true, description: "cliente (busca) e servidor (rota/escuta)" },
-    "json": { type: "boolean", default: true, description: "de_json / pra_json" },
-    "arquivo": { type: "boolean", default: true, description: "le_arquivo / escreve_arquivo" },
-    "lsp": { type: "boolean", default: true, description: "diagnosticos, autocomplete, hover" },
-    "wasm": { type: "boolean", default: true, description: "roda no navegador (playground)" },
-    "formata": { type: "boolean", default: true, description: "gs formata" },
-    "vm": { type: "boolean", default: "experimental", description: "gs roda --vm (sem builtins ainda)" }
+    "tipos": { type: "string", description: "numero (inteiro exato ou real), texto, booleano, nada, lista, dicionario, conjunto" },
+    "sintaxe": { type: "string", description: "interpolacao ${}, range .., ternario, escolhe/caso, lambdas, destructuring, ?. e ??, +=, fatia xs[1:3]" },
+    "modulos": { type: "boolean", default: true, description: "importa \"arquivo.gs\" [como nome]" },
+    "http": { type: "boolean", default: true, description: "cliente (busca) e servidor paralelo (rota/escuta)" },
+    "json": { type: "boolean", default: true, description: "de_json / pra_json (preservam a ordem das chaves)" },
+    "banco": { type: "boolean", default: true, description: "conecta/consulta/executa — sqlite, mysql, postgres" },
+    "stdlib": { type: "string", description: "texto, regex, listas, conjunto, tempo, crypto, csv, gzip, arquivos, processos" },
+    "concorrencia": { type: "boolean", default: true, description: "bora (goroutine + futuro), cano, paralelo" },
+    "erros": { type: "boolean", default: true, description: "arruma/quebrou/finalmente + erro_tipo/erro_pilha" },
+    "vm": { type: "boolean", default: true, description: "motor padrao; gs roda --tree volta pro tree-walker" },
+    "ferramentas": { type: "string", description: "repl, check, formata, testa, doc, build, bench, get, lsp" },
+    "wasm": { type: "boolean", default: true, description: "roda no navegador (playground)" }
   }}
 />
 
@@ -90,6 +95,7 @@ formatter, extensao pro VSCode e um runtime WASM que roda no navegador.
   <Accordion title="Avancado">
     - [Biblioteca padrao](/docs/biblioteca)
     - [Arruma / quebrou](/docs/erros)
+    - [Concorrencia](/docs/concorrencia)
     - [Modulos](/docs/modulos)
     - [Pegadinhas](/docs/pegadinhas)
   </Accordion>

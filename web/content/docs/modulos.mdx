@@ -1,30 +1,64 @@
 ---
 title: Modulos
-description: importa "caminho.gs" pra reaproveitar codigo entre arquivos.
+description: importa "caminho.gs" (com ou sem `como`) pra reaproveitar codigo entre arquivos.
 ---
 
-```gambiarrascript
-importa "util.gs"
+Dois jeitos de importar:
 
-mostra dobra(5)        # definido em util.gs
+```gambiarrascript
+# util.gs
+bota versao = "1.0"
+gambiarra dobra(n)
+    funciona n * 2
+acabou_finalmente
 ```
 
-`importa "caminho"` resolve o caminho relativo ao **diretorio base** do script
-que importa. Cada import carrega o modulo de novo; o resultado e mesclado no
-escopo do importador: tudo que o modulo definiu (variaveis, funcoes) fica
-visivel como se fosse parte do mesmo arquivo.
+```gambiarrascript
+# principal.gs
+importa "util.gs" como util     # tudo do modulo fica dentro de `util`
+mostra util.dobra(5)            # 10
+mostra util.versao              # 1.0
+```
+
+```gambiarrascript
+# outro.gs
+importa "util.gs"               # sem `como`: despeja tudo no escopo de quem importa
+mostra dobra(5)                 # 10
+mostra versao                   # 1.0
+```
+
+- **Com `como nome`**, o modulo vira um dicionario: cada variavel/gambiarra
+  que ele definiu vira uma chave, e voce acessa com ponto (`util.dobra(5)`).
+  E o jeito recomendado — nada de colisao de nome silenciosa.
+- **Sem `como`**, tudo que o modulo definiu fica visivel como se estivesse no
+  mesmo arquivo. Se dois modulos definirem o mesmo nome, o ultimo importado
+  ganha, sem aviso.
 
 Veja `examples/modulos/` no repo pra um exemplo completo (`principal.gs`
 importa `util.gs`).
 
 ## Resolucao de caminho
 
-- Relativo -> relativo ao dir base (setado pelo runner; via CLI e o dir do
-  arquivo `.gs` principal).
-- Absoluto -> usado direto.
+- Relativo → relativo ao **diretorio do arquivo `.gs` principal** que o
+  `gs roda` recebeu.
+- Absoluto → usado direto.
+
+## Modulos de terceiros: gs get
+
+`gs get <url> [nome.gs]` baixa um `.gs` (e confere se ele parseia) pra
+`gs_modulos/` e registra a dependencia no `gambiarra.json` (se existir). Depois
+e so importar:
+
+```bash
+gs get https://exemplo.com/libs/datas.gs
+# usa com: importa "gs_modulos/datas.gs"
+```
+
+Ainda nao tem versao/lockfile. Veja [Linha de comando](/docs/cli#gs-get).
 
 ## Notas
 
-- Importa e **execucao literal** do modulo; nao existe `export`/`nao-export`.
-  tudo vaza.
-- Ciclos de importacao viram recursao (cuidado com stack).
+- Importar e **executar** o modulo: o codigo de topo dele roda (um `mostra`
+  solto no modulo aparece na saida).
+- Nao existe `export`/privado: tudo que o modulo define fica acessivel.
+- Evite importacao circular (`a.gs` importa `b.gs` que importa `a.gs`).

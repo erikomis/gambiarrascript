@@ -63,7 +63,7 @@ pra converter.
 ```gambiarrascript
 # rode: gs roda args.gs um dois treis
 bota args = argumentos()
-mostra "recebi " + texto(tamanho(args)) + " argumentos"
+mostra "recebi ${tamanho(args)} argumentos"
 pra_cada a em args
     mostra "- " + a
 acabou_finalmente
@@ -124,11 +124,8 @@ gambiarra eco(pedido)
 acabou_finalmente
 
 gambiarra ola(pedido)
-    bota nome = pedido["query"]["nome"]
-    se_colar nome == nada
-        bota nome = "estranho"
-    acabou_finalmente
-    funciona "e ai, " + nome + "!"
+    bota nome = pedido.query.nome ?? "estranho"
+    funciona "e ai, ${nome}!"
 acabou_finalmente
 
 rota("GET", "/", inicio)
@@ -139,8 +136,8 @@ mostra "servidor de pe na porta 8080 (ctrl+c pra parar)"
 escuta(8080)
 ```
 
-Atencao: `escuta` e **serial** (uma requisicao por vez), nao tem concorrencia.
-Veja [Servidor HTTP](/docs/servidor) pra todos os campos do `pedido`.
+Cada requisicao roda em paralelo. Veja [Servidor HTTP](/docs/servidor) pra
+todos os campos do `pedido`.
 
 ## API REST com JSON
 
@@ -152,12 +149,11 @@ gambiarra api(pedido)
 
     arruma
         bota dados = de_json(pedido["corpo"])
-        bota resposta = {
-            "ok": deu_bom,
-            "recebido": dados,
-            "tamanho": tamanho(dados["corpo"])  # se voce mandou campo "corpo"
+        funciona {
+            "status": 201,
+            "corpo": pra_json({"ok": deu_bom, "recebido": dados}),
+            "cabecalhos": {"Content-Type": "application/json"}
         }
-        funciona pra_json(resposta)
     quebrou erro
         funciona {
             "status": 400,
@@ -184,8 +180,10 @@ mostra "li do disco:"
 mostra conteudo
 ```
 
-`escreve_arquivo` sempre sobrescreve (nao tem append). `le_arquivo` poe o
-conteudo num texto (basicamente bytes — sem tratamento binario separado).
+`escreve_arquivo` sempre sobrescreve; pra acrescentar no fim (log, por
+exemplo) use `anexa_arquivo`. `le_arquivo` devolve o conteudo como texto.
+Tem tambem `existe`, `le_dir`, `glob`, `copia`, `move`, `deleta`... — veja
+[Biblioteca padrao](/docs/biblioteca#arquivo-e-sistema-de-arquivos).
 
 ## Mapear e filtrar (functional)
 
@@ -202,15 +200,10 @@ gambiarra par(n)
 acabou_finalmente
 mostra filtra(nums, par)                    # [2, 4]
 
-# reduce na unha (nao tem builtin)
-gambiarra soma_tudo(lista)
-    bota total = 0
-    pra_cada x em lista
-        bota total = total + x
-    acabou_finalmente
-    funciona total
-acabou_finalmente
-mostra soma_tudo(nums)                      # 15
+# reduz acumula; lambda cabe numa linha
+mostra reduz(nums, gambiarra(acc, n) funciona acc * n acabou_finalmente)   # 120
+mostra soma(nums)                           # 15
+mostra media(nums)                          # 3
 ```
 
 ## Ordenar por criterio (sort by field)
@@ -222,38 +215,76 @@ bota pessoas = [
     {"nome": "Bia", "idade": 22}
 ]
 
-# cria lista so com idades, ordena, e reconstroi? nao — faz so com mapeia:
-bota idades = mapeia(pessoas, gambiarra(p)
-    funciona p["idade"]
-acabou_finalmente)
-ordena(idades)
-mostra idades                              # [22, 25, 30]
+# por um campo, crescente (devolve lista nova)
+pra_cada p em ordena_por(pessoas, "idade")
+    mostra "${p.nome} (${p.idade})"
+acabou_finalmente
+# Bia (22) / Erik (25) / Ana (30)
 
-# pra ordenar o dicionario pela idade, sem sortby, faz bubble na unha
-gambiarra ordena_por_idade(lista)
-    bota n = tamanho(lista)
-    pra_cada i de 0 ate n - 2
-        pra_cada j de 0 ate n - i - 2
-            se_colar lista[j]["idade"] > lista[j + 1]["idade"]
-                bota tmp = lista[j]
-                bota lista[j] = lista[j + 1]
-                bota lista[j + 1] = tmp
-            acabou_finalmente
-        acabou_finalmente
+# criterio livre: ordena_com muta a lista; aqui, idade decrescente
+ordena_com(pessoas, gambiarra(a, b) funciona a.idade > b.idade acabou_finalmente)
+mostra mapeia(pessoas, gambiarra(p) funciona p.nome acabou_finalmente)   # [Ana, Erik, Bia]
+```
+
+## Ler CSV e tirar media
+
+```gambiarrascript
+escreve_arquivo("notas.csv", "nome,nota\nAna,9\nBia,7.5\nCaio,6\n")
+
+bota alunos = le_csv("notas.csv")          # lista de dicionarios (valores texto)
+bota notas = mapeia(alunos, gambiarra(a) funciona numero(a.nota) acabou_finalmente)
+mostra "media da turma: ${media(notas)}"   # media da turma: 7.5
+
+bota aprovados = filtra(alunos, gambiarra(a) funciona numero(a.nota) >= 7 acabou_finalmente)
+mostra "aprovados: ${junta(mapeia(aprovados, gambiarra(a) funciona a.nome acabou_finalmente), ", ")}"
+# aprovados: Ana, Bia
+```
+
+## Contar palavras
+
+```gambiarrascript
+bota frase = "o rato roeu a roupa do rei de roma o rato"
+bota contagem = {}
+pra_cada palavra em separa(frase, " ")
+    se_colar nao tem(contagem, palavra)
+        bota contagem[palavra] = 0
     acabou_finalmente
-    funciona lista
+    contagem[palavra] += 1
 acabou_finalmente
+mostra contagem["rato"]        # 2
 
-bota ordenada = ordena_por_idade(pessoas)
-pra_cada p em ordenada
-    mostra p["nome"] + " (" + texto(p["idade"]) + ")"
+# agrupando pela primeira letra
+bota grupos = agrupa_por(separa(frase, " "), gambiarra(p) funciona p[0] acabou_finalmente)
+mostra grupos["r"]             # [rato, roeu, roupa, rei, roma, rato]
+```
+
+## Medir quanto tempo levou
+
+```gambiarrascript
+bota ini = agora_ns()
+bota s = soma(1..100000)
+bota ms = (agora_ns() - ini) / 1000000
+mostra "somou ${s} em ${formata("%.1f", ms)}ms"
+```
+
+Pra comparar versoes de um script inteiro, tem o `gs bench`.
+
+## Rodar um comando do sistema
+
+```gambiarrascript
+bota r = roda_comando("git", ["status", "--short"])
+se_colar r.codigo != 0
+    escreve_erro("git reclamou: " + r.erro)
+    sai(r.codigo)
 acabou_finalmente
+bota linhas = filtra(separa(r.saida, "\n"), gambiarra(l) funciona l != "" acabou_finalmente)
+mostra "arquivos mexidos: ${tamanho(linhas)}"
 ```
 
 ## Adivinhacao (jogo)
 
 ```gambiarrascript
-bota secreto = arredonda(aleatorio(100))
+bota secreto = chao(aleatorio(100))      # 0 a 99
 bota tentativas = 0
 bota acertou = deu_ruim
 
@@ -301,23 +332,22 @@ acabou_finalmente
 mostra inverte_texto("gambiarra")          # "arraibmag"
 ```
 
-## Potencia (sem `**`)
+## Potencia e juros compostos
+
+Potencia e o operador `**` — inteiro elevado a inteiro continua exato:
 
 ```gambiarrascript
-gambiarra potencia(base, expoente)
-    bota out = 1
-    pra_cada i de 1 ate expoente
-        bota out = out * base
-    acabou_finalmente
-    funciona out
+mostra 2 ** 10             # 1024
+mostra 5 ** 3              # 125
+mostra 9 ** 0.5            # 3 (expoente quebrado = raiz)
+
+crava TAXA = 0.1           # 10% ao ano
+bota capital = 1000
+pra_cada ano de 1 ate 3
+    mostra "ano ${ano}: ${formata("%.2f", capital * (1 + TAXA) ** ano)}"
 acabou_finalmente
-
-mostra potencia(2, 10)     # 1024
-mostra potencia(5, 3)     # 125
+# ano 1: 1100.00 / ano 2: 1210.00 / ano 3: 1331.00
 ```
-
-Suporta so expoente inteiro positivo. Pra raiz de outra ordem usa `raiz()`
-que e so raiz quadrada; nao tem `pow()` geral.
 
 ## Tabuada com `adiciona` e `junta`
 
@@ -332,5 +362,5 @@ mostra junta(linhas, "\n")
 ## Receba sua propria receita
 
 Abre um PR no
-[github.com/erik-martins/gambiarrascript](https://github.com/erik-martins/gambiarrascript)
+[github.com/erikomis/gambiarrascript](https://github.com/erikomis/gambiarrascript)
 com outro exemplo e a gente publica aqui tambem.

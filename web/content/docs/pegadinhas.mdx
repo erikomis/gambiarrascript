@@ -1,7 +1,28 @@
 ---
 title: Pegadinhas
-description: Semantica que foge do comum e costume dar furada.
+description: Semantica que foge do comum e costuma dar furada.
 ---
+
+## Atribuir dentro de funcao cria variavel local
+
+Ler uma variavel de fora funciona; **atribuir** (`bota x = ...`, `x += ...`)
+dentro de uma gambiarra cria uma variavel **local** com o mesmo nome — a de
+fora fica igual (estilo Python sem `global`/`nonlocal`). Vale pra closure e
+pra `bora` tambem.
+
+```gambiarrascript
+bota total = 0
+gambiarra soma_no_total(x)
+    total += x           # cria um "total" local
+    funciona total
+acabou_finalmente
+
+mostra soma_no_total(5)  # 5
+mostra total             # 0
+```
+
+Pra estado compartilhado, use um dicionario/lista (passados por referencia) e
+mude o conteudo: `estado.total += x`. Ou devolva o valor com `funciona`.
 
 ## Escopo do `pra_cada` e do `quebrou` (estilo Python)
 
@@ -9,17 +30,65 @@ A variavel do `pra_cada` e a da clausula `quebrou` **continuam existindo**
 depois que o bloco fecha — elas vazam pro escopo da funcao que as contem.
 
 ```gambiarrascript
-pra_cada i de 1 ate 3
+pra_cada fruta em ["caju", "goiaba"]
 acabou_finalmente
-mostra i              # 4 (no for de..ate) ou o ultimo item (no for..em)
+mostra fruta          # goiaba (o ultimo item)
 
 arruma
     bota x = 1 / 0
 quebrou erro
-    mostra erro
+    mostra "pegou"
 acabou_finalmente
-mostra erro           # ainda visivel: mensagem de erro
+mostra erro_msg(erro) # ainda visivel
 ```
+
+No `pra_cada i de A ate B`, `i` fica com o ultimo valor que rodou (`B`).
+
+## Palavra-chave nao vira nome
+
+`e`, `ou`, `nao`, `de`, `ate`, `em`, `como`, `entao`, `caso`, `escolhe`,
+`finalmente`, `nada`... sao palavras-chave. `quebrou e` ou `bota de = 1` da
+erro de sintaxe. Use `quebrou erro`, `bota inicio = 1`.
+
+## `bota` pra atribuir, mas `+=` dispensa
+
+`x = 5` puro e erro de sintaxe: atribuicao simples sempre leva `bota`
+(`bota x = 5`, `bota xs[0] = 5`, `bota obj.campo = 5`). Ja a atribuicao
+composta (`x += 1`, `xs[0] *= 2`, `obj.n -= 1`, `x **= 2`) vem **sem** `bota`.
+E nome declarado com `crava` nao aceita nenhuma das duas.
+
+## `crava` nao e por bloco
+
+O `crava` vale pro escopo da funcao (igual `bota`), nao pro bloco. Entao cravar
+o mesmo nome nos dois lados de um `se_colar` conta como cravar duas vezes — e
+da erro antes de rodar:
+
+```gambiarrascript
+bota modo = "producao"
+# se_colar modo == "producao"
+#     crava URL = "https://api.exemplo.com"
+# se_nao_colar
+#     crava URL = "http://localhost:8080"     -> erro: `URL` ja foi cravada
+# acabou_finalmente
+
+# use o ternario: um crava so
+crava URL = se_colar modo == "producao" entao "https://api.exemplo.com" se_nao_colar "http://localhost:8080"
+mostra URL                 # https://api.exemplo.com
+```
+
+Ja `crava` dentro do corpo de um laco pode: e o mesmo `crava` a cada volta.
+
+## `-2 ** 2` e `-4`
+
+O `**` prende mais que o menos da frente (igual Python): `-2 ** 2` e
+`-(2 ** 2)`. Quer elevar o negativo? `(-2) ** 2` da `4`. E `2 ** 3 ** 2` e
+`2 ** 9` (associa pela direita).
+
+## `pi` da pra sombrear
+
+`pi` e um valor pronto, nao palavra-chave: `bota pi = 3` cria uma variavel que
+esconde o `pi` de verdade dali pra frente (igual acontece com qualquer
+builtin). Quer garantir? `crava PI = pi` e use `PI`.
 
 ## `e` / `ou` sempre devolvem booleano
 
@@ -28,27 +97,53 @@ pra `deu_bom`/`deu_ruim`:
 
 ```gambiarrascript
 mostra "x" e "y"      # deu_bom  (nao devolve "y")
-mostra nada ou "ok"   # deu_bom
+mostra nada ou "ok"   # deu_bom  (nao devolve "ok")
 ```
 
-Esse e o comportamento que te protege de bugs chatos de coercao.
-
-## Escapes em textos
-
-So `\"`, `\\`, `\n` e `\t` escapam dentro de `"..."`. Qualquer outro `\x` e
-mantido literal (barra e tudo). Pra texto cravo (JSON, regex, path Windows),
-use crase `` `...` `` — la nada e escapado.
+Pra "valor ou padrao", use `??`: `nome ?? "anonimo"`.
 
 ## Truthiness
 
 So `nada` e `deu_ruim` sao falsy. **Tudo o mais** e truthy: `0`, `""`, `[]`, `{}`
 inclusive. Se quiser checar vazio, faca explicitamente (`tamanho(x) == 0`,
-`x == ""`, etc).
+`x == ""`, etc). E o `??` so troca `nada` — `0 ?? 5` continua `0`.
 
-## Divisao por zero
+## Bitwise abaixo do `==`
 
-`/ 0` e `% 0` dao erro de runtime (nao `Inf`/`NaN`). Pra deixar passar, enrole
-num `arruma...quebrou`.
+Como em C, `&`, `|` e `^` tem precedencia **menor** que `==`: `x & 1 == 1` vira
+`x & (1 == 1)` e da erro. Escreva `(x & 1) == 1`.
+
+## Divisao entre inteiros pode dar real
+
+`7 / 2` e `3.5` (nao `3`). Quer divisao inteira? `chao(7 / 2)`.
+E `/ 0` ou `% 0` da erro de runtime (nao `Inf`/`NaN`) — enrole num
+`arruma...quebrou` se o divisor vier de fora.
+
+## `pra_cada de ... ate` so sobe
+
+`pra_cada i de 10 ate 1` nao roda nenhuma vez. Pra descer, use range:
+`pra_cada i em 10..1`.
+
+## `mostra` de lista nao poe aspas
+
+```gambiarrascript
+mostra ["1", 1]       # [1, 1] — texto e numero ficam iguais na tela
+mostra pra_json(["1", 1])   # ["1",1]
+```
+
+Na duvida sobre o que tem dentro, use `pra_json`.
+
+## Escapes e crase
+
+So `\"`, `\\`, `\n` e `\t` escapam dentro de `"..."`. Qualquer outro `\x` e
+mantido literal (barra e tudo). Pra texto cru (JSON, regex, path Windows),
+use crase `` `...` `` — la nada e escapado... exceto o `${...}`, que **interpola
+ate dentro da crase**. Tem `${` literal no texto? Use aspas duplas com `\${`.
+
+## Goroutine solta morre com o script
+
+`bora f()` sem `espera` e fire-and-forget: se o script principal terminar
+antes, a goroutine morre junto (sem aviso). Veja [Concorrencia](/docs/concorrencia).
 
 ## Nada vs 0 vs ""
 

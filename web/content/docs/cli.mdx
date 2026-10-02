@@ -3,57 +3,55 @@ title: Linha de comando
 description: O binario gs — subcomandos, flags e como roda o teu script.
 ---
 
-O `gs` e o binario unico que faz tudo. Sem subcomandos escondidos.
+O `gs` e o binario unico que faz tudo: roda, testa, formata, empacota e
+conversa com o teu editor.
 
 ## Uso
 
 ```
-gs <subcomando> [flags] [argumentos]
-
-Subcomandos:
-  roda      roda um script .gs
-  formata   formata um script .gs
-  repl      abre o REPL interativo
-  lsp       roda o servidor LSP (pra editor)
-  version   mostra a versao
-  ajuda     mostra esta mensagem
+gs roda [--tree] [--cache] <arquivo.gs> [args]   executa (VM e o padrao)
+gs repl                                          modo interativo (multiline)
+gs check <arquivo.gs>...                         parse + lint (erros e avisos)
+gs formata [-w] <arquivo.gs | diretorio>...      formata (imprime ou sobrescreve)
+gs testa [--tree] [-so nome] [<dir>]             roda os *_test.gs e soma os asserts
+gs doc [<arquivo.gs | diretorio>...]             gera markdown das gambiarras documentadas
+gs init [nome]                                   cria gambiarra.json + principal.gs
+gs get <url> [nome.gs]                           baixa um modulo pra gs_modulos/
+gs build <arquivo.gs> [-o saida]                 gera binario standalone com o script
+gs bench [--tree] <arquivo.gs> [n]               mede o tempo de execucao (n rodadas)
+gs disasm <arquivo.gs>                           mostra o bytecode da VM
+gs lsp                                           language server (usado pelo editor)
+gs --version  (ou gs versao)                     mostra a versao
+gs --help                                        mostra a ajuda
 ```
 
 ## `gs roda`
 
 ```bash
-gs roda [--vm] <arquivo.gs> [args...]
+gs roda [--tree] [--cache] <arquivo.gs> [args...]
 ```
 
-- Roda o arquivo no interpretador tree-walking (default).
-- `--vm` liga a VM experimental em bytecode. **A VM nao suporta builtins**
-  ainda — so linguagem basica. Use so pra benchmark/curiosidade.
-- Tudo depois do arquivo vira argumento acessivel via `argumentos()` no script.
-- `dirBase` (usado por `importa`) vira o diretorio do arquivo rodado.
+- Roda o arquivo na **VM de bytecode** — o motor padrao (o mesmo do `build`,
+  `testa`, `bench`, REPL e playground).
+- `--tree` volta pro interpretador tree-walking (fallback; os dois motores
+  rodam todos os exemplos igual). `--vm` ainda e aceito por compatibilidade,
+  mas nao muda nada.
+- `--cache` grava o bytecode compilado em `arquivo.gsc` do lado do `.gs` e
+  reaproveita nas proximas vezes (invalida sozinho quando a fonte, a versao do
+  `gs` ou a lista de builtins muda). Nao se aplica com `--tree`.
+- Tudo depois do arquivo vira argumento acessivel via `argumentos()`.
+- `importa` resolve caminho relativo ao diretorio do arquivo rodado.
 
 ```bash
-gs roda exemplo.gs              # roda
-gs roda --vm exemplo.gs         # roda na VM (sem builtins)
-gs roda script.gs prim seg      # arg[0]="prim", arg[1]="seg"
+gs roda exemplo.gs              # roda na VM
+gs roda --tree exemplo.gs       # roda no tree-walker
+gs roda --cache exemplo.gs      # grava/usa exemplo.gsc
+gs roda script.gs prim seg      # argumentos() == [prim, seg]
 ```
 
-Erros de parse dao `exit 1`. Erro de runtime imprime a mensagem e `exit 1`.
-
-## `gs formata`
-
-```bash
-gs formata <arquivo.gs>
-```
-
-Parseia e re-emite o AST formatado pra stdout (indent 4 espacos). Comentarios
-sao descartados pelo lexer — **nao sobrevivem ao formatter**.
-
-```bash
-gs formata sujo.gs > lindo.gs
-gs formata sujo.gs | gs roda /dev/stdin
-```
-
-Mais em [Editor e formata](/docs/ferramentas).
+Codigo de saida: erro de sintaxe (ou nome que nao existe, `vaza` fora de laco)
+e pego **antes** de rodar → `exit 1`. Erro de runtime nao tratado imprime a
+mensagem + traco de pilha → `exit 1`. `sai(n)` sai com `n`.
 
 ## `gs repl`
 
@@ -61,45 +59,157 @@ Mais em [Editor e formata](/docs/ferramentas).
 gs repl
 ```
 
-Abre o REPL interativo. Prompt: `gambiarra> `. So uma linha por vez; pode
-declarar `bota` e `gambiarra`, que persistem entre linhas. `ctrl+d` vaza.
+Abre o modo interativo (roda na VM). Detalhes:
 
-Nao tem dot-commands (`.help`, `.exit`, `.load`); saida e so EOF.
-
-Expressoes sem `mostra` nao imprimem nada — se quiser ver o valor,
-mande um `mostra X`. O REPL foi desenhado pra fuçar； pra experimentar uma
-ideia rapida:
+- **Multiline**: abriu um bloco (`se_colar`, `gambiarra`, `pra_cada`,
+  `escolhe`...) o prompt vira `.........` ate fechar o `acabou_finalmente`.
+- Expressao solta mostra o valor com `=> valor` (a nao ser que seja `nada`).
+- Declaracoes (`bota`, `gambiarra`) persistem entre as linhas.
+- No terminal: historico com ↑/↓, edicao de linha e **TAB** completa
+  builtins, palavras-chave e variaveis.
+- Comandos: `:ajuda` e `:limpa`. `ctrl+d` vaza.
 
 ```bash
 gambiarra> bota x = 10
+gambiarra> x * 2
+=> 20
 gambiarra> gambiarra dobra(n)
-gambiarra>     funciona n * 2
-gambiarra> acabou_finalmente
-gambiarra> mostra dobra(x)
-20
+.........     funciona n * 2
+......... acabou_finalmente
+gambiarra> dobra(x)
+=> 20
 gambiarra> <ctrl+d>
 ```
 
-## `gs lsp`
+## `gs check`
 
 ```bash
-gs lsp
+gs check arquivo.gs outro.gs
 ```
 
-Roda o servidor LSP no stdin/stdout (protocolo JSON-RPC). Nao e pra voce
-rodar direto — voce configura no teu editor pra chamar `gs lsp`. Veja
-[Editor e formata](/docs/ferramentas).
+Parseia e passa o lint (o mesmo typechecker do LSP) sem rodar nada. Mostra
+`arquivo:linha:coluna: erro: ...` / `aviso: ...`. Mexer num nome cravado
+(`crava`) e erro. Avisos: nome que nao existe,
+variavel `bota` declarada e nunca usada, codigo morto depois de
+`funciona`/`vaza`/`continua`. Sai com `1` so quando tem erro de sintaxe.
 
-## `gs version` / `--version` / `-v`
+```bash
+$ gs check exemplo.gs
+exemplo.gs:15:14: aviso: `nome` foi declarada mas nunca usada
+$ gs check ok.gs
+ok.gs: suave, zero perrengue
+```
+
+## `gs formata`
+
+```bash
+gs formata <arquivo.gs | dir>...        # imprime formatado no stdout
+gs formata -w <arquivo.gs | dir>...     # sobrescreve (so se mudou algo)
+gs formata -w .                         # todos os .gs da pasta, recursivo
+```
+
+Indenta com 4 espacos e normaliza o espacamento. **Comentarios sao
+descartados** — mais em [Editor e formata](/docs/ferramentas#formatter-gs-formata).
+
+## `gs testa`
+
+```bash
+gs testa [--tree] [-so nome] [<dir>]
+```
+
+Roda cada `*_test.gs` do diretorio (default: o atual; nao entra em
+subpastas). Dentro dos testes, os asserts sao `espera(recebido, esperado)` e
+`afirma(condicao, [mensagem])`. `-so nome` (ou `--somente`) filtra pelos
+arquivos cujo nome contem `nome`. Sai com `1` se algum assert falhar.
+
+```gambiarrascript
+# soma_test.gs
+gambiarra soma(a, b)
+    funciona a + b
+acabou_finalmente
+
+espera(soma(2, 2), 4)
+afirma(soma(1, 1) == 2, "um mais um")
+```
+
+```bash
+$ gs testa
+rodando 1 arquivo(s) no VM:
+  OK  soma_test.gs  (2/2 asserts)
+
+Resumo (VM): 1 arquivos, 2/2 asserts passaram, 0 com perrengue
+```
+
+## `gs doc`
+
+```bash
+gs doc [<arquivo.gs | dir>...]
+```
+
+Gera markdown no stdout: pra cada `gambiarra` e cada `crava` de topo, a
+assinatura e o bloco de comentarios `#` logo acima.
+
+## `gs init`
+
+```bash
+gs init meu_app
+```
+
+Cria `gambiarra.json` (nome, versao, principal, dependencias) e um
+`principal.gs` de hello world. Nunca sobrescreve arquivo existente.
+
+## `gs get`
+
+```bash
+gs get https://exemplo.com/util.gs [nome.gs]
+```
+
+Baixa o modulo, confere se parseia, salva em `gs_modulos/` e registra em
+`dependencias` no `gambiarra.json`. Sem versao/lockfile ainda. Veja
+[Modulos](/docs/modulos).
+
+## `gs build`
+
+```bash
+gs build app.gs -o app
+./app arg1 arg2
+```
+
+Gera um binario standalone: o proprio `gs` com o teu script embutido (roda na
+VM). Quem receber nao precisa ter o `gs` instalado — so precisa ser o mesmo
+sistema operacional/arquitetura. No macOS ele tenta re-assinar o binario
+(ad-hoc); se nao conseguir, avisa o comando `codesign` pra rodar.
+
+## `gs bench`
+
+```bash
+gs bench [--tree] arquivo.gs [n]
+```
+
+Roda o script `n` vezes (default 10), descartando a saida, e mostra
+min/mediana/media/max.
+
+## `gs disasm`
+
+```bash
+gs disasm arquivo.gs
+```
+
+Mostra o bytecode que a VM vai executar. Bom pra curiosidade.
+
+## `gs lsp`
+
+Roda o servidor LSP no stdin/stdout (JSON-RPC). Nao e pra voce rodar direto —
+voce configura no editor. Veja [Editor e formata](/docs/ferramentas).
+
+## `gs --version` / `gs --help`
 
 ```bash
 gs --version
 # gs (GambiarraScript) 0.1.0
 ```
 
-## `gs ajuda` / `--help` / `-h`
-
-Imprime o help do CLI.
+`versao`, `version`, `-v`, `ajuda` e `-h` tambem valem.
 
 ## Argumentos no script
 
@@ -107,7 +217,7 @@ Qualquer coisa depois do arquivo vira `argumentos()` no runtime:
 
 ```gambiarrascript
 # args.gs
-mostra "recebi " + texto(tamanho(argumentos())) + " argumentos:"
+mostra "recebi ${tamanho(argumentos())} argumentos:"
 pra_cada arg em argumentos()
     mostra "  - " + arg
 acabou_finalmente
@@ -125,15 +235,16 @@ recebi 3 argumentos:
 
 ## Exemplos pra rodar
 
-O repo vem com `examples/` ja prontos:
+O repo vem com `examples/` prontos:
 
 ```bash
 gs roda examples/salve.gs
 gs roda examples/fizzbuzz.gs
-gs roda examples/texto.gs
-gs roda examples/dicionario.gs
-gs roda examples/matematica.gs
-gs roda examples/lista.gs
+gs roda examples/tier3.gs         # bitwise, range, interpolacao, finalmente
+gs roda examples/maturidade.gs    # escolhe, lambdas, destructuring, formata
+gs roda examples/libs.gs          # regex, tempo, crypto, conjunto
+gs roda examples/stats.gs         # soma, media, zip, ordena_por, agrupa_por
+gs roda examples/banco.gs         # sqlite em memoria
 gs roda examples/servidor.gs      # sobe um servidor HTTP na 8080
 gs roda examples/http.gs          # chama uma API publica
 ```

@@ -3,74 +3,159 @@ title: Biblioteca padrao
 description: Referencia completa dos builtins do GambiarraScript por categoria.
 ---
 
-Esta pagina lista **todos** os builtins disponiveis. Cada um e uma funcao
-global (nao precisa `importa`). Builtins que ainda nao existem tambem estao
-marcados — pra voce nao gastar tempo procurando.
+Esta pagina lista **todos** os builtins. Cada um e uma funcao global — nao
+precisa de `importa` nenhum. Roda igual na VM (o motor padrao do `gs roda`) e
+no tree-walker (`gs roda --tree`).
 
 <Callout title="Builtins sao funcoes, `mostra` nao e">
-  `mostra` e um **statement** (palavra-chave), nao um builtin. Os builtins
-  abaixo sao chamados como funcao: `tamanho(x)`, `mapeia(...)`, etc.
+  `mostra` e um **statement** (palavra-chave), nao um builtin: nao leva
+  parenteses. Os builtins abaixo sao chamados como funcao: `tamanho(x)`,
+  `mapeia(...)`, etc. `bora` tambem e palavra-chave (veja
+  [Concorrencia](/docs/concorrencia)).
 </Callout>
+
+<Callout type="warn" title="Erro de builtin vira erro de verdade">
+  Quando um builtin reclama (argumento errado, arquivo que nao existe, rede
+  fora do ar...), ele **lanca** o erro: o script para, a menos que esteja
+  dentro de um `arruma`. Veja [Arruma / quebrou](/docs/erros).
+</Callout>
+
+## Conversao e tamanho
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `texto(v)` | `(qualquer)` | `texto` — conversao universal (o mesmo que o `mostra` imprime) |
+| `numero(t)` | `(texto)` | `numero` — aceita `"42"`, `" 3.5 "`, `"1e3"`; texto nao-numerico **da erro** |
+| `tamanho(x)` | `(texto, lista ou dicionario)` | `numero` — em texto conta caracteres (UTF-8), nao bytes |
 
 ## Texto
 
 | Builtin | Assinatura | Devolve |
 | --- | --- | --- |
-| `texto(v)` | `(qualquer)` | `texto` — `v.Inspect()` (conversao universal) |
-| `tamanho(t)` | `(texto)` | `numero` (rune count; respeita UTF-8) |
-| `maiusculo(t)` | `(texto)` | `texto` (`ToUpper`) |
-| `minusculo(t)` | `(texto)` | `texto` (`ToLower`) |
-| `tira_espaco(t)` | `(texto)` | `texto` (`TrimSpace`) |
+| `maiusculo(t)` / `minusculo(t)` | `(texto)` | `texto` |
+| `tira_espaco(t)` | `(texto)` | `texto` sem espacos/tabs/quebras nas pontas |
 | `substitui(t, antigo, novo)` | `(texto, texto, texto)` | `texto` — troca **todas** as ocorrencias |
-| `separa(t, sep)` | `(texto, texto)` | `lista` de textos |
-| `junta(lista, sep)` | `(lista, texto)` | `texto` (cada elem via `Inspect`) |
-| `fatia(t, inicio, [fim])` | `(texto, numero, [numero])` | `texto` (`runes[i:j]`, clampa limites) |
-| `contem(t, sub)` | `(texto, texto)` | `booleano` |
-| `comeca_com(t, prefixo)` | `(texto, texto)` | `booleano` |
-| `termina_com(t, sufixo)` | `(texto, texto)` | `booleano` |
-| `numero(t)` | `(texto)` | `numero` (`ParseFloat`, trim; nao-numerico vira `NaN`) |
+| `separa(t, sep)` | `(texto, texto)` | `lista` de textos (`sep` vazio quebra caractere a caractere) |
+| `junta(lista, sep)` | `(lista, texto)` | `texto` (cada item vira texto) |
+| `fatia(t, inicio, [fim])` | `(texto, numero, [numero])` | `texto` — limites sao ajustados pro tamanho do texto |
+| `contem(t, pedaco)` | `(texto, texto)` | `booleano` |
+| `comeca_com(t, prefixo)` / `termina_com(t, sufixo)` | `(texto, texto)` | `booleano` |
+| `formata(modelo, valores...)` | `(texto, qualquer...)` | `texto` — printf com os verbos do Go (`%v %s %d %f %x`, `%05d`, `%.2f`, `%-10s`) |
+
+```gambiarrascript
+mostra formata("%-8s|%5.2f|%03d", "cafe", 3.14159, 7)   # cafe    | 3.14|007
+mostra formata("%v e %v", deu_bom, nada)                 # deu_bom e nada
+mostra formata("%x", 255)                                # ff
+```
+
+Na maior parte do tempo, a [interpolacao](/docs/strings#interpolacao) `"${expr}"`
+resolve sem `formata`. Indexar e fatiar texto direto (`t[0]`, `t[1:3]`) tambem
+funciona — veja [Textos](/docs/strings).
+
+## Regex
+
+Padroes com a sintaxe RE2 do Go. Dica: escreva o padrao entre crases
+(`` `\d+` ``) pra nao brigar com as barras.
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `busca_regex(padrao, t)` | `(texto, texto)` | `booleano` — casou em algum lugar? |
+| `acha_regex(padrao, t)` | `(texto, texto)` | `texto` do primeiro match, ou `nada` |
+| `combina_regex(padrao, t)` | `(texto, texto)` | `lista` de matches; cada match e `[inteiro, grupo1, grupo2, ...]` |
+| `substitui_regex(padrao, novo, t, [n])` | `(texto, texto, texto, [numero])` | `texto` — `novo` aceita `$1`, `$2`; `n` limita quantas trocas |
+| `separa_regex(padrao, t, [n])` | `(texto, texto, [numero])` | `lista` de textos |
+
+```gambiarrascript
+mostra busca_regex(`\d{2}`, "azeite23litros")              # deu_bom
+mostra acha_regex(`\d+`, "abc 123 def 45")                  # 123
+mostra combina_regex(`(\d+)-(\d+)`, "10-20 e 3-4")          # [[10-20, 10, 20], [3-4, 3, 4]]
+mostra substitui_regex(`(\w+)@(\w+)`, "$2/$1", "ze@xx")     # xx/ze
+mostra separa_regex(`\s+`, "oi   tropa  do  bem")           # [oi, tropa, do, bem]
+```
 
 ## Lista
 
-| Builtin | Assinatura | Devolve | Muta? |
-| --- | --- | --- | --- |
-| `tamanho(lista)` | `(lista)` | `numero` | nao |
-| `adiciona(lista, item)` | `(lista, valor)` | `nada` | **sim** (push back) |
-| `remove(lista, item)` | `(lista, valor)` | `nada` | **sim** (primeira ocorrencia) |
-| `ordena(lista)` | `(lista)` | `nada` | **sim** (estavel; mix Numero+Texto erro) |
-| `inverte(lista)` | `(lista)` | `nada` | **sim** |
-| `mapeia(lista, fn)` | `(lista, gambiarra)` | `lista` nova | nao |
-| `filtra(lista, fn)` | `(lista, gambiarra)` | `lista` nova | nao |
+Os que **mutam** a lista recebida (e devolvem `nada`):
+
+| Builtin | Assinatura | Notas |
+| --- | --- | --- |
+| `adiciona(lista, item)` | `(lista, valor)` | poe no fim |
+| `remove(lista, item)` | `(lista, valor)` | tira a **primeira** ocorrencia igual (`==`); se nao achar, nao faz nada |
+| `ordena(lista)` | `(lista)` | crescente, estavel; so numeros **ou** so textos (misturar da erro) |
+| `ordena_com(lista, fn)` | `(lista, gambiarra)` | `fn(a, b)` devolve booleano (`a` vem antes?) ou numero (`<0`, `0`, `>0`) |
+| `inverte(lista)` | `(lista)` | inverte no lugar |
+
+Os que **devolvem algo novo** (a original fica intacta):
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `mapeia(lista, fn)` | `(lista, gambiarra)` | `lista` com `fn(item)` de cada um |
+| `filtra(lista, fn)` | `(lista, gambiarra)` | `lista` so com os itens onde `fn(item)` e verdadeiro |
+| `reduz(lista, fn, [inicial])` | `(lista, gambiarra, [valor])` | acumulado de `fn(acc, item)`; sem `inicial` comeca do 1o item |
+| `acha(lista, fn)` | `(lista, gambiarra)` | primeiro item onde `fn` e verdadeiro, ou `nada` |
+| `acha_indice(lista, fn)` | `(lista, gambiarra)` | indice do primeiro, ou `-1` |
+| `unicos(lista)` | `(lista)` | `lista` sem repetidos (mantem a ordem) |
+| `achatada(lista)` | `(lista)` | `lista` achatada **um** nivel |
+| `ordena_por(lista, campo)` | `(lista de dicionarios, texto)` | `lista` nova ordenada pelo campo (crescente) |
+| `agrupa_por(lista, fn)` | `(lista, gambiarra)` | `dicionario` `{chave: [itens]}` com a chave vinda de `fn(item)` |
+| `zip(a, b)` | `(lista, lista)` | `lista` de pares `[a[i], b[i]]` (para no menor) |
+| `enumera(lista)` | `(lista)` | `lista` de pares `[indice, item]` |
+| `soma(lista)` | `(lista de numeros)` | `numero` (lista vazia = `0`) |
+| `media(lista)` | `(lista de numeros)` | `numero` (lista vazia da erro) |
+| `embaralha(lista)` | `(lista)` | `lista` nova embaralhada |
+| `escolhe_um(lista)` | `(lista)` | um item sorteado (lista vazia da erro) |
+
+`tamanho(lista)` e `junta(lista, sep)` tambem valem pra lista. Exemplos em
+[Listas e dicionarios](/docs/colecoes).
 
 ## Dicionario
 
 | Builtin | Assinatura | Devolve |
 | --- | --- | --- |
-| `tamanho(dic)` | `(dicionario)` | `numero` |
-| `chaves(dic)` | `(dicionario)` | `lista` de chaves |
+| `chaves(dic)` | `(dicionario)` | `lista` de chaves, na **ordem de insercao** |
 | `tem(dic, chave)` | `(dicionario, valor)` | `booleano` |
+| `tamanho(dic)` | `(dicionario)` | `numero` de pares |
+
+## Conjunto
+
+Conjunto (set) e um tipo proprio: sem repetidos, comparacao pelo `==`.
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `conjunto(x)` | `(lista, texto, dicionario ou conjunto)` | `conjunto` (de texto: um item por caractere; de dicionario: as chaves) |
+| `contem_conjunto(c, v)` | `(conjunto, valor)` | `booleano` |
+| `adiciona_conjunto(c, v)` | `(conjunto, valor)` | o proprio conjunto (muta) |
+| `remove_conjunto(c, v)` | `(conjunto, valor)` | o proprio conjunto (muta) |
+| `uniao(a, b)` / `intersecao(a, b)` / `diferenca(a, b)` | `(conjunto, conjunto)` | `conjunto` novo |
+
+```gambiarrascript
+bota s = conjunto([1, 2, 3, 2, 1])
+mostra s                                                 # {1, 2, 3} (em alguma ordem)
+mostra contem_conjunto(s, 2)                             # deu_bom
+mostra intersecao(conjunto([1, 2, 3]), conjunto([2, 3, 4]))   # {2, 3} (idem)
+```
+
+A ordem em que um conjunto e impresso **nao e garantida**, e `tamanho()` nao
+aceita conjunto — se precisar contar, faca `unicos(lista)` e conte a lista.
 
 ## Numeros e matematica
 
 | Builtin | Assinatura | Devolve | Notas |
 | --- | --- | --- | --- |
-| `raiz(n)` | `(numero)` | `numero` | `math.Sqrt` |
+| `raiz(n)` | `(numero)` | `numero` | raiz quadrada |
 | `abs(n)` | `(numero)` | `numero` | valor absoluto |
-| `arredonda(n)` | `(numero)` | `numero` | `math.Round` |
-| `teto(n)` | `(numero)` | `numero` | `math.Ceil` |
-| `chao(n)` | `(numero)` | `numero` | `math.Floor` |
-| `min(n1, n2, ...)` | `(numero...)` variadico | `numero` | requer >= 1 argumento |
-| `max(n1, n2, ...)` | `(numero...)` variadico | `numero` | requer >= 1 argumento |
-| `aleatorio([max])` | `([numero])` | `numero` | `0 args`: `rand.Float64()`. `1 arg`: `rand.Float64() * max`. Use com `arredonda` pra inteiro. |
+| `arredonda(n)` | `(numero)` | `numero` | meio vai pra longe do zero (`2.5` → `3`, `-2.5` → `-3`) |
+| `teto(n)` / `chao(n)` | `(numero)` | `numero` | arredonda pra cima / pra baixo |
+| `min(n1, n2, ...)` / `max(n1, n2, ...)` | `(numero...)` | `numero` | pelo menos 1 numero (nao aceita lista — pra lista use `ordena` ou `reduz`) |
+| `seno(x)` / `cosseno(x)` / `tangente(x)` | `(numero)` | `numero` | angulo em **radianos** |
+| `log(x)` | `(numero)` | `numero` | logaritmo natural; `x <= 0` da erro |
+| `log10(x)` | `(numero)` | `numero` | logaritmo na base 10; `x <= 0` da erro |
+| `exp(x)` | `(numero)` | `numero` | e elevado a `x` (desfaz o `log`) |
+| `pi` | valor, **sem parenteses** | `numero` | `3.141592653589793` |
 
-### O que **nao** tem
-
-Sem `potencia`/`**`, `log`, `sin`/`cos`, `pi`, `e`, `formato` (printf-style),
-`aleatorio_int(max)`, `dorme`. Pra potencia usa multiplicacao numa `gambiarra`,
-pra tempo/dorme voce precisa embutir ou chamar binario via `busca`/OS shell —
-nao existe builtin de sistema ainda.
-
-### Exemplo
+Potencia e operador, nao builtin: `2 ** 10` (veja [Tipos](/docs/tipos#potencia)).
+Um nome pra cada conceito: por isso nao tem `potencia()` (e o `**`) nem
+`dorme()` (e o `espera_ms`).
 
 ```gambiarrascript
 mostra raiz(144)         # 12
@@ -80,116 +165,248 @@ mostra chao(3.99)        # 3
 mostra arredonda(3.5)    # 4
 mostra min(7, 2, 9, 1)   # 1
 mostra max(7, 2, 9, 1)   # 9
+mostra 7 / 2             # 3.5
+mostra 6 / 3             # 2
+mostra 2 ** 10           # 1024
 
-bota n = aleatorio(100)              # 0 a 99.99...
-mostra "numero do dia: " + arredonda(n)
-
-gambiarra potencia(base, expoente)
-    bota out = 1
-    pra_cada i de 1 ate expoente
-        bota out = out * base
-    acabou_finalmente
-    funciona out
-acabou_finalmente
-mostra potencia(2, 10)             # 1024
+bota r = 3
+mostra formata("%.4f", pi * r ** 2)            # 28.2743 (area do circulo)
+bota rad = 60 * pi / 180                        # graus -> radianos
+mostra formata("%.4f", seno(rad))              # 0.8660
+mostra arredonda(tangente(pi / 4))             # 1
+mostra log10(1000)                             # 3
+mostra exp(0)                                  # 1
+mostra arredonda(log(exp(5)))                  # 5
 ```
+
+## Aleatorio
+
+Tudo sai de um gerador compartilhado. Chamou `semente(n)`, a sequencia fica
+reprodutivel (afeta `aleatorio`, `embaralha`, `escolhe_um` e `uuid`).
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `aleatorio([max])` | `([numero])` | `numero` em `[0, 1)`; com `max`, em `[0, max)` |
+| `semente(n)` | `(numero)` | `nada` — fixa a semente |
+| `embaralha(lista)` | `(lista)` | `lista` nova embaralhada |
+| `escolhe_um(lista)` | `(lista)` | um item sorteado |
+| `uuid()` | `()` | `texto` — UUID v4 (nao use pra seguranca) |
+
+```gambiarrascript
+semente(42)                              # mesma sorte toda vez
+bota dado = chao(aleatorio(6)) + 1       # 1 a 6
+mostra "deu " + dado
+mostra escolhe_um(["vermelho", "verde", "azul"])
+```
+
+## Tempo e datas
+
+Instantes sao **texto ISO 8601** (`"2024-06-15T13:45:00Z"`) ou **numero** (unix
+em segundos). Duracoes sao numeros em **nanossegundos**. Os formatos usam o
+layout de referencia do Go: `2006-01-02 15:04:05`.
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `agora()` | `()` | `texto` ISO 8601 (UTC) |
+| `agora_num()` / `agora_ns()` | `()` | `numero` unix em segundos / nanossegundos |
+| `formata_tempo(formato, instante)` | `(texto, texto ou numero)` | `texto` |
+| `parse_tempo(formato, t)` | `(texto, texto)` | `texto` ISO 8601 |
+| `duracao(dic)` | `(dicionario)` | `numero` (ns) a partir de `{"h", "m", "s", "ms", "us", "ns"}` |
+| `duracao(inst1, inst2)` | `(instante, instante)` | `numero` (ns) de `inst1` ate `inst2` |
+| `soma_tempo(inst, ns)` / `sub_tempo(inst, ns)` | `(instante, numero)` | `texto` ISO 8601 |
+| `dia_da_semana(inst)` | `(instante)` | `texto` (`"domingo"`, `"segunda"`, ..., `"sabado"`) |
+| `diferenca_dias(i1, i2)` / `diferenca_horas(i1, i2)` | `(instante, instante)` | `numero` inteiro (pode ser negativo) |
+| `converte_tz(inst, tz)` | `(instante, texto)` | `texto` ISO 8601 no fuso (ex: `"America/Sao_Paulo"`) |
+| `espera_ms(ms)` | `(numero)` | `nada` — dorme `ms` milissegundos |
+
+```gambiarrascript
+bota natal = parse_tempo("2006-01-02 15:04", "2024-12-25 10:00")
+mostra natal                                        # 2024-12-25T10:00:00Z
+mostra formata_tempo("02/01/2006", natal)           # 25/12/2024
+mostra dia_da_semana(natal)                         # quarta
+mostra soma_tempo(natal, duracao({"h": 2}))         # 2024-12-25T12:00:00Z
+mostra converte_tz(natal, "America/Sao_Paulo")      # 2024-12-25T07:00:00-03:00
+espera_ms(10)                                       # cochilo de 10ms
+```
+
+## Crypto, codificacao e compressao
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `md5(t)` / `sha1(t)` / `sha256(t)` / `sha512(t)` | `(texto)` | `texto` hash em hex |
+| `hmac_sha256(chave, t)` | `(texto, texto)` | `texto` em hex |
+| `base64_codifica(t)` / `base64_decodifica(t)` | `(texto)` | `texto` |
+| `base32_codifica(t)` / `base32_decodifica(t)` | `(texto)` | `texto` |
+| `hex_codifica(t)` / `hex_decodifica(t)` | `(texto)` | `texto` |
+| `gzip_comprime(t)` | `(texto)` | `texto` — base64 dos bytes gzipados |
+| `gzip_descomprime(t)` | `(texto)` | `texto` original |
+
+```gambiarrascript
+mostra md5("gambiarra")                          # f964fedd110c1d0d999b9592473a05c5
+mostra base64_codifica("tropa")                  # dHJvcGE=
+mostra hex_codifica("AB")                        # 4142
+bota z = gzip_comprime("salve salve salve salve")
+mostra gzip_descomprime(z)                       # salve salve salve salve
+```
+
+`md5`/`sha*` sao pra checksum — nao pra guardar senha.
 
 ## JSON
 
 | Builtin | Assinatura | Devolve |
 | --- | --- | --- |
-| `de_json(texto)` | `(texto)` | valor (dicionario / lista / texto / numero / booleano / `nada`) |
-| `pra_json(valor)` | `(valor)` | `texto` (saida compacta, sem espacos) |
+| `de_json(t)` | `(texto)` | dicionario / lista / texto / numero / booleano / `nada` |
+| `pra_json(v)` | `(valor)` | `texto` compacto (sem espacos) |
 
-Chaves viram sempre **texto** no `de_json` — um JSON `{"1": 1}` vira um
-dicionario com chave Numero `"1"` (texto), nao Numero `1`. Veja [JSON](/docs/json).
+A ordem das chaves e preservada nos dois sentidos. Veja [JSON](/docs/json).
 
-## Arquivo
+## CSV
 
-| Builtin | Assinatura | Devolve | Notas |
-| --- | --- | --- | --- |
-| `le_arquivo(caminho)` | `(texto)` | `texto` ou `Erro` | `os.ReadFile`, path relativo ao **CWD do processo** (nao ao script) |
-| `escreve_arquivo(caminho, texto)` | `(texto, texto)` | `nada` ou `Erro` | `os.WriteFile` modo `0644`; sempre sobrescreve (sem append) |
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `le_csv(caminho)` | `(texto)` | `lista` de dicionarios — a 1a linha vira o cabecalho; valores sempre texto |
+| `escreve_csv(caminho, lista, [cabecalhos])` | `(texto, lista de dicionarios, [lista de textos])` | `nada` — sem `cabecalhos`, usa as chaves do 1o dicionario |
+
+## Arquivo e sistema de arquivos
+
+Caminhos relativos sao relativos ao **diretorio de onde o `gs` foi rodado**
+(nao ao script). Falha de disco vira erro do tipo `"io"`.
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `le_arquivo(caminho)` | `(texto)` | `texto` |
+| `escreve_arquivo(caminho, t)` | `(texto, texto)` | `nada` — cria ou **sobrescreve** |
+| `anexa_arquivo(caminho, t)` | `(texto, texto)` | `nada` — acrescenta no fim (cria se nao existir) |
+| `existe(caminho)` | `(texto)` | `booleano` |
+| `eh_dir(caminho)` | `(texto)` | `booleano` |
+| `cria_dir(caminho)` | `(texto)` | `nada` — tipo `mkdir -p` |
+| `le_dir(caminho)` | `(texto)` | `lista` de nomes (1 nivel, ordem alfabetica) |
+| `deleta(caminho)` | `(texto)` | `nada` — arquivo ou pasta (recursivo); nao existir nao e erro |
+| `copia(de, pra)` / `move(de, pra)` | `(texto, texto)` | `nada` |
+| `tamanho_arquivo(caminho)` | `(texto)` | `numero` de bytes |
+| `modificado_em(caminho)` | `(texto)` | `numero` unix em segundos (passa direto pro `formata_tempo`) |
+| `glob(padrao)` | `(texto)` | `lista` de caminhos (`*`, `?`, `[...]`); sem match = `[]` |
+| `caminho_junta(p1, p2, ...)` | `(texto...)` | `texto` |
+| `caminho_base(c)` / `caminho_dir(c)` / `caminho_ext(c)` | `(texto)` | `texto` (`"nota.txt"`, `"tmp/a"`, `".txt"`) |
+| `caminho_abs(c)` | `(texto)` | `texto` absoluto |
 
 ```gambiarrascript
-escreve_arquivo("saida.gs", `# gerado pela GambiarraScript
-mostra "ola"`)
-mostra le_arquivo("saida.gs")
+cria_dir("tmp/a")
+escreve_arquivo("tmp/a/nota.txt", "linha 1\n")
+anexa_arquivo("tmp/a/nota.txt", "linha 2\n")
+mostra le_arquivo("tmp/a/nota.txt")        # linha 1 / linha 2
+mostra le_dir("tmp/a")                     # [nota.txt]
+mostra caminho_ext("tmp/a/nota.txt")       # .txt
+deleta("tmp")
+mostra existe("tmp")                       # deu_ruim
 ```
 
-## HTTP cliente
+## Console, stdin e processo
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `escreve(t)` | `(qualquer)` | `nada` — stdout **sem** quebra de linha |
+| `escreve_erro(t)` | `(qualquer)` | `nada` — stderr |
+| `pergunta([prompt])` | `([texto])` | `texto` — le uma linha do stdin |
+| `le_tudo()` | `()` | `texto` — stdin inteiro ate EOF |
+| `le_linhas()` | `()` | `lista` de textos — stdin, uma linha por item |
+| `argumentos()` | `()` | `lista` de textos passados depois do script |
+| `env(nome)` | `(texto)` | `texto`, ou `nada` se a variavel nao existir |
+| `roda_comando(cmd, [args])` | `(texto, [lista de textos])` | `dicionario` `{saida, erro, codigo}` |
+| `sai([codigo])` | `([numero])` | encerra o script na hora (default `0`) |
+
+`roda_comando` nao passa por shell: o comando e os argumentos vao separados.
+Codigo de saida diferente de zero **nao** e erro — vem em `codigo` pra voce
+decidir. So vira erro quando o comando nem consegue iniciar.
+
+```gambiarrascript
+bota r = roda_comando("echo", ["salve, tropa"])
+mostra tira_espaco(r.saida)        # salve, tropa
+mostra r.codigo                    # 0
+
+bota f = roda_comando("sh", ["-c", "exit 2"])
+se_colar f.codigo != 0
+    escreve_erro("falhou com codigo ${f.codigo}\n")
+    sai(f.codigo)
+acabou_finalmente
+```
+
+Rode `gs roda script.gs primeiro segundo` — `argumentos()` devolve
+`[primeiro, segundo]`.
+
+## HTTP
 
 | Builtin | Assinatura | Devolve |
 | --- | --- | --- |
 | `busca(url, [opcoes])` | `(texto, [dicionario])` | `dicionario` `{status, ok, corpo, cabecalhos}` |
+| `rota(metodo, caminho, handler)` | `(texto, texto, gambiarra)` | `nada` — registra a rota |
+| `escuta(porta)` | `(numero)` | bloqueia servindo (cada requisicao em paralelo) |
 
-Detalhes das `opcoes` (`metodo`, `corpo`, `cabecalhos`, `timeout`) e formato
-da resposta em [HTTP (cliente)](/docs/http).
+Opcoes do `busca` (`metodo`, `corpo`, `cabecalhos`, `timeout`) em
+[HTTP (cliente)](/docs/http); `pedido` e resposta do handler em
+[Servidor HTTP](/docs/servidor).
 
-## Servidor HTTP
+## Banco de dados
 
-| Builtin | Assinatura | Devolve |
-| --- | --- | --- |
-| `rota(metodo, caminho, handler)` | `(texto, texto, gambiarra)` | `nada` |
-| `escuta(porta)` | `(numero)` | bloqueia servindo (serial) |
-
-Handler recebe um dicionario `pedido` e devolve `texto`, `nada` ou
-dicionario `{status, corpo, cabecalhos}`. Veja [Servidor HTTP](/docs/servidor).
-
-## Console e CLI
+SQLite, MySQL/MariaDB e Postgres. Nao funciona no playground (wasm).
 
 | Builtin | Assinatura | Devolve |
 | --- | --- | --- |
-| `pergunta([prompt])` | `([texto])` | `texto` — le uma linha do stdin (trim `\r\n`) |
-| `argumentos()` | `()` | `lista` de textos — args passados apos o script |
-| `escreve(texto)` | `(texto)` | `nada` — escreve no stdout sem newline |
-| `escreve_erro(texto)` | `(texto)` | `nada` — escreve no stderr |
-| `env(nome)` | `(texto)` | `texto` ou `nada` — variavel de ambiente |
-| `le_tudo()` | `()` | `texto` — le todo stdin ate EOF |
-| `le_linhas()` | `()` | `lista` de textos — stdin uma linha por item |
+| `conecta(url)` | `(texto)` | conexao — `"sqlite::memory:"`, `"sqlite:dados.db"`, `"mysql://user:senha@host:3306/db"`, `"postgres://..."` |
+| `consulta(con, sql, params...)` | `(conexao, texto, valores ou lista)` | `lista` de dicionarios (`coluna: valor`) |
+| `executa(con, sql, params...)` | `(conexao, texto, valores ou lista)` | `numero` de linhas afetadas |
+| `fecha(con)` | `(conexao)` | `nada` |
+
+Os params podem vir soltos ou numa lista; o placeholder e o do driver (`?` no
+sqlite/mysql, `$1` no postgres).
 
 ```gambiarrascript
-bota nome = pergunta("como voce se chama? ")
-mostra "salve, " + nome
-
-pra_cada arg em argumentos()
-    mostra "arg: " + arg
+bota c = conecta("sqlite::memory:")
+executa(c, "CREATE TABLE gente (nome TEXT, idade INTEGER)")
+executa(c, "INSERT INTO gente VALUES (?, ?)", "Ze", 30)
+executa(c, "INSERT INTO gente VALUES (?, ?)", ["Rita", 25])
+pra_cada linha em consulta(c, "SELECT nome, idade FROM gente ORDER BY idade")
+    mostra "${linha.nome} tem ${linha.idade}"     # Rita tem 25 / Ze tem 30
 acabou_finalmente
+fecha(c)
 ```
 
-Rode `gs roda script.gs primeiro segundo terceiro` — `argumentos()` retorna
-`["primeiro", "segundo", "terceiro"]`.
+## Erros
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `quebra(msg, [causa])` | `(texto, [erro])` | lanca um erro do tipo `"usuario"` |
+| `envolve_erro(tipo, msg, causa)` | `(texto, texto, erro)` | lanca um erro novo embrulhando `causa` |
+| `erro_msg(e)` | `(erro)` | `texto` da mensagem |
+| `erro_linha(e)` | `(erro)` | `numero` da linha |
+| `erro_tipo(e)` | `(erro)` | `texto`: `"runtime"`, `"builtin"`, `"io"`, `"rede"`, `"parse"`, `"usuario"` (ou o que voce passou no `envolve_erro`) |
+| `erro_pilha(e)` | `(erro)` | `lista` de `{"funcao", "linha"}` |
+| `erro_causa(e)` | `(erro)` | o erro de dentro, ou `nada` |
+
+Detalhes em [Arruma / quebrou](/docs/erros).
 
 ## Concorrencia
 
-| Builtin | Assinatura | Devolve | Notas |
-| --- | --- | --- | --- |
-| `cano([cap])` | `() ou (numero)` | `Cano` | canal (Go channel); `0` ou sem arg = sincrono |
-| `envia(cano, v)` | `(Cano, valor)` | `nada` ou `Erro` | bloqueia ate ter espaco ou receptor |
-| `recebe(cano)` | `(Cano)` | `valor` ou `nada` | bloqueia ate ter algo; `nada` se fechado e vazio |
-| `fecha(cano ou conexao)` | `(Cano ou Nativo)` | `nada` | idempotente; tambem fecha conexao de banco |
-| `espera(futuro ou lista)` | `(Futuro ou lista de Futuros)` | `valor` ou `lista` | bloqueia ate resolver (wait) |
-| `espera(recebido, esperado)` | `(valor, valor)` | `nada` | **assert de teste** (ambiguidade resolvivel por arity) |
-| `paralelo(lista, fn)` | `(lista, gambiarra)` | `lista` | aplica fn em paralelo (ate 256 goroutines) |
-| `afirma(cond, [msg])` | `(valor, [texto])` | `nada` | assert de teste |
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `cano([cap])` | `([numero])` | canal; sem arg (ou `0`) = sincrono |
+| `envia(cano, v)` | `(cano, valor)` | `nada` — bloqueia ate ter espaco/receptor; cano fechado da erro |
+| `recebe(cano)` | `(cano)` | valor, ou `nada` se o cano fechou e esvaziou |
+| `fecha(cano)` | `(cano)` | `nada` — pode chamar mais de uma vez |
+| `espera(futuro)` | `(futuro ou lista de futuros)` | o valor (ou a lista de valores, na ordem) |
+| `paralelo(lista, fn)` | `(lista, gambiarra)` | `lista` com `fn(item)` rodado em paralelo (ate 256 de uma vez), na ordem original |
 
-A keyword `bora fn(args)` (nao builtin — statement/prefix) dispara `fn`
-em paralelo e devolve `Futuro`. Detalhes em [Concorrencia](/docs/concorrencia).
+A palavra-chave `bora fn(args)` dispara a gambiarra numa goroutine e devolve
+um futuro. Detalhes em [Concorrencia](/docs/concorrencia).
 
-## O que nao existe ainda
+## Testes
 
-Builfins ausente mas usual em linguagens dinamicas:
+Usados pelo `gs testa` (arquivos `*_test.gs`), mas funcionam em qualquer
+script: falha imprime `FALHA: ...` no stderr e o script segue.
 
-- Ambiente/`ambiente()` / env vars
-- Tempo: `agora()`, `dorme(segundos)`
-- Aleatorio inteiro, semente manual
-- Sistema: `sai()`, `exec(cmd)`
-- Regex (sem `match`, `substitui_regex`, etc. — `substitui` so faz string fixa)
-- Tipo: `tipo(x)` / `typeof`, `e_lista`, `e_dic`
-- Lista: `insere`, `fatia_lista`, `acha`, `acha_indice`, `cada`/`para_cada` ja existe pra lista mas nao `reduce`
-- Numero: potencia, log, trigonometria
-- Arquivo: append, binario, listagem de dir
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `espera(recebido, esperado)` | `(valor, valor)` | `nada` — assert de igualdade (com **2** argumentos) |
+| `afirma(cond, [msg])` | `(valor, [texto])` | `nada` — assert de verdade |
 
-Quando algo aqui em cima fizer falta, a saida e escrever numa `gambiarra` em
-GambiarraScript — a maior parte do que falta da pra fazer com os builtins
-existem combinados. Veja [Receitas](/docs/exemplos) pra ideias.
+Veja [Linha de comando](/docs/cli#gs-testa).

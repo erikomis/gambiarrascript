@@ -1,6 +1,6 @@
 ---
 title: Functions
-description: How to declare and call functions in GambiarraScript.
+description: How to declare and call functions in GambiarraScript — defaults, varargs, lambdas and closures.
 ---
 
 A function is a `gambiarra`. `gambiarra` declares it, `funciona` returns from
@@ -26,12 +26,37 @@ acabou_finalmente
 mostra dobra(21)        # 42
 ```
 
-`funciona` without an expression returns `nada`.
+`funciona` always takes an expression — write `funciona nada` to return
+nothing. A function that ends without `funciona` returns `nada`.
+
+## Default parameters and varargs
+
+```gambiarrascript
+gambiarra cumprimenta(nome, saudacao = "salve")
+    funciona saudacao + ", " + nome
+acabou_finalmente
+
+mostra cumprimenta("Erik")            # salve, Erik
+mostra cumprimenta("Erik", "fala")    # fala, Erik
+
+gambiarra soma_tudo(primeiro, ...resto)
+    bota total = primeiro
+    pra_cada x em resto
+        total += x
+    acabou_finalmente
+    funciona total
+acabou_finalmente
+
+mostra soma_tudo(1, 2, 3, 4)          # 10
+```
+
+A default may refer to earlier parameters (`gambiarra f(a, b = a * 2)`).
+`...rest` collects the leftover arguments into a list.
 
 ## Arity
 
-The number of arguments must match. If a `gambiarra` takes 2 parameters and you
-pass 3, it's a runtime error.
+Apart from optional parameters and `...rest`, the argument count must match.
+Too few or too many is a runtime error:
 
 ```gambiarrascript
 gambiarra soma(a, b)
@@ -39,55 +64,85 @@ gambiarra soma(a, b)
 acabou_finalmente
 
 mostra soma(2, 3)       # 5
+mostra soma(2)          # error: essa gambiarra quer 2 parametro(s), voce mandou 1
 ```
 
-## Functions as values
+## Lambdas and functions as values
 
-Functions are first-class: they can live in lists and dicts and be passed as
-arguments (used by `mapeia`, `filtra`, `rota`, etc):
+Without a name, `gambiarra(params) ... acabou_finalmente` is an **expression**:
+store it in a variable, a list or a dict, or pass it straight to a builtin.
 
 ```gambiarrascript
+bota dobra = gambiarra(x) funciona x * 2 acabou_finalmente
+mostra dobra(4)                                  # 8
+
 bota ops = [gambiarra(x) funciona x + 1 acabou_finalmente,
             gambiarra(x) funciona x * 2 acabou_finalmente]
+mostra ops[0](10)                                # 11
 
-# inline lambdas — no name, call by indexing
-mostra ops[0](10)       # 11
+mostra mapeia([1, 2, 3], gambiarra(n) funciona n * n acabou_finalmente)   # [1, 4, 9]
 ```
 
-## Closures and free variables
+## Closures
 
-Functions capture variables from the enclosing scope (freevars). The capture
-works identically in the tree-walker **and** the VM, including closures nested
-1, 2 or 3 levels deep:
+Inner functions see the variables of the enclosing scope, even after it has
+returned. The capture works the same in the VM and the tree-walker:
 
 ```gambiarrascript
-gambiarra contador(inicio)
-    bota счет = inicio
+gambiarra multiplicador(fator)
+    funciona gambiarra(x) funciona x * fator acabou_finalmente
+acabou_finalmente
+
+bota triplica = multiplicador(3)
+mostra triplica(5)          # 15
+```
+
+<Callout type="warn" title="Assigning inside a function creates a local">
+  Reading an outer variable works; **assigning** to it (`bota x = ...` or
+  `x += ...`) inside a function creates a **local** variable — like Python
+  without `nonlocal`. The outer one is untouched. For shared mutable state,
+  keep it in a dict or list (passed by reference) and mutate the contents:
+</Callout>
+
+```gambiarrascript
+gambiarra contador()
+    bota estado = {"n": 0}
     funciona gambiarra()
-        bota счет = счет + 1
-        funciona счет
+        estado.n += 1
+        funciona estado.n
     acabou_finalmente
 acabou_finalmente
 
-bota c = contador(10)
-mostra c()   # 11
-mostra c()   # 12
+bota proximo = contador()
+proximo()
+proximo()
+mostra proximo()            # 3
 ```
+
+## Recursion
+
+Plain recursion goes up to **1024** nested calls, then fails with a clean
+error. A self-call in tail position (`funciona f(...)` calling the same
+function) reuses the frame, so it can go as deep as you like.
 
 <Callout type="warn" title="Scope of pra_cada and quebrou">
   The loop variable of `pra_cada` and the variable of a `quebrou` clause
   **leak** into the enclosing function scope — same style as Python. See
-  [Gotchas](/docs/en/pegadinhas).
+  [Gotchas](/docs/pegadinhas) (pt).
 </Callout>
 
 ## Calling in parallel — bora
 
-Prefix a call with `bora` to run it in a goroutine and get a `Futuro` back:
+Prefix a call with `bora` to run it in a goroutine and get a future back:
 
 ```gambiarrascript
+gambiarra dobra(n)
+    funciona n * 2
+acabou_finalmente
+
 bota f = bora dobra(21)
 mostra espera(f)   # 42 — blocks until the future resolves
 ```
 
-See [Concurrency](/docs/en/concorrencia) for the full story (`bora`, `espera`,
+See [Concurrency](/docs/concorrencia) (pt) for the full story (`bora`, `espera`,
 `cano`, `paralelo`).

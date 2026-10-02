@@ -1,6 +1,6 @@
 ---
 title: Estruturas de controle
-description: se_colar, enquanto, pra_cada e o fechamento com acabou_finalmente.
+description: se_colar, enquanto, pra_cada, escolhe/caso, ternario e o fechamento com acabou_finalmente.
 ---
 
 Todo bloco aberto e fechado com `acabou_finalmente`. Indentacao e livre (nao e
@@ -21,7 +21,43 @@ acabou_finalmente
 ```
 
 `se_nao_colar` encadeia como `else if`. O ultimo `se_nao_colar` sem condicao e
-o `else` final.
+o `else` final. Lembre que so `nada` e `deu_ruim` sao falsos — `0` e `""`
+entram no `se_colar` (veja [Pegadinhas](/docs/pegadinhas#truthiness)).
+
+## Ternario: se_colar ... entao ... se_nao_colar
+
+Com `entao`, o `se_colar` vira **expressao** (sem `acabou_finalmente`):
+
+```gambiarrascript
+bota idade = 15
+bota recado = se_colar idade >= 18 entao "pode entrar" se_nao_colar "volta daqui a pouco"
+mostra recado              # volta daqui a pouco
+```
+
+## escolhe / caso (switch)
+
+Compara o valor com cada `caso` usando `==`. Um `caso` aceita varios valores
+separados por virgula; nao tem fallthrough (roda so o primeiro que casar).
+`se_nao_colar` e o "default".
+
+```gambiarrascript
+gambiarra clima(condicao)
+    escolhe condicao
+    caso "sol", "calor"
+        funciona "bora pra praia"
+    caso "chuva"
+        funciona "fica em casa"
+    se_nao_colar
+        funciona "sei la, olha pela janela"
+    acabou_finalmente
+acabou_finalmente
+
+mostra clima("calor")      # bora pra praia
+mostra clima("chuva")      # fica em casa
+mostra clima("neblina")    # sei la, olha pela janela
+```
+
+Repara: `escolhe` e palavra-chave; o builtin de sorteio e `escolhe_um`.
 
 ## enquanto (while)
 
@@ -29,23 +65,27 @@ o `else` final.
 bota i = 0
 enquanto i < 3
     mostra i
-    bota i = i + 1
+    i += 1
 acabou_finalmente
 ```
 
 ## pra_cada numerico
 
 ```gambiarrascript
-pra_cada i de 1 ate 10
+pra_cada i de 1 ate 5
     mostra i
 acabou_finalmente
 ```
 
-O intervalo e inclusivo nos dois lados (`de 1 ate 10` inclui o 10).
+O intervalo e inclusivo nos dois lados (`de 1 ate 5` inclui o 5) e so sobe:
+`de 10 ate 7` nao roda nenhuma vez. Pra contar pra baixo, use um range:
+`pra_cada i em 10..7`.
 
 ## pra_cada em (for-each)
 
-Funciona com listas e dicionarios (itera nas **chaves** do dicionario):
+Funciona com listas e dicionarios (itera nas **chaves** do dicionario, na ordem
+de insercao). Com dois nomes, vem o par: indice + item na lista, chave + valor
+no dicionario.
 
 ```gambiarrascript
 bota frutas = ["abacaxi", "goiaba", "caju"]
@@ -53,11 +93,21 @@ pra_cada fruta em frutas
     mostra "hoje tem: " + fruta
 acabou_finalmente
 
-bota dic = {"a": 1, "b": 2}
-pra_cada chave em dic
-    mostra chave + " = " + dic[chave]
+pra_cada i, fruta em frutas
+    mostra "${i + 1}. ${fruta}"
+acabou_finalmente
+
+bota precos = {"cafe": 5, "pao": 1}
+pra_cada item, preco em precos
+    mostra "${item} custa ${preco}"
+acabou_finalmente
+
+pra_cada n em 3..1
+    mostra n               # 3, 2, 1
 acabou_finalmente
 ```
+
+Texto nao e iteravel direto: use `pra_cada letra em separa(t, "")`.
 
 ## vaza e continua
 
@@ -74,4 +124,9 @@ acabou_finalmente
 ```
 
 `vaza` sai do loop, `continua` pula pra proxima iteracao. Fora de um loop os
-dois viram erro de runtime.
+dois sao erro — o `gs roda` ja reclama antes de comecar a rodar.
+
+## Saindo do script
+
+`sai(codigo)` encerra o script na hora, de qualquer lugar (dentro de funcao,
+loop, o que for), com o codigo de saida do processo. Sem argumento, sai com `0`.

@@ -14,7 +14,11 @@ escuta(8080)
 
 ## rota(metodo, caminho, handler)
 
-Registra uma rota. O `handler` e uma `gambiarra` que recebeum dicionario
+Registra uma rota. O casamento e **exato** por metodo + caminho (sem
+parametros tipo `/usuarios/:id` — pra isso, use `query` ou quebre o
+`caminho` na mao). Pedido sem rota recebe `404`.
+
+O `handler` e uma `gambiarra` (com nome ou lambda) que recebe um dicionario
 `pedido` com:
 
 | chave        | tipo | conteudo                                          |
@@ -22,22 +26,29 @@ Registra uma rota. O `handler` e uma `gambiarra` que recebeum dicionario
 | `metodo`     | texto | metodo HTTP (`"GET"`, `"POST"`...)               |
 | `caminho`    | texto | path da URL (`"/"`, `"/usuarios"`)                |
 | `corpo`      | texto | corpo do request (use `de_json` pra parsear)      |
-| `cabecalhos` | dic  | headers canonizados                                |
-| `query`      | dic  | query string parseada, chaves lowercase           |
+| `cabecalhos` | dic  | headers, com o nome na forma canonica do Go (`Content-Type`, `X-Teste`) |
+| `query`      | dic  | query string (`?nome=ze` → `pedido.query.nome`)   |
+
+Quando um header ou parametro de query vem repetido, os valores chegam juntos
+com `", "`.
 
 ## Resposta
 
 O handler devolve:
 
-- um **texto** -> corpo + status 200, ou
-- um **dicionario** `{"status": numero, "corpo": texto, "cabecalhos": dic}`
+- um **texto** → corpo, status 200;
+- `nada` → status 200 com corpo vazio;
+- um **dicionario** `{"status": numero, "corpo": texto, "cabecalhos": dic}` —
+  tudo opcional (status default 200; fora de 100–599 vira 500).
+
+Se o handler estourar um erro, o cliente recebe `500` com a mensagem.
 
 ```gambiarrascript
 gambiarra api(pedido)
     arruma
         bota dados = de_json(pedido["corpo"])
         funciona pra_json({"ok": deu_bom, "recebido": dados})
-    quebrou e
+    quebrou erro
         funciona {"status": 400, "corpo": "json zuado", "cabecalhos": {"Content-Type": "text/plain"}}
     acabou_finalmente
 acabou_finalmente
@@ -48,12 +59,6 @@ escuta(8090)
 
 ## escuta(porta)
 
-Bloqueia e serve. **Serializado** (uma requisicao por vez) — concorrencia de
-verdade vem depois.
-
-## Cabecalhos e query com multiplos valores
-
-Quando um header ou parametro de query vem com multiplos valores, eles chegam
-unidos por `", "`. As chaves dos cabecalhos usam a forma canonica do Go (ex.:
-`pedido["cabecalhos"]["X-Teste"]`, com `T` maiusculo). Query usa lowercase nas
-chaves.
+Bloqueia e serve. Cada requisicao roda **em paralelo** (uma goroutine por
+conexao). Por isso, cuidado ao mexer em lista/dicionario compartilhado entre
+handlers: nao tem lock (veja [Concorrencia](/docs/concorrencia#estado-compartilhado)).

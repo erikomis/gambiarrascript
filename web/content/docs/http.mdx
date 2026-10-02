@@ -7,8 +7,8 @@ description: busca() faz requisicoes HTTP no GambiarraScript.
 
 ```gambiarrascript
 bota r = busca("https://httpbin.org/get")
-se_colar r["ok"]
-    mostra r["corpo"]
+se_colar r.ok
+    mostra r.corpo
 acabou_finalmente
 ```
 
@@ -19,9 +19,12 @@ acabou_finalmente
 | `status`     | numero  | codigo HTTP (200, 404, etc.)          |
 | `ok`         | booleano| `deu_bom` se 2xx                       |
 | `corpo`      | texto   | corpo da resposta                      |
-| `cabecalhos` | dic     | headers canonizados (ex.: `Content-Type`) |
+| `cabecalhos` | dic     | headers canonizados (ex.: `Content-Type`); varios valores vem juntos com `", "` |
 
-## Opcoes (POST, corpo, cabecalhos, timeout)
+Status 4xx/5xx **nao** e erro: vem no `status`/`ok` pra voce decidir. Erro de
+verdade (DNS, conexao recusada, timeout) estoura — pegue com `arruma`.
+
+## Opcoes (metodo, corpo, cabecalhos, timeout)
 
 ```gambiarrascript
 bota r = busca("https://httpbin.org/post", {
@@ -30,13 +33,27 @@ bota r = busca("https://httpbin.org/post", {
     "cabecalhos": {"Content-Type": "application/json"},
     "timeout": 10
 })
-mostra r["status"]
+mostra r.status
+mostra de_json(r.corpo).json.msg      # salve
 ```
 
-- `metodo`: `"GET"` (default), `"POST"`, `"PUT"`, `"DELETE"`, etc.
+- `metodo`: `"GET"` (default), `"POST"`, `"PUT"`, `"DELETE"` ou `"PATCH"`
+  (maiuscula ou minuscula). Outro metodo da erro.
 - `corpo`: texto do corpo da requisicao.
-- `cabecalhos`: dicionario, chaves no formato que o Go canoniza (ex.: `X-Teste`
-  com inicial maiscula).
-- `timeout`: em segundos; default 30.
+- `cabecalhos`: dicionario texto → texto.
+- `timeout`: em segundos (aceita fracao); default 30.
 
-A chamada e **bloqueante** (sem async/await): o resultado ja vem pronto.
+## Bloqueante, mas da pra paralelizar
+
+A chamada e **bloqueante**: o resultado ja vem pronto. Pra varias requisicoes
+ao mesmo tempo, dispare com `bora` ou use `paralelo`:
+
+```gambiarrascript
+bota urls = ["https://httpbin.org/get", "https://httpbin.org/uuid"]
+bota respostas = paralelo(urls, gambiarra(u) funciona busca(u) acabou_finalmente)
+pra_cada r em respostas
+    mostra r.status
+acabou_finalmente
+```
+
+Veja [Concorrencia](/docs/concorrencia).

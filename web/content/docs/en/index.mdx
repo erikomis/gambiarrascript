@@ -31,14 +31,16 @@ acabou_finalmente
 ```
 
 GambiarraScript is a dynamic, interpreted language written in Go. It ships a
-lexer, parser, a tree-walking interpreter and a bytecode VM — both first-class
-and capable of running every example in this docs. There is also an LSP, a
-formatter, a VSCode extension and a WebAssembly runtime that runs in the
-browser.
+lexer, parser, a bytecode compiler and a **VM** — the default engine for
+everything (`gs roda`, `gs build`, `gs testa`, the REPL and the playground) —
+plus the original tree-walking interpreter as a fallback (`gs roda --tree`).
+There is also an LSP, a formatter, a VSCode extension and a WebAssembly runtime
+that runs in the browser.
 
 > The keywords are Portuguese memes (gíria BR). They are **fixed** — there is
 > no English alias for them. The code you write looks the same in any docs
-> language; only the prose around it is translated.
+> language; only the prose around it is translated. Only a few pages are
+> translated so far; the others link to the Portuguese version (marked "pt").
 
 ## Features
 
@@ -48,23 +50,26 @@ browser.
     "language": { type: "'GambiarraScript'", description: "interpreted, dynamic, weakly typed" },
     "implemented_in": { type: "'Go'", description: "1.23.12+" },
     "keywords": { type: "string", description: "Portuguese slang, fixed, no alias" },
-    "types": { type: "string", description: "number, string, boolean, nada, list, dict" },
+    "types": { type: "string", description: "number, string, boolean, nada, list, dict, set" },
+    "syntax": { type: "string", description: "${} interpolation, .. ranges, ternary, escolhe/caso, lambdas, destructuring, ?. and ??, +=, slices xs[1:3]" },
     "integers": { type: "boolean", default: true, description: "exact int64 (no float drift on whole numbers)" },
-    "modules": { type: "boolean", default: true, description: "importa \"arquivo.gs\" (tree-walker AND VM)" },
+    "modules": { type: "boolean", default: true, description: "importa \"arquivo.gs\" [como name]" },
     "http": { type: "boolean", default: true, description: "client (busca) and parallel server (rota/escuta)" },
     "json": { type: "boolean", default: true, description: "de_json / pra_json" },
     "database": { type: "boolean", default: true, description: "conecta/consulta/executa — sqlite, mysql, postgres" },
     "regex": { type: "boolean", default: true, description: "busca_regex, substitui_regex, separa_regex, ..." },
-    "time": { type: "boolean", default: true, description: "agora, formate_tempo, parse_tempo, duracao" },
+    "time": { type: "boolean", default: true, description: "agora, formata_tempo, parse_tempo, duracao, converte_tz" },
     "crypto": { type: "boolean", default: true, description: "md5, sha256, hmac, base64, hex" },
     "sets": { type: "boolean", default: true, description: "conjunto, uniao, intersecao, diferenca" },
     "concurrency": { type: "boolean", default: true, description: "bora (goroutines+future), cano (channels), paralelo" },
     "errors": { type: "boolean", default: true, description: "arruma/quebrou + erro_tipo/erro_pilha/envolve_erro" },
-    "file": { type: "boolean", default: true, description: "le_arquivo, escreve_arquivo, anexa_arquivo, fs helpers" },
+    "file": { type: "boolean", default: true, description: "le_arquivo, escreve_arquivo, anexa_arquivo, fs helpers, csv, gzip" },
+    "processes": { type: "boolean", default: true, description: "roda_comando, sai, argumentos, env" },
     "lsp": { type: "boolean", default: true, description: "diagnostics, autocomplete, hover" },
     "wasm": { type: "boolean", default: true, description: "runs in the browser (playground)" },
     "formatter": { type: "boolean", default: true, description: "gs formata [-w]" },
-    "vm": { type: "boolean", default: true, description: "gs roda --vm — full parity with tree-walker" }
+    "vm": { type: "boolean", default: true, description: "default engine; gs roda --tree falls back to the tree-walker" },
+    "tooling": { type: "string", description: "repl, check, formata, testa, doc, build, bench, get, lsp" }
   }}
 />
 
@@ -94,27 +99,28 @@ browser.
     - [Vocabulary](/docs/en/vocabulario)
     - [Control flow](/docs/en/estruturas)
     - [Functions](/docs/en/funcoes)
-    - [Types & operators](/docs/en/tipos)
-    - [Strings](/docs/en/strings)
-    - [Lists & dicts](/docs/en/colecoes)
+    - [Types & operators](/docs/tipos) (pt)
+    - [Strings](/docs/strings) (pt)
+    - [Lists & dicts](/docs/colecoes) (pt)
   </Accordion>
   <Accordion title="Advanced">
-    - [Standard library](/docs/en/biblioteca)
-    - [try / catch](/docs/en/erros)
-    - [Modules](/docs/en/modulos)
-    - [Gotchas](/docs/en/pegadinhas)
+    - [Standard library](/docs/biblioteca) (pt)
+    - [try / catch](/docs/erros) (pt)
+    - [Concurrency](/docs/concorrencia) (pt)
+    - [Modules](/docs/modulos) (pt)
+    - [Gotchas](/docs/pegadinhas) (pt)
   </Accordion>
   <Accordion title="Outside world">
-    - [JSON](/docs/en/json)
-    - [HTTP client](/docs/en/http)
-    - [HTTP server](/docs/en/servidor)
+    - [JSON](/docs/json) (pt)
+    - [HTTP client](/docs/http) (pt)
+    - [HTTP server](/docs/servidor) (pt)
   </Accordion>
   <Accordion title="Tools">
-    - [Command line](/docs/en/cli)
-    - [Editor & format](/docs/en/ferramentas)
+    - [Command line](/docs/cli) (pt)
+    - [Editor & format](/docs/ferramentas) (pt)
   </Accordion>
   <Accordion title="Practical">
-    - [Recipes](/docs/en/exemplos)
+    - [Recipes](/docs/exemplos) (pt)
   </Accordion>
 </Accordions>
 

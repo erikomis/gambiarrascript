@@ -10,58 +10,73 @@ Decorou essa tabela, decorou a lingua.
 
 | Palavra             | Equivalente          | O que faz |
 | ------------------- | -------------------- | --------- |
-| `bota`              | `let` / `var`        | declara (ou reatribui) variavel |
+| `bota`              | `let` / `var`        | declara (ou reatribui) variavel; tambem `bota [a, b] = lista` / `bota {x, y} = dic` |
+| `crava`             | `const`              | declara constante: o nome nao pode mais ser reatribuido |
 | `mostra`            | `print`              | imprime na tela (statement, nao funcao) |
 | `se_colar`          | `if`                 | abre condicional |
 | `se_nao_colar`      | `else` / `else if`   | clausula do `se_colar`; pega condicao (vira else-if) ou nao (else final) |
-| `enquanto`          | `while`              | loop enquanto condição for verdadeira |
-| `pra_cada ... de A ate B` | `for i in range(A, B+1)` | loop numerico inclusivo |
-| `pra_cada x em colecao`   | `for x in ...` | for-each em lista ou dicionario (itera as **chaves** do dic) |
-| `gambiarra`         | `func` / `fn` / `def`| declara funcao |
+| `se_colar c entao a se_nao_colar b` | `c ? a : b` | ternario (expressao, sem `acabou_finalmente`) |
+| `escolhe` / `caso`  | `switch` / `case`    | compara com `==`, sem fallthrough; `se_nao_colar` e o default |
+| `enquanto`          | `while`              | loop enquanto condicao for verdadeira |
+| `pra_cada i de A ate B` | `for i in range(A, B+1)` | loop numerico inclusivo (so sobe) |
+| `pra_cada x em colecao` | `for x in ...`   | for-each em lista ou dicionario (no dic, as **chaves**) |
+| `pra_cada i, v em colecao` | `for i, v in enumerate(...)` / `.items()` | indice + item na lista, chave + valor no dic |
+| `gambiarra`         | `func` / `fn` / `def`| declara funcao (com nome) ou lambda (sem nome) |
 | `funciona`          | `return`             | devolve valor da gambiarra |
 | `arruma`            | `try`                | abre bloco de tratamento de erro |
-| `quebrou <nome>`    | `catch <e>`          | captura erro numa variavel texto |
+| `quebrou <nome>`    | `catch <e>`          | captura o erro numa variavel |
+| `finalmente`        | `finally`            | roda sempre, deu erro ou nao |
 | `vaza`              | `break`              | sai do loop |
 | `continua`          | `continue`           | pula pra proxima iteracao |
-| `importa`           | `import`             | importa modulo `.gs` relativo |
-| `deu_bom` / `deu_ruim` | `true` / `false`  | booleanos singleton |
+| `importa "x.gs" [como nome]` | `import`    | importa modulo `.gs` (com `como`, vira um dicionario) |
+| `bora`              | `go` (goroutine)     | dispara funcao em paralelo; devolve um futuro |
+| `deu_bom` / `deu_ruim` | `true` / `false`  | booleanos |
 | `nada`              | `null` / `None`      | o unico valor nulo |
-| `acabou_finalmente` | `}`                  | fecha **qualquer** bloco (`se_colar`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`) |
-| `bora`              | `go` (goroutine)     | dispara funcao em paralelo; devolve `Futuro` |
+| `e` / `ou` / `nao`  | `and` / `or` / `not` | logicos (sempre devolvem booleano) |
+| `acabou_finalmente` | `}`                  | fecha **qualquer** bloco (`se_colar`, `escolhe`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`) |
 
-As palavras-chave sao fixas: nao tem alias pra escolher a que voce gosta mais.
-O que existe e o sentimento: `acabou_finalmente` fecha qualquer bloco aberto.
+As palavras-chave sao fixas: nao tem alias pra escolher a que voce gosta mais
+(e nenhuma delas pode virar nome de variavel — nem `e`, `de` ou `em`). O que
+existe e o sentimento: `acabou_finalmente` fecha qualquer bloco aberto.
 
 ## Operadores
 
 | Categoria    | Simbolos |
 | ------------ | -------- |
-| Aritmeticos  | `+ - * / %` |
+| Aritmeticos  | `+ - * / %`, potencia `**` (associa pela direita) |
+| Bitwise      | `& \| ^ ~ << >>` (so inteiros) |
 | Comparacao   | `== != < > <= >=` |
-| Logicos      | `e` (and), `ou` (or), `nao` (not prefix) |
-| Atribuicao   | `=` (sempre precedido por `bota`) |
-| Indexacao    | `expr[expr]` |
-| Chamada      | `expr(args)` |
-
-Nao tem exponenciacao (`**`), nem atribuicao composta (`+=`, `-=`, etc.). Pra
-potencia use multiplicacao numa funcao, ou `raiz()` no lugar de raiz quadrada.
+| Logicos      | `e` (and), `ou` (or), `nao` (not prefixo) |
+| Nada         | `x?.campo` (navegacao segura), `x ?? padrao` (coalescing) |
+| Range        | `1..5` → `[1, 2, 3, 4, 5]` |
+| Atribuicao   | `bota x = ...`, `crava X = ...`; compostos `+= -= *= /= %= **= &= \|= ^= <<= >>=` sem `bota` |
+| Indice/fatia | `xs[i]`, `xs[-1]`, `xs[1:3]`, `xs[:2]`, `xs[2:]` |
+| Campo        | `dic.campo` (atalho pra `dic["campo"]`) |
+| Chamada      | `f(args)`; na declaracao: `f(a, b = 10, ...resto)` |
+| Texto        | `"oi ${nome}"` (interpolacao) |
 
 ### Precedencia (do mais fraco pro mais forte)
 
-1. `ou`
+1. `ou`, `??`
 2. `e`
-3. `== !=`
-4. `< > <= >=`
-5. `+ -`
-6. `* / %`
-7. prefix (`-`, `nao`)
-8. chamada `f(args)`
-9. indexacao `x[i]`
+3. `..`
+4. `|`
+5. `^`
+6. `&`
+7. `== !=`
+8. `< > <= >=`
+9. `<< >>`
+10. `+ -`
+11. `* / %`
+12. prefixo (`-`, `nao`, `~`)
+13. `**` (`-2 ** 2` e `-4`)
+14. chamada `f(args)`
+15. indice `x[i]`, campo `x.campo` / `x?.campo`
 
 ## Booleanos e nulos
 
-`deu_bom` e `deu_ruim` sao os booleanos `true`/`false`. `nada` e o singleton de
-nulo (null/None). Operadores logicos `e` e `ou` **sempre devolvem booleano**
+`deu_bom` e `deu_ruim` sao os booleanos `true`/`false`. `nada` e o nulo
+(null/None). Operadores logicos `e` e `ou` **sempre devolvem booleano**
 (normalizam o operando), ao contrario de JS/Python. `nao` inverte.
 
 ```gambiarrascript
@@ -69,7 +84,8 @@ bota maior = 10 > 5          # deu_bom
 bota ativo = deu_bom e maior
 bota falso = nao maior
 mostra falso                 # deu_ruim
-mostra nada
+mostra nada                  # nada
+mostra nada ?? "padrao"      # padrao
 ```
 
 ## Truthiness
@@ -85,13 +101,21 @@ para referencia rapida:
 
 | Categoria | Funcoes |
 | --------- | -------- |
-| Texto | `tamanho` `maiusculo` `minusculo` `fatia` `contem` `comeca_com` `termina_com` `tira_espaco` `substitui` `separa` `junta` `texto` `numero` |
-| Lista | `tamanho` `adiciona` `remove` `ordena` `inverte` `mapeia` `filtra` |
+| Conversao | `texto` `numero` `tamanho` |
+| Texto | `maiusculo` `minusculo` `tira_espaco` `substitui` `separa` `junta` `fatia` `contem` `comeca_com` `termina_com` `formata` |
+| Regex | `busca_regex` `acha_regex` `combina_regex` `substitui_regex` `separa_regex` |
+| Lista | `adiciona` `remove` `ordena` `ordena_com` `inverte` `mapeia` `filtra` `reduz` `acha` `acha_indice` `unicos` `achatada` `ordena_por` `agrupa_por` `zip` `enumera` `soma` `media` |
 | Dicionario | `chaves` `tem` |
-| Numero | `raiz` `abs` `arredonda` `teto` `chao` `min` `max` `aleatorio` |
-| JSON | `de_json` `pra_json` |
-| Arquivo | `le_arquivo` `escreve_arquivo` |
-| HTTP | `busca` |
-| Servidor | `rota` `escuta` |
-| Console/CLI | `pergunta` `argumentos` |
-| Concorrencia | `bora` `espera` `cano` `envia` `recebe` `fecha` `paralelo` |
+| Conjunto | `conjunto` `contem_conjunto` `adiciona_conjunto` `remove_conjunto` `uniao` `intersecao` `diferenca` |
+| Numero | `raiz` `abs` `arredonda` `teto` `chao` `min` `max` `seno` `cosseno` `tangente` `log` `log10` `exp` (+ o valor `pi`) |
+| Aleatorio | `aleatorio` `semente` `embaralha` `escolhe_um` `uuid` |
+| Tempo | `agora` `agora_num` `agora_ns` `formata_tempo` `parse_tempo` `duracao` `soma_tempo` `sub_tempo` `dia_da_semana` `diferenca_dias` `diferenca_horas` `converte_tz` `espera_ms` |
+| Crypto | `md5` `sha1` `sha256` `sha512` `hmac_sha256` `base64_*` `base32_*` `hex_*` `gzip_comprime` `gzip_descomprime` |
+| JSON / CSV | `de_json` `pra_json` `le_csv` `escreve_csv` |
+| Arquivo | `le_arquivo` `escreve_arquivo` `anexa_arquivo` `existe` `eh_dir` `cria_dir` `le_dir` `deleta` `copia` `move` `tamanho_arquivo` `modificado_em` `glob` `caminho_*` |
+| Console/processo | `escreve` `escreve_erro` `pergunta` `le_tudo` `le_linhas` `argumentos` `env` `roda_comando` `sai` |
+| HTTP | `busca` `rota` `escuta` |
+| Banco | `conecta` `consulta` `executa` `fecha` |
+| Erros | `quebra` `envolve_erro` `erro_msg` `erro_tipo` `erro_linha` `erro_pilha` `erro_causa` |
+| Concorrencia | `espera` `cano` `envia` `recebe` `fecha` `paralelo` (+ a palavra-chave `bora`) |
+| Testes | `espera(recebido, esperado)` `afirma(cond, [msg])` |
