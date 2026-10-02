@@ -94,6 +94,9 @@ type Parser struct {
 	curToken  token.Token
 	peekToken token.Token
 
+	pos      *Posicoes   // nil = nao guarda (so o formatter liga)
+	anterior token.Token // token antes do cur (so com pos)
+
 	prefixParseFns map[token.TokenType]prefixParseFn
 	infixParseFns  map[token.TokenType]infixParseFn
 }
@@ -140,6 +143,31 @@ func New(l *lexer.Lexer) *Parser {
 	return p
 }
 
+// Posicoes diz onde cada pedaco comeca e termina na fonte, pro formatter
+// recolocar comentarios e linhas em branco. So e preenchido com GuardaPosicoes.
+type Posicoes struct {
+	Inicio, Fim map[ast.Statement]token.Token // primeiro e ultimo token
+	// Cabeca: ultimo token antes do bloco (fim do cabecalho: `se_colar x`,
+	// `caso 1, 2`, `se_nao_colar`...); no escolhe, o ultimo antes do 1o caso.
+	Cabeca   map[ast.Node]token.Token
+	FimBloco map[*ast.BlockStatement]token.Token // quem fechou o bloco
+	Caso     map[*ast.BlockStatement]token.Token // o `caso` que abre o bloco
+	Fecha    map[ast.Expression]token.Token      // o `]`/`}` de lista e dicionario
+}
+
+// GuardaPosicoes liga o registro de posicoes (chamar antes do ParseProgram).
+func (p *Parser) GuardaPosicoes() *Posicoes {
+	p.pos = &Posicoes{
+		Inicio:   map[ast.Statement]token.Token{},
+		Fim:      map[ast.Statement]token.Token{},
+		Cabeca:   map[ast.Node]token.Token{},
+		FimBloco: map[*ast.BlockStatement]token.Token{},
+		Caso:     map[*ast.BlockStatement]token.Token{},
+		Fecha:    map[ast.Expression]token.Token{},
+	}
+	return p.pos
+}
+
 func (p *Parser) registerPrefix(tt token.TokenType, fn prefixParseFn) { p.prefixParseFns[tt] = fn }
 func (p *Parser) registerInfix(tt token.TokenType, fn infixParseFn)   { p.infixParseFns[tt] = fn }
 
@@ -160,6 +188,9 @@ func (p *Parser) Errors() []string {
 }
 
 func (p *Parser) nextToken() {
+	if p.pos != nil {
+		p.anterior = p.curToken
+	}
 	p.curToken = p.peekToken
 	p.peekToken = p.l.NextToken()
 }
@@ -530,6 +561,9 @@ func (p *Parser) parseGrouped() ast.Expression {
 func (p *Parser) parseLista() ast.Expression {
 	lista := &ast.ListaLiteral{Token: p.curToken}
 	lista.Elements = p.parseExpressionList(token.RBRACKET)
+	if p.pos != nil {
+		p.pos.Fecha[lista] = p.curToken
+	}
 	return lista
 }
 
@@ -550,6 +584,9 @@ func (p *Parser) parseDicionario() ast.Expression {
 	}
 	if !p.expectPeek(token.RBRACE) {
 		return nil
+	}
+	if p.pos != nil {
+		p.pos.Fecha[dic] = p.curToken
 	}
 	return dic
 }
@@ -673,6 +710,19 @@ func (p *Parser) ParseProgram() *ast.Program {
 }
 
 func (p *Parser) parseStatement() ast.Statement {
+	if p.pos == nil {
+		return p.parseStatementCru()
+	}
+	ini := p.curToken
+	stmt := p.parseStatementCru()
+	if stmt != nil {
+		p.pos.Inicio[stmt] = ini
+		p.pos.Fim[stmt] = p.curToken
+	}
+	return stmt
+}
+
+func (p *Parser) parseStatementCru() ast.Statement {
 	switch p.curToken.Type {
 	case token.BOTA:
 		return p.parseBota()
@@ -805,8 +855,12 @@ func (p *Parser) parseEscolhe() ast.Statement {
 			"escolhe sem nenhum `caso`? escolhe o que entao?")
 		return nil
 	}
+	if p.pos != nil {
+		p.pos.Cabeca[stmt] = p.anterior
+	}
 	for p.curTokenIs(token.CASO) {
 		braco := ast.CasoBraco{}
+		casoTok := p.curToken
 		p.nextToken()
 		braco.Values = append(braco.Values, p.parseExpression(LOWEST))
 		for p.peekTokenIs(token.COMMA) {
@@ -816,6 +870,9 @@ func (p *Parser) parseEscolhe() ast.Statement {
 		}
 		p.nextToken()
 		braco.Body = p.parseBlockStatement()
+		if p.pos != nil {
+			p.pos.Caso[braco.Body] = casoTok
+		}
 		stmt.Casos = append(stmt.Casos, braco)
 	}
 	if p.curTokenIs(token.SE_NAO_COLAR) {
@@ -879,6 +936,9 @@ func (p *Parser) parseFunciona() ast.Statement {
 // parseBlockStatement le statements ate um terminador, sem consumi-lo.
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	block := &ast.BlockStatement{Token: p.curToken, Statements: []ast.Statement{}}
+	if p.pos != nil {
+		p.pos.Cabeca[block] = p.anterior
+	}
 	for !p.curTokenIs(token.ACABOU) &&
 		!p.curTokenIs(token.SE_NAO_COLAR) &&
 		!p.curTokenIs(token.QUEBROU) &&
@@ -889,6 +949,9 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 			block.Statements = append(block.Statements, stmt)
 		}
 		p.nextToken()
+	}
+	if p.pos != nil {
+		p.pos.FimBloco[block] = p.curToken
 	}
 	return block
 }

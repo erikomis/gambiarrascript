@@ -160,17 +160,25 @@ O formatter re-emite o AST. Regras:
 - Blocos: abre em linha separada, fecha com `acabou_finalmente` no nivel pai.
 - `else if` vira `se_nao_colar se_colar ...`.
 - Infix recebe parenteses so quando a precedencia exige.
-- Listas, dicionarios e lambdas ficam inline (sem quebra de linha).
+- Listas e dicionarios ficam inline, a nao ser que voce quebre a linha logo
+  depois do `[`/`{` — ai sai um item por linha. Lambda escrita em varias
+  linhas vira bloco indentado; lambda de uma linha fica inline.
 - Atribuicao composta (`x += 1`) e interpolacao (`"${x}"`) sao preservadas.
 - Texto e re-citado com aspas duplas — escapes normalizados (`\"`, `\\`, `\n`)
   e string de crase vira string de aspas equivalente.
-- **Comentarios sao descartados**: o lexer nao emite tokens de comentario,
-  entao o formatter nao tem como preserva-los.
+- **Comentarios ficam**: `#` sozinho na linha e reindentado pro nivel do
+  bloco; `#` depois do codigo fica na mesma linha, com 2 espacos antes;
+  `/* */` sai igualzinho. `#` dentro de texto nao e comentario e nao e tocado.
+- Linhas em branco ficam (varias seguidas viram uma; nenhuma no comeco ou no
+  fim de bloco).
+- Comentario no meio de uma expressao quebrada em varias linhas (chamada,
+  condicao) vai pra linha de cima, porque a expressao volta pra uma linha so.
 
-<Callout type="warn" title="Comentarios somem no formatter">
-  Se voce rodar `gs formata` num arquivo com `#` ou `/* */`, os comentarios
-  **somem** completamente (e com `-w`, somem do disco). E uma limitacao
-  conhecida do lexer. Use controle de versao, ou aceite o risco.
+<Callout title="Trava de seguranca">
+  Antes de gravar, o `gs formata -w` (e o "formatar documento" do editor)
+  confere que o resultado tem o mesmo codigo e exatamente os mesmos
+  comentarios. Se nao tiver, nao grava: avisa `NAO formatado` e o arquivo
+  fica como estava.
 </Callout>
 
 ### Indentacao

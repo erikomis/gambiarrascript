@@ -22,7 +22,7 @@ Tiers 1–5 estão entregues. O backlog vivo:
 | Tier 6 | `gs instala` + lock, `build --alvo`, Homebrew, cobertura, sombreamento |
 | Tier 7 | MaxStack por função |
 | Tier 8 | POO no estilo Go (`treta`/`combinado`) — tem decisões em aberto |
-| Tier 9 | sugestões novas: `//`, LSP completo, marketplace, formatter que guarda comentário |
+| Tier 9 | sugestões novas: `//`, publicar a extensão no marketplace, playground com entrada |
 
 ---
 
@@ -605,13 +605,16 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       já existe no escopo ou que capturaria outra referência), **outline do
       documento** e **signature help** (`(` e `,`, funciona com a linha pela
       metade, inclusive `m.f(`).
-- [~] **Formatar documento** pelo LSP — exposto, mas devolve nada em arquivo
-      com comentário: o `formatter` joga comentário e linha em branco fora
-      (ver bug abaixo). Posições em UTF-16 nas features novas; diagnostics e
-      hover ainda contam runa (erra depois de emoji na mesma linha).
-- [ ] **`gs formata` apaga comentários e linhas em branco** — o formatter
-      reimprime a AST, que não guarda comentário. Com `-w`, sobrescreve o
-      arquivo sem eles. Precisa o lexer guardar comentário como trivia.
+- [x] **Formatar documento** pelo LSP — mesmo formatter do `gs formata`.
+      Posições em UTF-16 nas features novas; diagnostics e hover ainda contam
+      runa (erra depois de emoji na mesma linha).
+- [x] **`gs formata` apagava comentários e linhas em branco** (com `-w`,
+      do disco). O lexer guarda comentário como trivia (`lexer.NewComTrivia`,
+      só no formatter — `gs roda` não paga) e o formatter devolve cada um pela
+      posição. Trava: `formata -w` e o LSP só gravam se o resultado tiver o
+      mesmo AST e os mesmos comentários (`formatter.Confere`). Testado com os
+      exemplos, todo bloco da doc e 11 mil variações com comentário em toda
+      linha.
 - [ ] **Publicar a extensão** no VS Marketplace e no Open VSX (hoje
       `"publisher": "local"`, só instala por `.vsix`).
 

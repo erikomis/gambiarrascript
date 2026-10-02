@@ -4,16 +4,14 @@ import (
 	"strings"
 
 	"gambiarrascript/formatter"
-	"gambiarrascript/lexer"
-	"gambiarrascript/parser"
 )
 
 // ---- textDocument/formatting ----
 //
-// Reaproveita o formatter do `gs formata`. Tres travas pra nunca destruir
-// codigo: (1) com erro de parse, nenhuma edicao; (2) o formatter descarta
-// comentarios, entao doc com comentario nao e formatado (avisa uma vez por
-// arquivo); (3) o resultado e reparseado e precisa dar o mesmo AST.
+// Reaproveita o formatter do `gs formata` (que guarda comentarios). Duas
+// travas pra nunca destruir codigo: (1) com erro de parse, nenhuma edicao;
+// (2) o resultado passa no formatter.Confere (reparseia no mesmo AST e com os
+// mesmos comentarios); se nao passar, avisa uma vez por arquivo.
 
 func (s *Servidor) formatar(uri string) []EdicaoTexto {
 	texto, ok := s.docs[uri]
@@ -48,15 +46,10 @@ func (s *Servidor) formatar(uri string) []EdicaoTexto {
 // formatarTexto devolve o texto formatado, ou o motivo de nao formatar ("" =
 // ok). Erro de parse nao gera aviso: o editor ja sublinha o erro.
 func formatarTexto(texto string) (string, string) {
-	p := parser.New(lexer.New(texto))
-	prog := p.ParseProgram()
-	if len(p.Errors()) > 0 {
+	novo, errs := formatter.FormataFonte(texto)
+	if len(errs) > 0 {
 		return texto, ""
 	}
-	if temComentario(texto) {
-		return texto, "formatar pulado: o formatter ainda descarta comentarios (# e /* */) e ia apagar os teus"
-	}
-	novo := formatter.Formata(prog)
 	// mesma regra do `gs formata -w`: preserva a quebra de linha final
 	if strings.HasSuffix(texto, "\n") && !strings.HasSuffix(novo, "\n") {
 		novo += "\n"
@@ -64,50 +57,8 @@ func formatarTexto(texto string) (string, string) {
 	if !strings.HasSuffix(texto, "\n") {
 		novo = strings.TrimSuffix(novo, "\n")
 	}
-	p2 := parser.New(lexer.New(novo))
-	prog2 := p2.ParseProgram()
-	if len(p2.Errors()) > 0 || prog2.String() != prog.String() {
-		return texto, "formatar pulado: o resultado mudaria o significado do codigo (bug do formatter, avisa a gente)"
+	if err := formatter.Confere(texto, novo); err != nil {
+		return texto, "formatar pulado: " + err.Error() + " (bug do formatter, avisa a gente)"
 	}
 	return novo, ""
-}
-
-// temComentario procura `#` ou `/*` fora de string, imitando o lexer (string
-// com aspas tem escape e `${...}` balanceado; crase e crua).
-func temComentario(texto string) bool {
-	rs := []rune(texto)
-	for i := 0; i < len(rs); i++ {
-		switch rs[i] {
-		case '#':
-			return true
-		case '/':
-			if i+1 < len(rs) && rs[i+1] == '*' {
-				return true
-			}
-		case '`':
-			for i++; i < len(rs) && rs[i] != '`'; i++ {
-			}
-		case '"':
-			for i++; i < len(rs) && rs[i] != '"'; i++ {
-				if rs[i] == '\\' && i+1 < len(rs) && strings.ContainsRune("\"\\nt", rs[i+1]) {
-					i++
-					continue
-				}
-				if rs[i] == '$' && i+1 < len(rs) && rs[i+1] == '{' {
-					prof := 0
-					for ; i < len(rs); i++ {
-						if rs[i] == '{' {
-							prof++
-						} else if rs[i] == '}' {
-							prof--
-							if prof == 0 {
-								break
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return false
 }

@@ -315,7 +315,14 @@ type ArrumaStatement struct {
 func (s *ArrumaStatement) statementNode()       {}
 func (s *ArrumaStatement) TokenLiteral() string { return s.Token.Literal }
 func (s *ArrumaStatement) String() string {
-	out := "arruma " + s.Try.String() + "quebrou " + s.ErrName.String() + " " + s.Catch.String()
+	out := "arruma " + s.Try.String()
+	if s.Catch != nil { // arruma so com finalmente nao tem quebrou
+		nome := ""
+		if s.ErrName != nil {
+			nome = s.ErrName.String()
+		}
+		out += "quebrou " + nome + " " + s.Catch.String()
+	}
 	if s.Finally != nil {
 		out += "finalmente " + s.Finally.String()
 	}

@@ -108,8 +108,10 @@ gs formata -w <arquivo.gs | dir>...     # sobrescreve (so se mudou algo)
 gs formata -w .                         # todos os .gs da pasta, recursivo
 ```
 
-Indenta com 4 espacos e normaliza o espacamento. **Comentarios sao
-descartados** — mais em [Editor e formata](/docs/ferramentas#formatter-gs-formata).
+Indenta com 4 espacos e normaliza o espacamento, mantendo comentarios e
+linhas em branco. Com `-w`, so grava se o resultado tiver o mesmo codigo e os
+mesmos comentarios — senao avisa `NAO formatado` e deixa o arquivo como
+estava. Mais em [Editor e formata](/docs/ferramentas#formatter-gs-formata).
 
 ## `gs testa`
 

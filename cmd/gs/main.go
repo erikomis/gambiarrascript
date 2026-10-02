@@ -77,6 +77,8 @@ func main() {
 				fmt.Println("  sem flag: imprime no stdout ( FORMATADO).")
 				fmt.Println("  -w / --write: sobrescreve cada arquivo com a versao formatada.")
 				fmt.Println("  diretorio: varre recursivamente todos os .gs (ex.: gs formata -w .).")
+				fmt.Println("  comentarios e linhas em branco ficam; se a saida nao conferir (AST ou")
+				fmt.Println("  comentarios diferentes), nao escreve nada e sai com erro.")
 				os.Exit(0)
 			}
 			arquivos = append(arquivos, a)
@@ -94,12 +96,16 @@ func main() {
 			fmt.Println("nenhum arquivo .gs encontrado")
 			os.Exit(1)
 		}
+		falhou := false
 		for _, arq := range alvos {
 			if escreverFlag {
-				formatarArquivoEscrever(arq)
+				falhou = !formatarArquivoEscrever(arq) || falhou
 			} else {
 				formatarArquivo(arq)
 			}
+		}
+		if falhou {
+			os.Exit(1)
 		}
 	case "repl":
 		repl.Start(os.Stdin, os.Stdout)
@@ -327,47 +333,38 @@ func formatarArquivo(caminho string) {
 		fmt.Printf("nao consegui abrir %q: %v\n", caminho, err)
 		os.Exit(1)
 	}
-	p := parser.New(lexer.New(string(fonte)))
-	prog := p.ParseProgram()
-	if errs := p.Errors(); len(errs) != 0 {
-		fmt.Println("eita, teu codigo tem uns perrengue:")
-		for _, e := range errs {
-			fmt.Println("  - " + e)
-		}
+	saida, err := formataConferido(string(fonte), formatter.FormataFonte)
+	if err != nil {
+		mostraErroFormata(caminho, err)
 		os.Exit(1)
 	}
-	fmt.Print(formatter.Formata(prog))
+	fmt.Print(saida)
 }
 
 // formatarArquivoEscrever formata o arquivo e sobrescreve no disco se (e
-// somente se) algo mudou. Informa no stdout a acao tomada.
-func formatarArquivoEscrever(caminho string) {
-	fonte, err := os.ReadFile(caminho)
-	if err != nil {
-		fmt.Printf("nao consegui abrir %q: %v\n", caminho, err)
-		os.Exit(1)
+// somente se) algo mudou e a saida passou na trava. Devolve false se falhou.
+func formatarArquivoEscrever(caminho string) bool {
+	mudou, err := escreveFormatado(caminho, formatter.FormataFonte)
+	switch {
+	case err != nil:
+		mostraErroFormata(caminho, err)
+		return false
+	case mudou:
+		fmt.Printf("  %s  (formatado)\n", filepath.Base(caminho))
+	default:
+		fmt.Printf("  %s  (sem mudanca)\n", filepath.Base(caminho))
 	}
-	p := parser.New(lexer.New(string(fonte)))
-	prog := p.ParseProgram()
-	if errs := p.Errors(); len(errs) != 0 {
-		fmt.Println("eita, teu codigo tem uns perrengue:")
+	return true
+}
+
+func mostraErroFormata(caminho string, err error) {
+	if errs, ok := err.(errParse); ok {
+		fmt.Printf("eita, %s tem uns perrengue:\n", filepath.Base(caminho))
 		for _, e := range errs {
 			fmt.Println("  - " + e)
 		}
-		os.Exit(1)
-	}
-	formatado := formatter.Formata(prog)
-	// adiciona quebra de linha final se o original tinha (preserva)
-	if len(fonte) > 0 && fonte[len(fonte)-1] == '\n' && !strings.HasSuffix(formatado, "\n") {
-		formatado += "\n"
-	}
-	if formatado == string(fonte) {
-		fmt.Printf("  %s  (sem mudanca)\n", filepath.Base(caminho))
 		return
 	}
-	if err := os.WriteFile(caminho, []byte(formatado), 0644); err != nil {
-		fmt.Printf("nao consegui sobrescrever %q: %v\n", caminho, err)
-		os.Exit(1)
-	}
-	fmt.Printf("  %s  (formatado)\n", filepath.Base(caminho))
+	fmt.Printf("  %s  NAO formatado, o arquivo ficou como estava: %v (bug do formatter, avisa a gente)\n",
+		filepath.Base(caminho), err)
 }

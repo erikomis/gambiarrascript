@@ -14,13 +14,64 @@ type Lexer struct {
 	ch      rune // char atual (rune). 0 = EOF.
 	w       int  // largura em bytes do char atual
 	line    int
-	col     int // coluna em RUNES (nao bytes) — ser humano-amigavel
+	col     int     // coluna em RUNES (nao bytes) — ser humano-amigavel
+	trivia  *Trivia // nil = nao coleta (o normal; so o formatter liga)
 }
 
 func New(input string) *Lexer {
 	l := &Lexer{input: input, line: 1, col: 0}
 	l.readChar()
 	return l
+}
+
+// Comentario e um `#` ou `/* */` visto pelo lexer em modo trivia.
+type Comentario struct {
+	Texto         string // cru, do `#`/`/*` ate o fim (sem o \n)
+	Linha, Coluna int
+	// token anterior (0,0 = nenhum): comentario nao-Sozinho "pendura" nele
+	AntesLinha, AntesColuna int
+	Sozinho                 bool // nao tem codigo antes dele na linha
+	BrancoAntes             bool // tem linha em branco logo antes
+}
+
+// Trivia e o que o parser nao ve: comentarios e linhas em branco.
+type Trivia struct {
+	Comentarios []Comentario
+	// BrancoAntes marca os tokens {linha, coluna} com linha em branco antes.
+	BrancoAntes map[[2]int]bool
+
+	temToken            bool
+	tokLinha, tokColuna int
+	linhaOcupada        int  // ultima linha com token ou comentario
+	ocupanteSozinho     bool // quem ocupa linhaOcupada e comentario Sozinho
+}
+
+// NewComTrivia e o New que tambem guarda comentarios e linhas em branco (pro
+// formatter). Os tokens saem iguais; o lexer normal nao paga nada disso.
+func NewComTrivia(input string) *Lexer {
+	l := New(input)
+	l.trivia = &Trivia{BrancoAntes: map[[2]int]bool{}}
+	return l
+}
+
+// Trivia devolve o que foi coletado ate aqui (nil fora do NewComTrivia).
+func (l *Lexer) Trivia() *Trivia { return l.trivia }
+
+func (t *Trivia) anotaComentario(texto string, linha, coluna, fimLinha, quebras int) {
+	sozinho := linha > t.linhaOcupada || t.ocupanteSozinho
+	c := Comentario{Texto: texto, Linha: linha, Coluna: coluna, Sozinho: sozinho, BrancoAntes: quebras >= 2}
+	if t.temToken {
+		c.AntesLinha, c.AntesColuna = t.tokLinha, t.tokColuna
+	}
+	t.Comentarios = append(t.Comentarios, c)
+	t.linhaOcupada, t.ocupanteSozinho = fimLinha, sozinho
+}
+
+func (t *Trivia) anotaToken(linha, coluna, quebras int) {
+	if quebras >= 2 {
+		t.BrancoAntes[[2]int{linha, coluna}] = true
+	}
+	t.temToken, t.tokLinha, t.tokColuna = true, linha, coluna
 }
 
 func (l *Lexer) readChar() {
@@ -230,15 +281,30 @@ func (l *Lexer) NextToken() token.Token {
 }
 
 func (l *Lexer) skipWhitespaceAndComments() {
+	t := l.trivia
+	if t != nil && t.temToken {
+		// cur e o char logo depois do token anterior: a linha onde ele acabou
+		t.linhaOcupada, t.ocupanteSozinho = l.line, false
+	}
+	quebras := 0 // \n desde o ultimo token/comentario (2+ = linha em branco)
 	for {
 		switch {
 		case l.ch == ' ' || l.ch == '\t' || l.ch == '\r' || l.ch == '\n':
+			if l.ch == '\n' {
+				quebras++
+			}
 			l.readChar()
 		case l.ch == '#':
+			ini, linha, coluna := l.pos, l.line, l.col
 			for l.ch != '\n' && l.ch != 0 {
 				l.readChar()
 			}
+			if t != nil {
+				t.anotaComentario(l.input[ini:l.pos], linha, coluna, l.line, quebras)
+				quebras = 0
+			}
 		case l.ch == '/' && l.peekChar() == '*':
+			ini, linha, coluna := l.pos, l.line, l.col
 			l.readChar() // consome '/'
 			l.readChar() // consome '*'
 			for !(l.ch == '*' && l.peekChar() == '/') && l.ch != 0 {
@@ -248,7 +314,14 @@ func (l *Lexer) skipWhitespaceAndComments() {
 				l.readChar() // consome '*'
 				l.readChar() // consome '/'
 			}
+			if t != nil {
+				t.anotaComentario(l.input[ini:l.pos], linha, coluna, l.line, quebras)
+				quebras = 0
+			}
 		default:
+			if t != nil {
+				t.anotaToken(l.line, l.col, quebras)
+			}
 			return
 		}
 	}

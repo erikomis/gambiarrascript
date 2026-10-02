@@ -5,22 +5,33 @@ import (
 	"strings"
 
 	"gambiarrascript/ast"
+	"gambiarrascript/parser"
 )
 
-// Formata devolve a fonte formatada (indentada, 4 espacos por nivel) de um
-// programa GambiarraScript. Comentarios sao descartados (o formatter reemite
-// so o AST).
+// Formata devolve a fonte formatada (indentada, 4 espacos por nivel) so a
+// partir do AST: sem a fonte nao tem comentario nem linha em branco. Pra
+// formatar arquivo de verdade usa o FormataFonte (comentarios.go).
 func Formata(prog *ast.Program) string {
-	f := &formatter{indent: "    "}
-	for _, s := range prog.Statements {
-		f.emitStmt(s, 0)
-	}
+	f := novoFormatter()
+	f.emitStmts(prog.Statements, 0, ponto{})
 	return f.out.String()
 }
 
 type formatter struct {
-	out    strings.Builder
+	out    *strings.Builder
 	indent string
+	nivel  int // nivel da linha sendo montada (lambda/lista em bloco usam)
+
+	// so no FormataFonte; zerados, o formatter so reimprime o AST
+	pos    *parser.Posicoes
+	coms   []comentario
+	prox   int             // primeiro comentario talvez nao usado
+	branco map[[2]int]bool // tokens com linha em branco antes
+	piso   ponto           // dentro de lambda/lista: so solta comentario depois disso
+}
+
+func novoFormatter() *formatter {
+	return &formatter{out: &strings.Builder{}, indent: "    "}
 }
 
 func (f *formatter) escreve(nivel int, s string) {
@@ -29,7 +40,30 @@ func (f *formatter) escreve(nivel int, s string) {
 	f.out.WriteString("\n")
 }
 
-func (f *formatter) emitStmt(s ast.Statement, nivel int) {
+// emitStmts escreve os statements de um bloco e, no fim, os comentarios que
+// sobraram antes do terminador (`limite`), no nivel do bloco.
+func (f *formatter) emitStmts(stmts []ast.Statement, nivel int, limite ponto) {
+	velho := f.nivel
+	primeiro := true
+	for _, s := range stmts {
+		f.soltaComentarios(f.inicio(s), nivel, &primeiro)
+		f.emitStmt(s, nivel, &primeiro)
+	}
+	f.soltaComentarios(limite, nivel, &primeiro)
+	f.nivel = velho
+}
+
+func (f *formatter) emitBlock(b *ast.BlockStatement, nivel int) {
+	if b == nil {
+		return
+	}
+	f.emitStmts(b.Statements, nivel, f.fimBloco(b))
+}
+
+func (f *formatter) emitStmt(s ast.Statement, nivel int, primeiro *bool) {
+	f.nivel = nivel
+	// simples: statement de uma linha (o rabo e o comentario apos o ultimo token)
+	simples := func(txt string) { f.abre(s, nivel, primeiro, txt, f.fim(s)) }
 	switch n := s.(type) {
 	case *ast.BotaStatement:
 		alvo := ""
@@ -42,13 +76,13 @@ func (f *formatter) emitStmt(s ast.Statement, nivel int) {
 			// atribuicao composta (`x += 1`): Value e o desugar `x + 1`;
 			// reimprime a forma original usando so o lado direito do infix.
 			if inf, ok := n.Value.(*ast.InfixExpression); ok {
-				f.escreve(nivel, alvo+" "+n.OpComposto+" "+f.emitExpr(inf.Right))
+				simples(alvo + " " + n.OpComposto + " " + f.emitExpr(inf.Right))
 				return
 			}
 		}
-		f.escreve(nivel, "bota "+alvo+" = "+f.emitExpr(n.Value))
+		simples("bota " + alvo + " = " + f.emitExpr(n.Value))
 	case *ast.CravaStatement:
-		f.escreve(nivel, "crava "+n.Name.Value+" = "+f.emitExpr(n.Value))
+		simples("crava " + n.Name.Value + " = " + f.emitExpr(n.Value))
 	case *ast.DesestruturaStatement:
 		nomes := make([]string, len(n.Names))
 		for i, nm := range n.Names {
@@ -58,107 +92,103 @@ func (f *formatter) emitStmt(s ast.Statement, nivel int) {
 		if n.DeDict {
 			abre, fecha = "{", "}"
 		}
-		f.escreve(nivel, "bota "+abre+strings.Join(nomes, ", ")+fecha+" = "+f.emitExpr(n.Value))
+		simples("bota " + abre + strings.Join(nomes, ", ") + fecha + " = " + f.emitExpr(n.Value))
 	case *ast.MostraStatement:
-		f.escreve(nivel, "mostra "+f.emitExpr(n.Value))
+		simples("mostra " + f.emitExpr(n.Value))
 	case *ast.FuncionaStatement:
-		f.escreve(nivel, "funciona "+f.emitExpr(n.Value))
+		simples("funciona " + f.emitExpr(n.Value))
 	case *ast.VazaStatement:
-		f.escreve(nivel, "vaza")
+		simples("vaza")
 	case *ast.ContinuaStatement:
-		f.escreve(nivel, "continua")
+		simples("continua")
 	case *ast.ExpressionStatement:
 		if n.Expression != nil {
-			f.escreve(nivel, f.emitExpr(n.Expression))
+			simples(f.emitExpr(n.Expression))
 		}
 	case *ast.ImportaStatement:
 		if n.Alias != nil {
-			f.escreve(nivel, "importa "+f.emitExpr(n.Path)+" como "+n.Alias.Value)
+			simples("importa " + f.emitExpr(n.Path) + " como " + n.Alias.Value)
 		} else {
-			f.escreve(nivel, "importa "+f.emitExpr(n.Path))
+			simples("importa " + f.emitExpr(n.Path))
 		}
 	case *ast.GambiarraStatement:
 		params := make([]string, len(n.Parameters))
 		for i, p := range n.Parameters {
 			params[i] = p.String()
 		}
-		f.escreve(nivel, "gambiarra "+n.Name.Value+"("+strings.Join(params, ", ")+")")
+		f.abre(s, nivel, primeiro, "gambiarra "+n.Name.Value+"("+strings.Join(params, ", ")+")", f.cabeca(n.Body))
 		f.emitBlock(n.Body, nivel+1)
-		f.escreve(nivel, "acabou_finalmente")
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
 	case *ast.SeColarStatement:
 		for i, c := range n.Conditions {
 			if i == 0 {
-				f.escreve(nivel, "se_colar "+f.emitExpr(c))
+				f.abre(s, nivel, primeiro, "se_colar "+f.emitExpr(c), f.cabeca(n.Consequences[i]))
 			} else {
-				f.escreve(nivel, "se_nao_colar se_colar "+f.emitExpr(c))
+				f.linha(nivel, "se_nao_colar se_colar "+f.emitExpr(c), f.cabeca(n.Consequences[i]))
 			}
 			f.emitBlock(n.Consequences[i], nivel+1)
 		}
 		if n.Alternative != nil {
-			f.escreve(nivel, "se_nao_colar")
+			f.linha(nivel, "se_nao_colar", f.cabeca(n.Alternative))
 			f.emitBlock(n.Alternative, nivel+1)
 		}
-		f.escreve(nivel, "acabou_finalmente")
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
 	case *ast.EnquantoStatement:
-		f.escreve(nivel, "enquanto "+f.emitExpr(n.Condition))
+		f.abre(s, nivel, primeiro, "enquanto "+f.emitExpr(n.Condition), f.cabeca(n.Body))
 		f.emitBlock(n.Body, nivel+1)
-		f.escreve(nivel, "acabou_finalmente")
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
 	case *ast.PraCadaNumStatement:
-		f.escreve(nivel, "pra_cada "+n.Var.Value+" de "+f.emitExpr(n.Start)+" ate "+f.emitExpr(n.End))
+		f.abre(s, nivel, primeiro, "pra_cada "+n.Var.Value+" de "+f.emitExpr(n.Start)+" ate "+f.emitExpr(n.End), f.cabeca(n.Body))
 		f.emitBlock(n.Body, nivel+1)
-		f.escreve(nivel, "acabou_finalmente")
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
 	case *ast.PraCadaListStatement:
 		nomes := make([]string, len(n.Vars))
 		for i, v := range n.Vars {
 			nomes[i] = v.Value
 		}
-		f.escreve(nivel, "pra_cada "+strings.Join(nomes, ", ")+" em "+f.emitExpr(n.Iterable))
+		f.abre(s, nivel, primeiro, "pra_cada "+strings.Join(nomes, ", ")+" em "+f.emitExpr(n.Iterable), f.cabeca(n.Body))
 		f.emitBlock(n.Body, nivel+1)
-		f.escreve(nivel, "acabou_finalmente")
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
 	case *ast.EscolheStatement:
-		f.escreve(nivel, "escolhe "+f.emitExpr(n.Subject))
-		for _, braco := range n.Casos {
+		f.abre(s, nivel, primeiro, "escolhe "+f.emitExpr(n.Subject), f.cabeca(n))
+		for i, braco := range n.Casos {
+			if i == 0 {
+				// comentario entre o `escolhe x` e o 1o caso fica no nivel do caso
+				p := true
+				f.soltaComentarios(f.caso(braco.Body), nivel, &p)
+			}
 			vals := make([]string, len(braco.Values))
 			for i, v := range braco.Values {
 				vals[i] = f.emitExpr(v)
 			}
-			f.escreve(nivel, "caso "+strings.Join(vals, ", "))
+			f.linha(nivel, "caso "+strings.Join(vals, ", "), f.cabeca(braco.Body))
 			f.emitBlock(braco.Body, nivel+1)
 		}
 		if n.Default != nil {
-			f.escreve(nivel, "se_nao_colar")
+			f.linha(nivel, "se_nao_colar", f.cabeca(n.Default))
 			f.emitBlock(n.Default, nivel+1)
 		}
-		f.escreve(nivel, "acabou_finalmente")
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
 	case *ast.ArrumaStatement:
-		f.escreve(nivel, "arruma")
+		f.abre(s, nivel, primeiro, "arruma", f.cabeca(n.Try))
 		f.emitBlock(n.Try, nivel+1)
 		if n.Catch != nil {
 			if n.ErrName != nil {
-				f.escreve(nivel, "quebrou "+n.ErrName.Value)
+				f.linha(nivel, "quebrou "+n.ErrName.Value, f.cabeca(n.Catch))
 			} else {
-				f.escreve(nivel, "quebrou")
+				f.linha(nivel, "quebrou", f.cabeca(n.Catch))
 			}
 			f.emitBlock(n.Catch, nivel+1)
 		}
 		if n.Finally != nil {
-			f.escreve(nivel, "finalmente")
+			f.linha(nivel, "finalmente", f.cabeca(n.Finally))
 			f.emitBlock(n.Finally, nivel+1)
 		}
-		f.escreve(nivel, "acabou_finalmente")
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
 	default:
 		if s != nil {
-			f.escreve(nivel, s.String())
+			simples(s.String())
 		}
-	}
-}
-
-func (f *formatter) emitBlock(b *ast.BlockStatement, nivel int) {
-	if b == nil {
-		return
-	}
-	for _, s := range b.Statements {
-		f.emitStmt(s, nivel)
 	}
 }
 
@@ -168,7 +198,7 @@ func (f *formatter) inlineBlock(b *ast.BlockStatement) string {
 	if b == nil || len(b.Statements) == 0 {
 		return ""
 	}
-	sub := &formatter{indent: ""}
+	sub := &formatter{out: &strings.Builder{}} // sem posicoes: tudo inline
 	sub.emitBlock(b, 0)
 	// indent="" => cada linha e so o statement; troca \n por espaco simples.
 	// (Nao usar Fields/split generico: colapsaria espacos DENTRO de strings.)
@@ -235,7 +265,8 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 	case *ast.NumeroLiteral:
 		return n.TokenLiteral()
 	case *ast.TextoLiteral:
-		return strconv.Quote(n.Value)
+		// `${` literal veio de um `\${` escapado: sem a barra voltava a interpolar
+		return strings.ReplaceAll(strconv.Quote(n.Value), "${", `\${`)
 	case *ast.TextoInterpolado:
 		// reconstruir a string com `${...}` — usa o Literal do token (o texto cru
 		// que o lexer leu, com markers `${...}` preservados). Sicaro parse sempre
@@ -249,12 +280,18 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 	case *ast.NadaLiteral:
 		return "nada"
 	case *ast.ListaLiteral:
+		if txt, ok := f.listaEmLinhas(n); ok {
+			return txt
+		}
 		parts := make([]string, len(n.Elements))
 		for i, el := range n.Elements {
 			parts[i] = f.emitExpr(el)
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
 	case *ast.DicionarioLiteral:
+		if txt, ok := f.dictEmLinhas(n); ok {
+			return txt
+		}
 		parts := make([]string, len(n.Pares))
 		for i, p := range n.Pares {
 			parts[i] = f.emitExpr(p.Chave) + ": " + f.emitExpr(p.Valor)
@@ -310,14 +347,18 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 		}
 		return f.emitExprPrec(n.Left, precIndex) + "[" + f.emitExpr(n.Index) + "]"
 	case *ast.FuncaoLiteral:
-		// lambda anonima em posicao de expressao: forma inline (newline nao
-		// e significativo na linguagem, entao reparseia igual).
+		// lambda anonima em posicao de expressao: escrita numa linha so fica
+		// inline (newline nao e significativo, reparseia igual); escrita em
+		// varias linhas vira bloco indentado (e guarda os comentarios).
 		params := make([]string, len(n.Parameters))
 		for i, p := range n.Parameters {
 			params[i] = p.String()
 		}
-		return "gambiarra(" + strings.Join(params, ", ") + ") " +
-			f.inlineBlock(n.Body) + "acabou_finalmente"
+		cab := "gambiarra(" + strings.Join(params, ", ") + ")"
+		if txt, ok := f.lambdaEmBloco(n, cab); ok {
+			return txt
+		}
+		return cab + " " + f.inlineBlock(n.Body) + "acabou_finalmente"
 	case *ast.FatiaExpression:
 		inicio := ""
 		if n.Inicio != nil {

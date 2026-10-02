@@ -210,3 +210,17 @@ func TestFormataInterpolacaoComAspas(t *testing.T) {
 		t.Fatalf("got:\n%s\nesperado:\n%s", out, src)
 	}
 }
+
+// `\${` escapado vira TextoLiteral com `${` dentro: tem que voltar escapado,
+// senao o formatter transformava texto em interpolacao.
+func TestFormataDolarEscapado(t *testing.T) {
+	for _, src := range []string{`mostra "preco: \${nao interpola}"` + "\n", "mostra \"a\\\\\\${b}\"\n"} {
+		out := formataFonte(t, src)
+		p := parser.New(lexer.New(out))
+		prog := p.ParseProgram()
+		orig := parser.New(lexer.New(src)).ParseProgram()
+		if len(p.Errors()) != 0 || prog.String() != orig.String() {
+			t.Fatalf("%q virou %q (mudou o sentido)", src, out)
+		}
+	}
+}

@@ -54,18 +54,19 @@ func TestFormatarComErroDeParseNaoMexe(t *testing.T) {
 	}
 }
 
-func TestFormatarComComentarioNaoApaga(t *testing.T) {
+func TestFormatarGuardaComentarios(t *testing.T) {
 	src := "# importante\nbota x=1\nmostra \"#nao e comentario\" /* esse e */\n"
 	s := servidorCom(map[string]string{uriMain: src})
-	if eds := formatarDoc(t, s, uriMain); len(eds) != 0 {
-		t.Fatalf("formatter apagaria o comentario: %+v", eds)
+	eds := formatarDoc(t, s, uriMain)
+	if len(eds) != 1 {
+		t.Fatalf("esperava 1 edicao, veio %+v", eds)
 	}
-	if !strings.Contains(s.out.(*bytes.Buffer).String(), "window/showMessage") {
-		t.Fatal("deveria avisar por que nao formatou")
+	want := "# importante\nbota x = 1\nmostra \"#nao e comentario\"  /* esse e */\n"
+	if eds[0].NewText != want {
+		t.Fatalf("texto formatado:\n%q\nwant:\n%q", eds[0].NewText, want)
 	}
-	// `#` dentro de string nao e comentario
-	if temComentario("mostra \"#fff ${x}\"\nbota y = `#raw`") {
-		t.Fatal("# dentro de string nao e comentario")
+	if strings.Contains(s.out.(*bytes.Buffer).String(), "window/showMessage") {
+		t.Fatal("nao devia avisar nada: formatou de boa")
 	}
 }
 
