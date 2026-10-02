@@ -12,6 +12,10 @@ type Environment struct {
 	mu    sync.RWMutex
 	store map[string]Object
 	outer *Environment
+	// cravadas sao os nomes declarados com `crava` NESTE escopo (nil ate o
+	// primeiro). A checagem de verdade e estatica (ast.ChecaCravadas); isto
+	// so serve pro importa saber o que o modulo e o importador cravaram.
+	cravadas map[string]bool
 }
 
 func NewEnvironment() *Environment {
@@ -60,4 +64,32 @@ func (e *Environment) Locais() []string {
 		nomes = append(nomes, k)
 	}
 	return nomes
+}
+
+// Crava marca o nome como cravado neste escopo.
+func (e *Environment) Crava(name string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.cravadas == nil {
+		e.cravadas = map[string]bool{}
+	}
+	e.cravadas[name] = true
+}
+
+// EhCravada diz se o nome foi cravado NESTE escopo (ignora outer).
+func (e *Environment) EhCravada(name string) bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.cravadas[name]
+}
+
+// Cravadas devolve uma copia dos nomes cravados neste escopo.
+func (e *Environment) Cravadas() map[string]bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make(map[string]bool, len(e.cravadas))
+	for k := range e.cravadas {
+		out[k] = true
+	}
+	return out
 }

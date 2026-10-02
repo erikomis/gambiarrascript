@@ -229,3 +229,24 @@ func TestUnicodeNumeroETextoLen(t *testing.T) {
 		t.Fatalf("RPAREN")
 	}
 }
+
+// TestTokensPotencia: `**` e `**=` nao podem virar dois `*` (nem `*` + `*=`).
+func TestTokensPotencia(t *testing.T) {
+	l := New("a ** 2 * 3\nx **= 2\ny *= 3")
+	esperado := []struct {
+		tipo    token.TokenType
+		literal string
+	}{
+		{token.IDENT, "a"}, {token.POW, "**"}, {token.NUMERO, "2"},
+		{token.STAR, "*"}, {token.NUMERO, "3"},
+		{token.IDENT, "x"}, {token.POWASSIGN, "**="}, {token.NUMERO, "2"},
+		{token.IDENT, "y"}, {token.STARASSIGN, "*="}, {token.NUMERO, "3"},
+		{token.EOF, ""},
+	}
+	for i, e := range esperado {
+		tok := l.NextToken()
+		if tok.Type != e.tipo || tok.Literal != e.literal {
+			t.Fatalf("token %d: got %q %q, esperado %q %q", i, tok.Type, tok.Literal, e.tipo, e.literal)
+		}
+	}
+}

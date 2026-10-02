@@ -70,6 +70,21 @@ func (s *BotaStatement) String() string {
 	return "bota " + alvo + " = " + s.Value.String()
 }
 
+// CravaStatement e `crava NOME = valor`: declara um nome que nao pode ser
+// reatribuido no mesmo escopo (igual const do JS: o valor de dentro de uma
+// lista/dicionario cravado ainda muda via indice).
+type CravaStatement struct {
+	Token token.Token // o 'crava'
+	Name  *Identifier
+	Value Expression
+}
+
+func (s *CravaStatement) statementNode()       {}
+func (s *CravaStatement) TokenLiteral() string { return s.Token.Literal }
+func (s *CravaStatement) String() string {
+	return "crava " + s.Name.String() + " = " + s.Value.String()
+}
+
 // EscolheStatement e o switch/match:
 //
 //	escolhe x

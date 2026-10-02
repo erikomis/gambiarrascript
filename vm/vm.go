@@ -465,7 +465,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			ip++
 		case code.OpHalt:
 			return nil
-		case code.OpAdd, code.OpSub, code.OpMul, code.OpDiv, code.OpMod,
+		case code.OpAdd, code.OpSub, code.OpMul, code.OpDiv, code.OpMod, code.OpPow,
 			code.OpBAnd, code.OpBOr, code.OpBXor, code.OpLShift, code.OpRShift:
 			vm.execBinario(op)
 			ip++
@@ -920,8 +920,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			}
 			switch c := left.(type) {
 			case *object.Lista:
-				lo, hi := object.NormalizarFatia(inicio, fim, len(c.Elements))
-				vm.push(&object.Lista{Elements: c.Elements[lo:hi]})
+				vm.push(object.FatiaLista(c, inicio, fim))
 			case *object.Texto:
 				runes := []rune(c.Value)
 				lo, hi := object.NormalizarFatia(inicio, fim, len(runes))
@@ -1063,6 +1062,9 @@ func (vm *VM) binario(op code.Opcode, left, right object.Object) object.Object {
 	ln, lok := left.(*object.Numero)
 	rn, rok := right.(*object.Numero)
 	if lok && rok {
+		if op == code.OpPow {
+			return vm.potencia(ln, rn)
+		}
 		// bitwise so faz sentido com inteiros; tratamos antes do fast-path
 		// float pra nao contaminar caminho aritmetico. Igual ao tree-walker,
 		// operando nao-inteiro num op bitwise e erro (nao cai no caminho float).
@@ -1105,6 +1107,8 @@ func simboloBinario(op code.Opcode) string {
 		return "/"
 	case code.OpMod:
 		return "%"
+	case code.OpPow:
+		return "**"
 	case code.OpBAnd:
 		return "&"
 	case code.OpBOr:
@@ -1139,6 +1143,19 @@ func ehBitwise(op code.Opcode) bool {
 // ehShift diz se o opcode e um deslocamento (<< ou >>).
 func ehShift(op code.Opcode) bool {
 	return op == code.OpLShift || op == code.OpRShift
+}
+
+// potencia usa a mesma conta do tree-walker (object.Potencia), so que
+// alocando o resultado na arena da VM.
+func (vm *VM) potencia(base, exp *object.Numero) object.Object {
+	iv, fv, ehInt, err := object.Potencia(base, exp)
+	if err != nil {
+		panic(VMError{err: &object.Erro{Message: err.Error(), Kind: "runtime"}})
+	}
+	if ehInt {
+		return vm.num.Int(iv)
+	}
+	return vm.num.Float(fv)
 }
 
 func (vm *VM) execBinarioNumero(op code.Opcode, l, r float64) object.Object {

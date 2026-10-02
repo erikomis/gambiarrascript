@@ -10,8 +10,9 @@ import (
 	"gambiarrascript/parser"
 )
 
-// geraDoc parseia a fonte e gera markdown de referencia: para cada gambiarra de
-// topo, a assinatura e o bloco de comentarios `#` imediatamente acima dela.
+// geraDoc parseia a fonte e gera markdown de referencia: para cada gambiarra (e
+// cada constante `crava`) de topo, a assinatura e o bloco de comentarios `#`
+// imediatamente acima dela.
 func geraDoc(fonte string) (string, error) {
 	p := parser.New(lexer.New(fonte))
 	prog := p.ParseProgram()
@@ -21,6 +22,10 @@ func geraDoc(fonte string) (string, error) {
 	linhas := strings.Split(fonte, "\n")
 	var b strings.Builder
 	for _, stmt := range prog.Statements {
+		if c, ok := stmt.(*ast.CravaStatement); ok {
+			escreveDocCrava(&b, c, linhas)
+			continue
+		}
 		g, ok := stmt.(*ast.GambiarraStatement)
 		if !ok || g.Name == nil {
 			continue
@@ -39,6 +44,22 @@ func geraDoc(fonte string) (string, error) {
 		}
 	}
 	return b.String(), nil
+}
+
+// escreveDocCrava documenta uma constante de topo. Valor curto entra na
+// assinatura; valor grande (lista/dict enorme) fica so o nome.
+func escreveDocCrava(b *strings.Builder, c *ast.CravaStatement, linhas []string) {
+	sig := "crava " + c.Name.Value
+	if c.Value != nil {
+		if v := c.Value.String(); len(v) <= 40 {
+			sig += " = " + v
+		}
+	}
+	fmt.Fprintf(b, "### `%s`\n\n", sig)
+	if doc := comentariosAcima(linhas, c.Token.Line); doc != "" {
+		b.WriteString(doc)
+		b.WriteString("\n\n")
+	}
 }
 
 // comentariosAcima coleta os comentarios `#` contiguos imediatamente acima da

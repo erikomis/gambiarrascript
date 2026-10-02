@@ -25,6 +25,7 @@ const (
 	SUM         // + -
 	PRODUCT     // * / %
 	PREFIX      // -x  nao x  ~x
+	POWER       // ** (mais forte que o menos: -2 ** 2 == -4)
 	CALL        // f(x)
 	INDEX       // lista[i]
 )
@@ -50,6 +51,7 @@ var precedencias = map[token.TokenType]int{
 	token.STAR:     PRODUCT,
 	token.SLASH:    PRODUCT,
 	token.PERCENT:  PRODUCT,
+	token.POW:      POWER,
 	token.LPAREN:   CALL,
 	token.LBRACKET: INDEX,
 	token.DOT:      INDEX,
@@ -64,6 +66,7 @@ var baseDoComposto = map[token.TokenType]string{
 	token.STARASSIGN:    "*",
 	token.SLASHASSIGN:   "/",
 	token.PERCENTASSIGN: "%",
+	token.POWASSIGN:     "**",
 	token.BANDASSIGN:    "&",
 	token.BORASSIGN:     "|",
 	token.BXORASSIGN:    "^",
@@ -116,7 +119,7 @@ func New(l *lexer.Lexer) *Parser {
 
 	p.infixParseFns = map[token.TokenType]infixParseFn{}
 	for _, tt := range []token.TokenType{
-		token.PLUS, token.MINUS, token.STAR, token.SLASH, token.PERCENT,
+		token.PLUS, token.MINUS, token.STAR, token.SLASH, token.PERCENT, token.POW,
 		token.EQ, token.NEQ, token.LT, token.GT, token.LTE, token.GTE,
 		token.E, token.OU,
 		token.BAND, token.BOR, token.BXOR, token.LSHIFT, token.RSHIFT,
@@ -374,6 +377,10 @@ func (p *Parser) parseBora() ast.Expression {
 func (p *Parser) parseInfix(left ast.Expression) ast.Expression {
 	exp := &ast.InfixExpression{Token: p.curToken, Operator: p.curToken.Literal, Left: left}
 	prec := p.curPrecedence()
+	if p.curTokenIs(token.POW) {
+		// ** associa pela direita: 2 ** 3 ** 2 == 2 ** (3 ** 2)
+		prec--
+	}
 	p.nextToken()
 	exp.Right = p.parseExpression(prec)
 	return exp
@@ -555,6 +562,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	switch p.curToken.Type {
 	case token.BOTA:
 		return p.parseBota()
+	case token.CRAVA:
+		return p.parseCrava()
 	case token.MOSTRA:
 		return p.parseMostra()
 	case token.FUNCIONA:
@@ -637,6 +646,25 @@ func (p *Parser) parseBota() ast.Statement {
 			"depois do bota eu esperava um nome ou um alvo[indice], veio outra coisa")
 		return nil
 	}
+	if !p.expectPeek(token.ASSIGN) {
+		return nil
+	}
+	p.nextToken()
+	stmt.Value = p.parseExpression(LOWEST)
+	return stmt
+}
+
+// parseCrava monta `crava NOME = valor`. So aceita nome simples: cravar
+// alvo[indice] ou desestruturacao nao faz sentido.
+func (p *Parser) parseCrava() ast.Statement {
+	stmt := &ast.CravaStatement{Token: p.curToken}
+	if !p.peekTokenIs(token.IDENT) {
+		p.addErro(p.peekToken.Line, p.peekToken.Coluna,
+			"depois do crava eu esperava um nome, veio %q", p.peekToken.Literal)
+		return nil
+	}
+	p.nextToken()
+	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 	if !p.expectPeek(token.ASSIGN) {
 		return nil
 	}

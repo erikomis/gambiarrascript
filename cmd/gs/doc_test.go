@@ -59,3 +59,28 @@ acabou_finalmente`
 		t.Fatalf("assinatura com default/variadico errada:\n%s", md)
 	}
 }
+
+func TestGeraDocCrava(t *testing.T) {
+	fonte := `# juros ao mes
+crava TAXA = 0.02
+
+crava GRANDE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+gambiarra f()
+    crava LOCAL = 1
+    funciona LOCAL
+acabou_finalmente`
+	md, err := geraDoc(fonte)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, esperado := range []string{"`crava TAXA = 0.02`", "juros ao mes", "`crava GRANDE`", "f()"} {
+		if !strings.Contains(md, esperado) {
+			t.Fatalf("markdown nao contem %q:\n%s", esperado, md)
+		}
+	}
+	// crava de dentro de gambiarra nao e API do modulo
+	if strings.Contains(md, "LOCAL") {
+		t.Fatalf("crava local nao devia virar doc:\n%s", md)
+	}
+}

@@ -23,6 +23,7 @@ const (
 	STAR    = "*"
 	SLASH   = "/"
 	PERCENT = "%"
+	POW     = "**" // potencia (associa pela direita)
 
 	// atribuicao composta aritmetica
 	PLUSASSIGN    = "+="
@@ -30,6 +31,7 @@ const (
 	STARASSIGN    = "*="
 	SLASHASSIGN   = "/="
 	PERCENTASSIGN = "%="
+	POWASSIGN     = "**="
 
 	EQ  = "=="
 	NEQ = "!="
@@ -70,6 +72,7 @@ const (
 	COMO  = "COMO"  // importa "x.gs" COMO alias
 
 	BOTA         = "BOTA"
+	CRAVA        = "CRAVA" // crava NOME = valor (constante)
 	MOSTRA       = "MOSTRA"
 	SE_COLAR     = "SE_COLAR"
 	SE_NAO_COLAR = "SE_NAO_COLAR"
@@ -102,6 +105,7 @@ const (
 
 var keywords = map[string]TokenType{
 	"bota":              BOTA,
+	"crava":             CRAVA,
 	"mostra":            MOSTRA,
 	"se_colar":          SE_COLAR,
 	"se_nao_colar":      SE_NAO_COLAR,

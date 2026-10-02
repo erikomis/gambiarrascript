@@ -149,3 +149,30 @@ acabou_finalmente`
 		t.Fatalf("saida formatada vazia")
 	}
 }
+
+// TestFormataPotenciaECrava: o formatter reimprime ** sem mudar o sentido
+// (parentese so onde precisa) e o crava como veio.
+func TestFormataPotenciaECrava(t *testing.T) {
+	casos := map[string]string{
+		"crava PI=3.14":      "crava PI = 3.14\n",
+		"mostra 2**3**2":     "mostra 2 ** 3 ** 2\n",
+		"mostra (2**3)**2":   "mostra (2 ** 3) ** 2\n",
+		"mostra -2**2":       "mostra -2 ** 2\n",
+		"mostra (-2)**2":     "mostra (-2) ** 2\n",
+		"mostra 2**-1":       "mostra 2 ** -1\n",
+		"mostra (1+2)**2":    "mostra (1 + 2) ** 2\n",
+		"mostra 2*3**2":      "mostra 2 * 3 ** 2\n",
+		"x **= 2":            "x **= 2\n",
+		"mostra nao deu_bom": "mostra nao deu_bom\n",
+	}
+	for src, esp := range casos {
+		out := formataFonte(t, src)
+		if out != esp {
+			t.Errorf("%q: got %q, esperado %q", src, out, esp)
+		}
+		// idempotente: formatar de novo nao muda
+		if de2 := formataFonte(t, out); de2 != out {
+			t.Errorf("%q nao e idempotente: %q -> %q", src, out, de2)
+		}
+	}
+}

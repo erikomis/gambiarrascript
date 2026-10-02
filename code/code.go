@@ -80,6 +80,7 @@ const (
 	// caso mais comum de aritmetica (`i + 1`, `i * 2`, `i < 200000`) sem o
 	// push/pop da constante nem o segundo dispatch.
 	OpBinConst // constIdx (2) + opcode da operacao (1)
+	OpPow      // pop exp, pop base, push base ** exp
 	OpHalt   // para execucao
 )
 
@@ -153,6 +154,7 @@ var definitions = map[Opcode]*Definition{
 	OpIterPar: {"OpIterPar", []int{}},
 	OpDup:    {"OpDup", []int{}},
 	OpIsNada: {"OpIsNada", []int{}},
+	OpPow:    {"OpPow", []int{}},
 	OpHalt:   {"OpHalt", []int{}},
 }
 

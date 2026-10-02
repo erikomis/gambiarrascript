@@ -81,7 +81,15 @@ func (l *Lexer) NextToken() token.Token {
 			tok = newToken(token.MINUS, l.ch, linha, coluna)
 		}
 	case '*':
-		if l.peekChar() == '=' {
+		if l.peekChar() == '*' {
+			l.readChar()
+			if l.peekChar() == '=' {
+				l.readChar()
+				tok = token.Token{Type: token.POWASSIGN, Literal: "**=", Line: linha, Coluna: coluna}
+			} else {
+				tok = token.Token{Type: token.POW, Literal: "**", Line: linha, Coluna: coluna}
+			}
+		} else if l.peekChar() == '=' {
 			l.readChar()
 			tok = token.Token{Type: token.STARASSIGN, Literal: "*=", Line: linha, Coluna: coluna}
 		} else {

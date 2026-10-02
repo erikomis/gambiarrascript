@@ -82,6 +82,12 @@ var builtins = map[string]*object.Builtin{
 	"abs":       {Nome: "abs", Fn: builtinAbs},
 	"min":       {Nome: "min", Fn: builtinMin},
 	"max":       {Nome: "max", Fn: builtinMax},
+	"seno":      {Nome: "seno", Fn: builtinSeno},
+	"cosseno":   {Nome: "cosseno", Fn: builtinCosseno},
+	"tangente":  {Nome: "tangente", Fn: builtinTangente},
+	"log":       {Nome: "log", Fn: builtinLog},
+	"log10":     {Nome: "log10", Fn: builtinLog10},
+	"exp":       {Nome: "exp", Fn: builtinExp},
 
 	// arquivo
 	"le_arquivo":      {Nome: "le_arquivo", Fn: builtinLeArquivo},

@@ -5,6 +5,7 @@ import "testing"
 func TestLookupIdent(t *testing.T) {
 	casos := map[string]TokenType{
 		"bota":              BOTA,
+		"crava":             CRAVA,
 		"mostra":            MOSTRA,
 		"se_colar":          SE_COLAR,
 		"se_nao_colar":      SE_NAO_COLAR,

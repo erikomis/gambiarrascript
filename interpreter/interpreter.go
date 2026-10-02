@@ -120,6 +120,11 @@ func (i *Interpreter) DefinirDirBase(dir string) { i.dirBase = dir }
 func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
 	case *ast.Program:
+		// crava e checada antes de rodar, pelo texto (igual a VM, que barra
+		// na compilacao): assim os dois engines reclamam dos mesmos casos.
+		if errs := ast.ChecaCravadas(node, env.Cravadas()); len(errs) > 0 {
+			return newError(errs[0].Linha, "%s", errs[0].Msg)
+		}
 		return i.evalProgram(node, env)
 	case *ast.ExpressionStatement:
 		return i.Eval(node.Expression, env)
@@ -217,6 +222,14 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 			return NADA
 		}
 		return i.evalAtribuiIndice(node.Indice, val, env)
+	case *ast.CravaStatement:
+		val := i.Eval(node.Value, env)
+		if isError(val) {
+			return val
+		}
+		env.Set(node.Name.Value, val)
+		env.Crava(node.Name.Value)
+		return NADA
 	case *ast.FuncionaStatement:
 		val := i.Eval(node.Value, env)
 		if isError(val) {
@@ -355,6 +368,9 @@ func (i *Interpreter) evalIdentifier(node *ast.Identifier, env *object.Environme
 	}
 	if b, ok := builtins[node.Value]; ok {
 		return b
+	}
+	if v, ok := object.Predefinidas[node.Value]; ok {
+		return v
 	}
 	return newError(node.Token.Line, "cade o `%s`? voce nao botou isso ainda", node.Value)
 }
@@ -553,6 +569,15 @@ func (i *Interpreter) evalInfixNumero(op string, lo, ro *object.Numero, linha in
 			return object.NumInt(lo.Int % ro.Int)
 		}
 		return object.NumFloat(math.Mod(l, r))
+	case "**":
+		iv, fv, ehInt, err := object.Potencia(lo, ro)
+		if err != nil {
+			return newError(linha, "%s", err.Error())
+		}
+		if ehInt {
+			return object.NumInt(iv)
+		}
+		return object.NumFloat(fv)
 	case "<":
 		if bothInt {
 			return boolDoNativo(lo.Int < ro.Int)
@@ -956,6 +981,11 @@ func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Enviro
 	if errs := p.Errors(); len(errs) != 0 {
 		return newError(node.Token.Line, "o modulo %q ta com perrengue: %s", caminho.Value, errs[0])
 	}
+	// o modulo nao pode mexer no que o importador cravou (na VM ele compila
+	// no mesmo escopo, entao a regra e a mesma)
+	if errs := ast.ChecaCravadas(prog, env.Cravadas()); len(errs) > 0 {
+		return newError(node.Token.Line, "o modulo %q ta com perrengue: linha %d: %s", caminho.Value, errs[0].Linha, errs[0].Msg)
+	}
 
 	dirAntes := i.dirBase
 	i.DefinirDirBase(filepath.Dir(resolvido))
@@ -968,6 +998,7 @@ func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Enviro
 		if isError(res) {
 			return res
 		}
+		herdaCravadas(env, modEnv)
 		// Cria um dicionario com todas as definicoes do modulo
 		modulo := object.NovoDicionario()
 		for _, nome := range modEnv.Locais() {
@@ -992,7 +1023,16 @@ func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Enviro
 			env.Set(nome, v)
 		}
 	}
+	herdaCravadas(env, modEnv)
 	return NADA
+}
+
+// herdaCravadas passa pro importador o que o modulo cravou no topo — na VM o
+// modulo compila no escopo de quem importa, entao la isso ja vem de graca.
+func herdaCravadas(env, modEnv *object.Environment) {
+	for nome := range modEnv.Cravadas() {
+		env.Crava(nome)
+	}
 }
 
 // evalFatia executa xs[inicio:fim] pra lista e texto. nil = omitido.
@@ -1029,8 +1069,7 @@ func (i *Interpreter) evalFatia(node *ast.FatiaExpression, env *object.Environme
 
 	switch c := left.(type) {
 	case *object.Lista:
-		lo, hi := object.NormalizarFatia(inicioVal, fimVal, len(c.Elements))
-		return &object.Lista{Elements: c.Elements[lo:hi]}
+		return object.FatiaLista(c, inicioVal, fimVal)
 	case *object.Texto:
 		runes := []rune(c.Value)
 		lo, hi := object.NormalizarFatia(inicioVal, fimVal, len(runes))
@@ -1059,13 +1098,26 @@ func (i *Interpreter) evalArruma(node *ast.ArrumaStatement, env *object.Environm
 	// erro/return — deve apenas executar cleanup efeito colateral.
 	if node.Finally != nil {
 		fin := i.evalBlock(node.Finally, env)
-		// se finally devolveu algo (return/erro/vaza/continua) explicitamente,
-		// toma precedencia — sobrepoe o res do try/catch.
-		if fin != nil && fin.Type() != object.NADA_OBJ {
+		// so desvio de fluxo (return/erro/vaza/continua/sai) do finally
+		// sobrepoe o res do try/catch. Valor de expressao solta (um `mostra`
+		// no fim do bloco) nao pode engolir erro/return pendente.
+		if ehDesvio(fin) {
 			res = fin
 		}
 	}
 	return res
+}
+
+// ehDesvio diz se o resultado de um bloco e desvio de fluxo (nao valor).
+func ehDesvio(o object.Object) bool {
+	if o == nil {
+		return false
+	}
+	switch o.Type() {
+	case object.ERRO_OBJ, object.RETORNO_OBJ, object.VAZA_OBJ, object.CONTINUA_OBJ, object.SAIR_OBJ:
+		return true
+	}
+	return false
 }
 
 func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linha int, nome string) object.Object {

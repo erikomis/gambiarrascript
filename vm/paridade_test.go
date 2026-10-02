@@ -54,7 +54,8 @@ func rodaVMComp(t *testing.T, src string) (string, string, string) {
 	maq := New(comp.Bytecode(), &buf)
 	err := maq.Run()
 	if err != nil {
-		return "", "", err.Error()
+		// saida ate o erro vale (o tree-walker tambem devolve)
+		return "", buf.String(), err.Error()
 	}
 	return maq.LastPoppedStackElem().Inspect(), buf.String(), ""
 }

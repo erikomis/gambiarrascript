@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"gambiarrascript/compiler"
@@ -85,3 +86,50 @@ type escritor struct{ b []byte }
 
 func (e *escritor) Write(p []byte) (int, error) { e.b = append(e.b, p...); return len(p), nil }
 func (e *escritor) String() string              { return string(e.b) }
+
+// TestHandlerComArrumaNaVM: handler que faz de_json(pedido["corpo"]) dentro de
+// arruma. Na VM o try/catch nao enxergava o param `pedido` ("freevar fora do
+// range") e todo pedido caia no quebrou.
+func TestHandlerComArrumaNaVM(t *testing.T) {
+	fonte := `gambiarra cria(pedido)
+    arruma
+        bota dados = de_json(pedido["corpo"])
+        funciona {"status": 201, "corpo": "oi " + dados["nome"]}
+    quebrou err
+        funciona {"status": 400, "corpo": "json ruim"}
+    acabou_finalmente
+acabou_finalmente
+rota("POST", "/cria", cria)`
+
+	prog := parser.New(lexer.New(fonte)).ParseProgram()
+	comp := compiler.New()
+	if err := comp.Compile(prog); err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	interp := interpreter.New(io.Discard)
+	maq := NovaComInterp(comp.Bytecode(), io.Discard, interp)
+	if err := maq.Run(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	srv := httptest.NewServer(interp.ServidorHandler())
+	defer srv.Close()
+
+	casos := []struct {
+		corpo, esp string
+		status     int
+	}{
+		{`{"nome": "Ze"}`, "oi Ze", 201},
+		{`{quebrado`, "json ruim", 400},
+	}
+	for _, c := range casos {
+		resp, err := http.Post(srv.URL+"/cria", "application/json", strings.NewReader(c.corpo))
+		if err != nil {
+			t.Fatal(err)
+		}
+		corpo, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != c.status || string(corpo) != c.esp {
+			t.Fatalf("POST %s: status %d corpo %q, queria %d %q", c.corpo, resp.StatusCode, corpo, c.status, c.esp)
+		}
+	}
+}

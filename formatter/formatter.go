@@ -47,6 +47,8 @@ func (f *formatter) emitStmt(s ast.Statement, nivel int) {
 			}
 		}
 		f.escreve(nivel, "bota "+alvo+" = "+f.emitExpr(n.Value))
+	case *ast.CravaStatement:
+		f.escreve(nivel, "crava "+n.Name.Value+" = "+f.emitExpr(n.Value))
 	case *ast.DesestruturaStatement:
 		nomes := make([]string, len(n.Names))
 		for i, nm := range n.Names {
@@ -193,8 +195,9 @@ const (
 	precSum         = 11
 	precProduct     = 12
 	precPrefix      = 13
-	precCall        = 14
-	precIndex       = 15
+	precPower       = 14
+	precCall        = 15
+	precIndex       = 16
 )
 
 func precOf(op string) int {
@@ -219,6 +222,8 @@ func precOf(op string) int {
 		return precSum
 	case "*", "/", "%":
 		return precProduct
+	case "**":
+		return precPower
 	}
 	return precLowest
 }
@@ -256,10 +261,24 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 		}
 		return "{" + strings.Join(parts, ", ") + "}"
 	case *ast.PrefixExpression:
-		return n.Operator + f.emitExprPrec(n.Right, precPrefix)
+		op := n.Operator
+		if op == "nao" {
+			op += " "
+		}
+		s := op + f.emitExprPrec(n.Right, precPrefix)
+		// (-2) ** 2 e (-x)[0]: sem o parentese o menos engoliria o resto
+		if precPrefix < parent {
+			return "(" + s + ")"
+		}
+		return s
 	case *ast.InfixExpression:
 		my := precOf(n.Operator)
-		s := f.emitExprPrec(n.Left, my) + " " + n.Operator + " " + f.emitExprPrec(n.Right, my+1)
+		esq, dir := my, my+1
+		if n.Operator == "**" {
+			// associa pela direita, e o lado direito aceita menos solto (2 ** -1)
+			esq, dir = my+1, precPrefix
+		}
+		s := f.emitExprPrec(n.Left, esq) + " " + n.Operator + " " + f.emitExprPrec(n.Right, dir)
 		if my < parent {
 			return "(" + s + ")"
 		}

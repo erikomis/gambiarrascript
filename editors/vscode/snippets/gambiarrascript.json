@@ -4,6 +4,11 @@
     "body": ["gambiarra ${1:nome}(${2:args})", "\t${0}", "acabou_finalmente"],
     "description": "Declara uma funcao"
   },
+  "Crava (constante)": {
+    "prefix": "crava",
+    "body": ["crava ${1:NOME} = ${0:valor}"],
+    "description": "Declara uma constante (nao da pra reatribuir)"
+  },
   "Se colar (if)": {
     "prefix": "se_colar",
     "body": ["se_colar ${1:condicao}", "\t${0}", "acabou_finalmente"],

@@ -24,7 +24,15 @@ func init() {
 	gob.Register(&object.CompiledFunction{})
 }
 
+// formatoGSC e a versao do formato do bytecode. Sobe toda vez que mudar
+// opcode (numeracao ou semantica): .gsc velho deixa de valer mesmo que a
+// Versao do gs nao tenha mudado (build de dev). 2 = OpPow (`**`).
+// 3 = codegen novo de `??`, arruma no escopo da funcao e pra_cada com
+// contador escondido (bytecode velho tem os bugs).
+const formatoGSC = 3
+
 type cacheGSC struct {
+	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)
 	Versao       string   // versao do gs que gravou (invalida em upgrade)
 	NumBuiltins  int      // guarda contra mudanca nos indices de builtin
 	HashFonte    [32]byte // sha256 da fonte
@@ -46,7 +54,7 @@ func carregaCache(caminhoGSC string, fonte []byte) *compiler.Bytecode {
 	if err := gob.NewDecoder(f).Decode(&c); err != nil {
 		return nil
 	}
-	if c.Versao != Versao || c.NumBuiltins != len(compiler.BuiltinNomes()) {
+	if c.Formato != formatoGSC || c.Versao != Versao || c.NumBuiltins != len(compiler.BuiltinNomes()) {
 		return nil
 	}
 	if c.HashFonte != sha256.Sum256(fonte) {
@@ -70,6 +78,7 @@ func gravaCache(caminhoGSC string, fonte []byte, bc *compiler.Bytecode) {
 	}
 	defer f.Close()
 	c := cacheGSC{
+		Formato:      formatoGSC,
 		Versao:       Versao,
 		NumBuiltins:  len(compiler.BuiltinNomes()),
 		HashFonte:    sha256.Sum256(fonte),

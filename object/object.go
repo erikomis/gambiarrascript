@@ -45,7 +45,15 @@ type Object interface {
 // FormatNumero imprime inteiros sem casa decimal e o resto com precisao minima.
 func FormatNumero(f float64) string {
 	if !math.IsInf(f, 0) && !math.IsNaN(f) && f == math.Trunc(f) {
-		return strconv.FormatInt(int64(f), 10)
+		// int64(f) so e seguro abaixo de 2^63; acima (ex.: 2 ** 70) imprime o
+		// float inteiro por extenso e, se for gigante, em notacao cientifica.
+		if math.Abs(f) < 1<<63 {
+			return strconv.FormatInt(int64(f), 10)
+		}
+		if math.Abs(f) < 1e21 {
+			return strconv.FormatFloat(f, 'f', -1, 64)
+		}
+		return strconv.FormatFloat(f, 'g', -1, 64)
 	}
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
@@ -369,6 +377,16 @@ func NormalizarFatia(inicio, fim *Numero, tamanho int) (int, int) {
 		lo = hi
 	}
 	return lo, hi
+}
+
+// FatiaLista devolve uma lista NOVA com os elementos [inicio:fim]. Copia o
+// trecho: fatiar direto o slice do Go dividia o array com a original, e um
+// adiciona na fatia sobrescrevia elemento da original.
+func FatiaLista(l *Lista, inicio, fim *Numero) *Lista {
+	lo, hi := NormalizarFatia(inicio, fim, len(l.Elements))
+	elems := make([]Object, hi-lo)
+	copy(elems, l.Elements[lo:hi])
+	return &Lista{Elements: elems}
 }
 
 type BuiltinFunc func(args []Object) Object

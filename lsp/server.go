@@ -8,6 +8,7 @@ import (
 
 	"gambiarrascript/ast"
 	"gambiarrascript/lexer"
+	"gambiarrascript/object"
 	"gambiarrascript/parser"
 	"gambiarrascript/token"
 )
@@ -38,7 +39,7 @@ type ItemCompletion struct {
 
 // keywords da GambiarraScript, sem acento, para o autocomplete.
 var keywords = []string{
-	"bota", "mostra", "se_colar", "se_nao_colar", "enquanto", "pra_cada",
+	"bota", "crava", "mostra", "se_colar", "se_nao_colar", "enquanto", "pra_cada",
 	"de", "ate", "em", "gambiarra", "funciona", "arruma", "quebrou",
 	"vaza", "continua", "deu_bom", "deu_ruim", "nada", "acabou_finalmente",
 	"finalmente", "escolhe", "caso",
@@ -59,6 +60,7 @@ var builtinsCompletion = []string{
 	// estatistica / munging
 	"soma", "media", "zip", "enumera", "ordena_por", "agrupa_por",
 	"raiz", "aleatorio", "arredonda", "teto", "chao", "abs", "min", "max",
+	"seno", "cosseno", "tangente", "log", "log10", "exp",
 	// aleatoriedade
 	"semente", "embaralha", "escolhe_um", "uuid",
 	"le_arquivo", "escreve_arquivo", "anexa_arquivo",
@@ -154,6 +156,13 @@ var docsBuiltin = map[string]string{
 	"abs":             "abs(numero) -> numero: valor absoluto.",
 	"min":             "min(n1, n2, ...) -> numero: o menor dos numeros.",
 	"max":             "max(n1, n2, ...) -> numero: o maior dos numeros.",
+	"seno":            "seno(angulo) -> numero: seno do angulo em radianos (graus * pi / 180).",
+	"cosseno":         "cosseno(angulo) -> numero: cosseno do angulo em radianos.",
+	"tangente":        "tangente(angulo) -> numero: tangente do angulo em radianos.",
+	"log":             "log(numero) -> numero: logaritmo natural (base e). Zero ou negativo da erro.",
+	"log10":           "log10(numero) -> numero: logaritmo na base 10. Zero ou negativo da erro.",
+	"exp":             "exp(numero) -> numero: e elevado ao numero (inverso do log).",
+	"pi":              "pi -> numero: a constante 3.141592653589793 (valor, nao gambiarra — usa `pi`, sem parenteses).",
 	"le_arquivo":      "le_arquivo(caminho) -> texto: le todo o conteudo de um arquivo.",
 	"escreve_arquivo": "escreve_arquivo(caminho, texto): escreve texto num arquivo.",
 	// fs
@@ -199,7 +208,8 @@ var docsBuiltin = map[string]string{
 
 // docsKeyword descreve cada keyword pro hover do LSP.
 var docsKeyword = map[string]string{
-	"bota":              "bota nome = valor: declara (ou reatribui) uma variavel. Tambem desestrutura: `bota [a, b] = lista` (posicao) e `bota {x, y} = dict` (chave). Atribuicao composta dispensa o bota: `x += 1`, `n <<= 2`.",
+	"bota":              "bota nome = valor: declara (ou reatribui) uma variavel. Tambem desestrutura: `bota [a, b] = lista` (posicao) e `bota {x, y} = dict` (chave). Atribuicao composta dispensa o bota: `x += 1`, `n <<= 2`, `x **= 2`.",
+	"crava":             "crava NOME = valor: declara uma constante — depois disso nenhum `bota`/`+=` muda esse nome no mesmo escopo. Lista/dicionario cravado ainda muda por dentro (`bota XS[0] = 2`). Dentro de uma gambiarra, `bota NOME` cria um local que sombreia.",
 	"mostra":            "mostra valor: imprime no stdout.",
 	"se_colar":          "se_colar condicao ... se_nao_colar ... acabou_finalmente: condicional.",
 	"se_nao_colar":      "se_nao_colar: ramo alternativo (else / else-if).",
@@ -392,6 +402,12 @@ func (s *Servidor) itensCompletion(texto string) []ItemCompletion {
 			vistos[b] = true
 		}
 	}
+	for nome := range object.Predefinidas {
+		if !vistos[nome] {
+			itens = append(itens, ItemCompletion{Label: nome, Kind: 21}) // 21 = Constant
+			vistos[nome] = true
+		}
+	}
 	l := lexer.New(texto)
 	for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {
 		if tok.Type == token.IDENT && !vistos[tok.Literal] {
@@ -455,6 +471,11 @@ func typecheck(prog *ast.Program) []Diagnostico {
 		botaScopes: []map[string]*varUso{{}},
 	}
 	tc.walkProgram(prog)
+	// crava: mesma checagem que os engines fazem antes de rodar — aqui vira
+	// erro (severidade 1) pro editor sublinhar a reatribuicao.
+	for _, e := range ast.ChecaCravadas(prog, nil) {
+		tc.erro(e.Linha, e.Coluna, len([]rune(e.Nome)), e.Msg)
+	}
 	return tc.diags
 }
 
@@ -501,6 +522,11 @@ func (tc *typechecker) registraBota(id *ast.Identifier) {
 	if len(tc.botaScopes) <= 1 {
 		return // escopo global (top-level): não checa var não-usada
 	}
+	if tc.resolvivel(id.Value) {
+		// ja existe neste escopo ou num de fora: e reatribuicao, nao
+		// declaracao nova (`bota total = total + 1` num laco).
+		return
+	}
 	tc.botaScopes[len(tc.botaScopes)-1][id.Value] = &varUso{linha: id.Token.Line, coluna: id.Token.Coluna}
 }
 func (tc *typechecker) marcaUsado(nome string) {
@@ -545,6 +571,28 @@ func (tc *typechecker) warn(linha int, coluna int, msg string) {
 	})
 }
 
+// erro e como warn, mas severidade 1 (Error) e sublinha `tam` caracteres.
+func (tc *typechecker) erro(linha, coluna, tam int, msg string) {
+	if linha < 1 {
+		linha = 1
+	}
+	if coluna < 1 {
+		coluna = 1
+	}
+	if tam < 1 {
+		tam = 1
+	}
+	tc.diags = append(tc.diags, Diagnostico{
+		Range: Faixa{
+			Start: Posicao{Line: linha - 1, Character: coluna - 1},
+			End:   Posicao{Line: linha - 1, Character: coluna - 1 + tam},
+		},
+		Severity: 1, // Error
+		Source:   "gambiarrascript-tc",
+		Message:  msg,
+	})
+}
+
 func (tc *typechecker) walkProgram(prog *ast.Program) {
 	for _, s := range prog.Statements {
 		tc.walkStmt(s)
@@ -556,9 +604,13 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 	case *ast.BotaStatement:
 		tc.walkExpr(n.Value)
 		if n.Name != nil {
+			tc.registraBota(n.Name) // antes do define: decide se e reatribuicao
 			tc.define(n.Name.Value)
-			tc.registraBota(n.Name)
 		}
+	case *ast.CravaStatement:
+		tc.walkExpr(n.Value)
+		tc.registraBota(n.Name)
+		tc.define(n.Name.Value)
 	case *ast.MostraStatement:
 		tc.walkExpr(n.Value)
 	case *ast.GambiarraStatement:
@@ -572,51 +624,35 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 	case *ast.SeColarStatement:
 		for i, c := range n.Conditions {
 			tc.walkExpr(c)
-			tc.pushScope()
 			tc.walkBlock(n.Consequences[i])
-			tc.popScope()
 		}
 		if n.Alternative != nil {
-			tc.pushScope()
 			tc.walkBlock(n.Alternative)
-			tc.popScope()
 		}
 	case *ast.EnquantoStatement:
 		tc.walkExpr(n.Condition)
-		tc.pushScope()
 		tc.walkBlock(n.Body)
-		tc.popScope()
 	case *ast.PraCadaNumStatement:
 		tc.walkExpr(n.Start)
 		tc.walkExpr(n.End)
-		tc.pushScope()
 		tc.define(n.Var.Value)
 		tc.walkBlock(n.Body)
-		tc.popScope()
 	case *ast.PraCadaListStatement:
 		tc.walkExpr(n.Iterable)
-		tc.pushScope()
 		for _, v := range n.Vars {
 			tc.define(v.Value)
 		}
 		tc.walkBlock(n.Body)
-		tc.popScope()
 	case *ast.ArrumaStatement:
-		tc.pushScope()
 		tc.walkBlock(n.Try)
-		tc.popScope()
 		if n.Catch != nil {
-			tc.pushScope()
 			if n.ErrName != nil {
 				tc.define(n.ErrName.Value)
 			}
 			tc.walkBlock(n.Catch)
-			tc.popScope()
 		}
 		if n.Finally != nil {
-			tc.pushScope()
 			tc.walkBlock(n.Finally)
-			tc.popScope()
 		}
 	case *ast.DesestruturaStatement:
 		tc.walkExpr(n.Value)
@@ -629,14 +665,10 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 			for _, v := range braco.Values {
 				tc.walkExpr(v)
 			}
-			tc.pushScope()
 			tc.walkBlock(braco.Body)
-			tc.popScope()
 		}
 		if n.Default != nil {
-			tc.pushScope()
 			tc.walkBlock(n.Default)
-			tc.popScope()
 		}
 	case *ast.FuncionaStatement:
 		if n.Value != nil {
@@ -686,6 +718,8 @@ func posDoStmt(s ast.Statement) (int, int) {
 	switch n := s.(type) {
 	case *ast.BotaStatement:
 		return n.Token.Line, n.Token.Coluna
+	case *ast.CravaStatement:
+		return n.Token.Line, n.Token.Coluna
 	case *ast.MostraStatement:
 		return n.Token.Line, n.Token.Coluna
 	case *ast.FuncionaStatement:
@@ -723,7 +757,8 @@ func (tc *typechecker) walkExpr(e ast.Expression) {
 	case *ast.Identifier:
 		nome := n.Value
 		tc.marcaUsado(nome)
-		if !tc.resolvivel(nome) && !builtinsSet[nome] && !ehKeyword(nome) {
+		_, predefinida := object.Predefinidas[nome]
+		if !tc.resolvivel(nome) && !builtinsSet[nome] && !predefinida && !ehKeyword(nome) {
 			tc.warn(n.Token.Line, n.Token.Coluna, "`"+nome+"` pode estar indefinido (nao e builtin nem keyword)")
 		}
 	case *ast.PrefixExpression:

@@ -27,8 +27,8 @@ import (
 // ---------- gs check ----------
 
 // cmdCheck parseia cada arquivo e reporta erros (linha/coluna) + warnings do
-// typechecker do LSP. Exit 1 so quando ha erro de parse (warnings avisam mas
-// nao reprovam).
+// typechecker do LSP. Exit 1 quando ha erro de parse ou diagnostico de erro
+// (ex.: mexer em nome cravado); warnings avisam mas nao reprovam.
 func cmdCheck(args []string) {
 	if len(args) == 0 {
 		fmt.Println("uso: gs check <arquivo.gs>...")
@@ -54,8 +54,13 @@ func cmdCheck(args []string) {
 		}
 		diags := lsp.Typecheck(prog)
 		for _, d := range diags {
+			tipo := "aviso"
+			if d.Severity == 1 {
+				tipo = "erro"
+				temErro = true
+			}
 			// Diagnostico do LSP e 0-based; humano quer 1-based.
-			fmt.Printf("%s:%d:%d: aviso: %s\n", arq, d.Range.Start.Line+1, d.Range.Start.Character+1, d.Message)
+			fmt.Printf("%s:%d:%d: %s: %s\n", arq, d.Range.Start.Line+1, d.Range.Start.Character+1, tipo, d.Message)
 		}
 		if len(diags) == 0 {
 			fmt.Printf("%s: suave, zero perrengue\n", arq)

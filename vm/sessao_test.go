@@ -2,6 +2,7 @@ package vm
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"gambiarrascript/interpreter"
@@ -167,5 +168,32 @@ func TestSessaoBateComTreeWalker(t *testing.T) {
 		if naVM[i] != noTree[i] {
 			t.Errorf("entrada %q divergiu:\n  VM:   %q\n  tree: %q", entradas[i], naVM[i], noTree[i])
 		}
+	}
+}
+
+// TestSessaoCrava: o que uma entrada crava continua cravado nas proximas; e
+// uma entrada que nao compila nao deixa crava pela metade.
+func TestSessaoCrava(t *testing.T) {
+	var buf bytes.Buffer
+	s := NovaSessao(&buf)
+
+	if _, err, _ := entrada(t, s, &buf, "crava PI = 3"); err != "" {
+		t.Fatalf("crava: %s", err)
+	}
+	if v, err, _ := entrada(t, s, &buf, "PI * 2"); err != "" || v != "6" {
+		t.Fatalf("PI * 2 deu (%q, %q), queria 6", v, err)
+	}
+	if _, err, _ := entrada(t, s, &buf, "bota PI = 4"); !strings.Contains(err, "`PI` foi cravada") {
+		t.Fatalf("bota em cravada de outra entrada devia dar erro, deu %q", err)
+	}
+	if _, err, _ := entrada(t, s, &buf, "crava PI = 5"); !strings.Contains(err, "ja foi cravada") {
+		t.Fatalf("crava de novo devia dar erro, deu %q", err)
+	}
+	// entrada que falha na compilacao (nome inexistente) nao crava X
+	if _, err, _ := entrada(t, s, &buf, "crava X = 1\nmostra naoexiste"); err == "" {
+		t.Fatalf("esperava erro de nome inexistente")
+	}
+	if _, err, _ := entrada(t, s, &buf, "crava X = 2"); err != "" {
+		t.Fatalf("X nao devia ter ficado cravado pela entrada que falhou: %s", err)
 	}
 }
