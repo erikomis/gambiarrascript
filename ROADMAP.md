@@ -22,7 +22,7 @@ Tiers 1–5 estão entregues. O backlog vivo:
 | Tier 6 | `gs instala` + lock, `build --alvo`, Homebrew, cobertura, sombreamento |
 | Tier 7 | MaxStack por função |
 | Tier 8 | POO no estilo Go (`treta`/`combinado`) — tem decisões em aberto |
-| Tier 9 | sugestões novas: `tipo()`, spread, `//`, LSP completo, marketplace |
+| Tier 9 | sugestões novas: `//`, LSP completo, marketplace, formatter que guarda comentário |
 
 ---
 
@@ -275,9 +275,9 @@ Ainda abertos (pedem decisão de semântica):
       roda 1x na VM e 2x no tree-walker; import circular trava o tree-walker.
 - [ ] Valor de erro difere entre engines (`erro_causa`, `mostra erro`).
 - [ ] VM não imprime traço de pilha em erro de builtin não pego no top-level.
-- [ ] Interpolação engole lixo calado: `"${3.14159:.2f}"` imprime `3.14159`
-      — o `:.2f` some sem erro. Ou vira erro de parse, ou vira formato de
-      verdade (ver `${x:.2f}` no Tier 9).
+- [x] Interpolação engolia lixo calado (`"${3.14159:.2f}"` imprimia
+      `3.14159`): um laço "se sobrou algo, ignora" no `parser.interpolar`.
+      Agora sobra vira erro de parse — e o `:.2f` virou formato de verdade.
 - [ ] Miudezas: `tamanho()` não aceita conjunto; ordem de impressão do
       conjunto é aleatória; falha de conexão do `busca` vem com tipo
       `"builtin"` em vez de `"rede"`; REPL na VM lista temporários `__*` no TAB.
@@ -578,16 +578,20 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
 
 **Linguagem / stdlib (curto, alto impacto)**
 
-- [ ] **`tipo(x)`** — hoje **não tem como perguntar o tipo** de um valor em
-      runtime (`"numero"`, `"texto"`, `"lista"`, `"dicionario"`, `"funcao"`,
-      `"nada"`...). Base pro type switch do Tier 8 e pra validar entrada de
-      API (`de_json` devolve qualquer coisa).
-- [ ] **Spread na chamada** — `f(...lista)` (o `...resto` já existe na
-      declaração; falta o lado de quem chama).
+- [x] **`tipo(x)`** — `"numero"`, `"texto"`, `"booleano"`, `"nada"`,
+      `"lista"`, `"dicionario"`, `"conjunto"`, `"erro"`, `"futuro"`, `"cano"`;
+      todo chamável (gambiarra, lambda, builtin) é `"funcao"`. Regra única em
+      `object.NomeTipo`, compartilhada pelos 2 engines.
+- [x] **Spread na chamada** — `f(...lista)`, misturável (`f(1, ...xs, 2)`),
+      com builtin, lambda, dot-call, `bora`, varargs e defaults. VM via
+      `OpCallEspalha`/`OpBoraEspalha` (o `OpCall` comum não mudou; fib sem
+      regressão). Espalhar não-lista: "so da pra espalhar lista, veio X".
 - [ ] **Divisão inteira `//`** — hoje `7 / 2` dá `3.5` e o jeito é
       `chao(7 / 2)`. Avaliar contra a regra de uma pegada por conceito.
-- [ ] **Formato na interpolação** — `"${preco:.2f}"` reaproveitando os verbos
-      do `formata` (resolve também o bug do lixo engolido acima).
+- [x] **Formato na interpolação** — `"${preco:.2f}"`, `"${n:05d}"`,
+      `"${t:-8}"`: o que vem depois do último `:` fora de `()[]{}`/strings é o
+      formato, com os verbos do `formata` sem o `%`. Formato inválido é erro
+      de parse.
 - [ ] **multi-catch** — já listado no Tier 2; com `tipo()` e `erro_tipo` fica
       natural: `quebrou erro se erro_tipo(erro) == "rede"`.
 

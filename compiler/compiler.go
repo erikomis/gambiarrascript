@@ -251,6 +251,19 @@ var nomesBuiltins = []string{
 	"le_csv", "escreve_csv",
 	// compressao
 	"gzip_comprime", "gzip_descomprime",
+	// introspeccao (sempre no FIM: indice novo nao mexe nos de antes)
+	"tipo",
+}
+
+// indiceBuiltin devolve o indice canonico da builtin (pros desugars que
+// chamam builtin direto via OpCallBuiltin).
+func indiceBuiltin(nome string) int {
+	for i, n := range nomesBuiltins {
+		if n == nome {
+			return i
+		}
+	}
+	panic("builtin desconhecida: " + nome)
 }
 
 // BuiltinNomes expoe a lista canonica de nomes de builtins (em ordem -> idx).
@@ -385,16 +398,30 @@ func (c *Compiler) compile(node ast.Node) error {
 		c.emit(code.OpConstant, idx)
 	case *ast.TextoInterpolado:
 		// empilha cada part; TextoLiteral => constante, expr => compilada.
-		// Concatena via OpAdd (string + string).
-		if len(node.Parts) == 0 {
+		// Concatena via OpAdd (string + string). Se a primeira parte nao e
+		// texto garantido, comeca de "" — senao `"${1}${2}"` somava (3) e
+		// `"${x}"` devolvia o valor cru em vez de texto.
+		jaTemTexto := false
+		if len(node.Parts) > 0 {
+			_, ehTexto := node.Parts[0].(*ast.TextoLiteral)
+			jaTemTexto = ehTexto || node.FormatoDa(0) != ""
+		}
+		if !jaTemTexto {
 			c.emit(code.OpConstant, c.addConstant(&object.Texto{Value: ""}))
-			break
 		}
 		for i, p := range node.Parts {
-			if err := c.compile(p); err != nil {
+			if f := node.FormatoDa(i); f != "" {
+				// `${v:fmt}` = formata("%fmt", v) — pelo indice, sem passar
+				// pelo nome (que o usuario pode ter sombreado)
+				c.emit(code.OpConstant, c.addConstant(&object.Texto{Value: "%" + f}))
+				if err := c.compile(p); err != nil {
+					return err
+				}
+				c.emit(code.OpCallBuiltin, indiceBuiltin("formata"), 2)
+			} else if err := c.compile(p); err != nil {
 				return err
 			}
-			if i > 0 {
+			if i > 0 || !jaTemTexto {
 				c.emit(code.OpAdd)
 			}
 		}
@@ -495,7 +522,8 @@ func (c *Compiler) compile(node ast.Node) error {
 			// tail call: `funciona f(args)` DENTRO de uma funcao vira OpTailCall,
 			// que reusa o frame atual — recursao em cauda nao estoura os frames.
 			// Dentro de arruma nao: a chamada tem que rodar protegida pelo try.
-			if call, ok := node.Value.(*ast.CallExpression); ok && len(c.arrumas) == 0 && ehSelfCall(call, c.funcAtual) {
+			// Chamada com `...lista` nao vira tail call (argc so se sabe em runtime).
+			if call, ok := node.Value.(*ast.CallExpression); ok && len(c.arrumas) == 0 && call.Espalhados == nil && ehSelfCall(call, c.funcAtual) {
 				for _, a := range call.Arguments {
 					if err := c.compile(a); err != nil {
 						return err
@@ -1265,8 +1293,25 @@ func (c *Compiler) compileCall(node *ast.CallExpression) error {
 	if err := c.compile(node.Function); err != nil {
 		return err
 	}
+	if node.Espalhados != nil {
+		c.emit(code.OpCallEspalha, c.mascaraEspalha(node))
+		return nil
+	}
 	c.emit(code.OpCall, len(node.Arguments))
 	return nil
+}
+
+// mascaraEspalha guarda no pool a mascara dos args espalhados ("010": 1 = o
+// arg e um `...lista`) e devolve o indice dela pro OpCallEspalha/OpBoraEspalha.
+func (c *Compiler) mascaraEspalha(call *ast.CallExpression) int {
+	m := make([]byte, len(call.Arguments))
+	for i := range m {
+		m[i] = '0'
+		if call.Espalha(i) {
+			m[i] = '1'
+		}
+	}
+	return c.addConstant(&object.Texto{Value: string(m)})
 }
 
 // compileBora: `bora fn(args)` dispara a chamada em paralelo e devolve Futuro.
@@ -1283,6 +1328,10 @@ func (c *Compiler) compileBora(node *ast.BoraExpression) error {
 	}
 	if err := c.compile(call.Function); err != nil {
 		return err
+	}
+	if call.Espalhados != nil {
+		c.emit(code.OpBoraEspalha, c.mascaraEspalha(call))
+		return nil
 	}
 	c.emit(code.OpBoraCall, len(call.Arguments))
 	return nil

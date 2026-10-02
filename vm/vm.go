@@ -304,16 +304,24 @@ func (vm *VM) execBoraCall(argc int) {
 	switch fn := callee.(type) {
 	case *object.CompiledFunction:
 		clone := vm.clone()
-		// monta o frame inicial: args entram como locals a partir de bp=0
-		for i, a := range args {
-			clone.stack[i] = a
+		// monta o frame inicial: args entram como locals a partir de bp=0,
+		// com aridade/varargs/default iguais a chamada normal
+		clone.garanteEspaco(len(args))
+		copy(clone.stack, args)
+		if e := clone.ajustaArgs(fn, 0, len(args)); e != nil {
+			// igual o tree-walker: o erro de aridade vai pro futuro, com a
+			// linha do `bora`
+			fr := vm.currentFrame()
+			if l := fr.fn.LinhaDoPC(fr.ip); l > 0 {
+				e.Line = l
+				e.Message = fmt.Sprintf("deu ruim na linha %d: %s", l, e.Message)
+			}
+			fut.Resolve(e)
+			break
 		}
 		// reserva os slots de locals (igual OpCall) pra pilha de trabalho nao
 		// pisar em cima de local do corpo.
 		clone.sp = fn.NumLocals
-		if clone.sp < len(args) {
-			clone.sp = len(args)
-		}
 		frame := &Frame{fn: fn, ip: 0, basePointer: 0}
 		clone.frames[0] = frame
 		clone.framesIdx = 1
@@ -352,6 +360,86 @@ func (vm *VM) execBoraCall(argc int) {
 		panic(VMError{err: &object.Erro{Message: fmt.Sprintf("bora: nao da pra chamar %s", callee.Type()), Kind: "runtime"}})
 	}
 	vm.push(fut)
+}
+
+// espalhaArgs abre os args `...lista` da chamada no topo da pilha. Layout de
+// entrada: [a0 .. an-1, callee] com n = len(mascara) ('1' = espalhado); sai
+// [args abertos..., callee] e devolve o argc novo.
+func (vm *VM) espalhaArgs(mascara string) int {
+	n := len(mascara)
+	base := vm.sp - 1 - n
+	callee := vm.stack[vm.sp-1]
+	args := make([]object.Object, 0, n)
+	for i := 0; i < n; i++ {
+		v := vm.stack[base+i]
+		if mascara[i] != '1' {
+			args = append(args, v)
+			continue
+		}
+		l, ok := v.(*object.Lista)
+		if !ok {
+			panic(VMError{err: &object.Erro{Message: "so da pra espalhar lista, veio " + object.NomeTipo(v), Kind: "runtime"}})
+		}
+		args = append(args, l.Elements...)
+	}
+	vm.garanteEspaco(base + len(args) + 1)
+	copy(vm.stack[base:], args)
+	vm.stack[base+len(args)] = callee
+	vm.sp = base + len(args) + 1
+	return len(args)
+}
+
+// erroAridade confere argc contra a gambiarra (mesmas mensagens do OpCall):
+// variadic aceita >= MinArgs; com default, entre MinArgs e NumArgs; sem
+// nenhum dos dois, exatamente NumArgs.
+func erroAridade(cf *object.CompiledFunction, argc int) *object.Erro {
+	if cf.Variadic {
+		if argc < cf.MinArgs {
+			return &object.Erro{Message: fmt.Sprintf("essa gambiarra quer no minimo %d parametro(s), voce mandou %d", cf.MinArgs, argc), Kind: "runtime"}
+		}
+		return nil
+	}
+	minA := cf.MinArgs
+	if minA == 0 {
+		minA = cf.NumArgs
+	}
+	if argc >= minA && argc <= cf.NumArgs {
+		return nil
+	}
+	if cf.MinArgs > 0 && cf.MinArgs < cf.NumArgs {
+		return &object.Erro{Message: fmt.Sprintf("essa gambiarra quer entre %d e %d parametro(s), voce mandou %d", cf.MinArgs, cf.NumArgs, argc), Kind: "runtime"}
+	}
+	return &object.Erro{Message: fmt.Sprintf("essa gambiarra quer %d parametro(s), voce mandou %d", cf.NumArgs, argc), Kind: "runtime"}
+}
+
+// ajustaArgs valida a aridade e arruma os argc args em stack[bp:] pros slots
+// da gambiarra: junta os extras no ...resto e completa os que faltam com NADA
+// (o prologo troca pelo default). Mesmo trabalho que o OpCall faz inline;
+// devolve o erro em vez de jogar porque o bora entrega ele no futuro.
+func (vm *VM) ajustaArgs(cf *object.CompiledFunction, bp, argc int) *object.Erro {
+	if e := erroAridade(cf, argc); e != nil {
+		return e
+	}
+	topo := bp + cf.NumLocals
+	if topo < bp+argc {
+		topo = bp + argc
+	}
+	vm.garanteEspaco(topo)
+	if cf.Variadic && argc >= cf.NumArgs {
+		variadicIdx := cf.NumArgs - 1
+		resto := make([]object.Object, argc-variadicIdx)
+		copy(resto, vm.stack[bp+variadicIdx:bp+argc])
+		vm.stack[bp+variadicIdx] = &object.Lista{Elements: resto}
+		argc = cf.NumArgs
+	}
+	for i := argc; i < cf.NumArgs; i++ {
+		if cf.Variadic && i == cf.NumArgs-1 {
+			vm.stack[bp+i] = &object.Lista{Elements: []object.Object{}}
+		} else {
+			vm.stack[bp+i] = NADA
+		}
+	}
+	return nil
 }
 
 // Run executa o bytecode. frame e ip reciclados entre chamadas via execFrame.
@@ -933,6 +1021,45 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			argc := int(fn.Bytecode[ip+1])
 			ip += 2
 			vm.execBoraCall(argc)
+		case code.OpCallEspalha:
+			// chamada com `...lista`: abre as listas na pilha e segue igual o
+			// OpCall (que fica intocado pra nao pesar nas chamadas normais).
+			opPos := ip
+			mascara := vm.constants[int(code.ReadUint16(fn.Bytecode[ip+1:]))].(*object.Texto).Value
+			ip += 3
+			argc := vm.espalhaArgs(mascara)
+			callee := vm.stack[vm.sp-1]
+			if cf, ok := callee.(*object.CompiledFunction); ok {
+				bp := vm.sp - 1 - argc
+				if e := vm.ajustaArgs(cf, bp, argc); e != nil {
+					panic(VMError{err: e})
+				}
+				vm.sp = bp + cf.NumLocals
+				frame.ip = ip
+				frame = vm.empurraFrame(cf, bp, opPos)
+				fn = cf
+				ip = 0
+				continue
+			}
+			if b, ok := callee.(*object.Builtin); ok {
+				args := make([]object.Object, argc)
+				copy(args, vm.stack[vm.sp-1-argc:vm.sp-1])
+				vm.sp -= argc + 1
+				res := b.Fn(args)
+				if s, ok := res.(*object.Sair); ok {
+					panic(VMError{sai: s})
+				}
+				if e, ok := res.(*object.Erro); ok && e != nil && !e.Handled {
+					panic(VMError{err: e})
+				}
+				vm.push(res)
+				continue
+			}
+			panic(VMError{err: &object.Erro{Message: fmt.Sprintf("isso ai (%s) nao e gambiarra pra voce sair chamando", callee.Type()), Kind: "runtime"}})
+		case code.OpBoraEspalha:
+			mascara := vm.constants[int(code.ReadUint16(fn.Bytecode[ip+1:]))].(*object.Texto).Value
+			ip += 3
+			vm.execBoraCall(vm.espalhaArgs(mascara))
 		case code.OpDup:
 			val := vm.stack[vm.sp-1]
 			vm.push(val)

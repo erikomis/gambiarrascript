@@ -176,3 +176,37 @@ func TestFormataPotenciaECrava(t *testing.T) {
 		}
 	}
 }
+
+// spread na chamada volta com `...` (normal, bora e metodo) e o formato da
+// interpolacao fica intacto.
+func TestFormataEspalhaEFormato(t *testing.T) {
+	src := `mostra f(1, ...xs, ...[2, 3])
+bota fu = bora g(...ys)
+mostra o.m(...zs)
+mostra "${preco:.2f} ${n:05d}"`
+	out := formataFonte(t, src)
+	for _, esp := range []string{
+		"mostra f(1, ...xs, ...[2, 3])",
+		"bota fu = bora g(...ys)",
+		"mostra o.m(...zs)",
+		`mostra "${preco:.2f} ${n:05d}"`,
+	} {
+		if !strings.Contains(out, esp) {
+			t.Fatalf("esperava %q em:\n%s", esp, out)
+		}
+	}
+	// idempotente: formatar de novo nao muda nada
+	if de_novo := formataFonte(t, out); de_novo != out {
+		t.Fatalf("nao e idempotente:\n%s\n---\n%s", out, de_novo)
+	}
+}
+
+// aspas dentro do ${...} ficam cruas (o lexer copia o miolo cru): o Quote
+// escapava e `${junta(xs, " ")}` saia quebrado. `\${` continua escapado.
+func TestFormataInterpolacaoComAspas(t *testing.T) {
+	src := `mostra "a \"b\" ${junta(xs, " ")} \${x} ${d["k"]:.2f}"` + "\n"
+	out := formataFonte(t, src)
+	if out != src {
+		t.Fatalf("got:\n%s\nesperado:\n%s", out, src)
+	}
+}

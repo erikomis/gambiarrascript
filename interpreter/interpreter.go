@@ -148,10 +148,14 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		return &object.Texto{Value: node.Value}
 	case *ast.TextoInterpolado:
 		var sb strings.Builder
-		for _, p := range node.Parts {
+		for k, p := range node.Parts {
 			v := i.Eval(p, env)
 			if isError(v) {
 				return v
+			}
+			if f := node.FormatoDa(k); f != "" {
+				// `${v:fmt}` = formata("%fmt", v)
+				v = builtinFormata([]object.Object{&object.Texto{Value: "%" + f}, v})
 			}
 			sb.WriteString(v.Inspect())
 		}
@@ -283,7 +287,7 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		if isError(fn) {
 			return fn
 		}
-		args := i.evalExpressions(node.Arguments, env)
+		args := i.evalArgumentos(node, env)
 		if len(args) == 1 && isError(args[0]) {
 			return args[0]
 		}
@@ -307,7 +311,7 @@ func (i *Interpreter) evalBora(node *ast.BoraExpression, env *object.Environment
 	if isError(fn) {
 		return fn
 	}
-	args := i.evalExpressions(call.Arguments, env)
+	args := i.evalArgumentos(call, env)
 	if len(args) == 1 && isError(args[0]) {
 		return args[0]
 	}
@@ -355,6 +359,31 @@ func (i *Interpreter) evalExpressions(exps []ast.Expression, env *object.Environ
 			return []object.Object{ev}
 		}
 		result = append(result, ev)
+	}
+	return result
+}
+
+// evalArgumentos avalia os args de uma chamada abrindo os `...lista` em
+// argumentos posicionais. Sem spread cai direto no evalExpressions.
+func (i *Interpreter) evalArgumentos(call *ast.CallExpression, env *object.Environment) []object.Object {
+	if call.Espalhados == nil {
+		return i.evalExpressions(call.Arguments, env)
+	}
+	result := []object.Object{}
+	for k, e := range call.Arguments {
+		ev := i.Eval(e, env)
+		if isError(ev) {
+			return []object.Object{ev}
+		}
+		if !call.Espalha(k) {
+			result = append(result, ev)
+			continue
+		}
+		l, ok := ev.(*object.Lista)
+		if !ok {
+			return []object.Object{newError(call.Token.Line, "so da pra espalhar lista, veio %s", object.NomeTipo(ev))}
+		}
+		result = append(result, l.Elements...)
 	}
 	return result
 }

@@ -16,6 +16,7 @@ var builtins = map[string]*object.Builtin{
 	"busca":    {Nome: "busca", Fn: builtinBusca},
 	"de_json":  {Nome: "de_json", Fn: builtinDeJson},
 	"pra_json": {Nome: "pra_json", Fn: builtinPraJson},
+	"tipo":     {Nome: "tipo", Fn: builtinTipo},
 
 	// texto
 	"formata":     {Nome: "formata", Fn: builtinFormata},
@@ -214,6 +215,15 @@ func builtinTexto(args []object.Object) object.Object {
 		return erroBuiltin("texto() quer 1 argumento, veio %d", len(args))
 	}
 	return &object.Texto{Value: args[0].Inspect()}
+}
+
+// builtinTipo devolve o nome do tipo do valor: "numero", "texto", "lista",
+// "funcao" (gambiarra, lambda ou builtin)... ver object.NomeTipo.
+func builtinTipo(args []object.Object) object.Object {
+	if len(args) != 1 {
+		return erroBuiltin("tipo() quer 1 argumento, veio %d", len(args))
+	}
+	return &object.Texto{Value: object.NomeTipo(args[0])}
 }
 
 func builtinNumero(args []object.Object) object.Object {

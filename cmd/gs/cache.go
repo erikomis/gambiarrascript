@@ -28,8 +28,9 @@ func init() {
 // opcode (numeracao ou semantica): .gsc velho deixa de valer mesmo que a
 // Versao do gs nao tenha mudado (build de dev). 2 = OpPow (`**`).
 // 3 = codegen novo de `??`, arruma no escopo da funcao e pra_cada com
-// contador escondido (bytecode velho tem os bugs).
-const formatoGSC = 3
+// contador escondido (bytecode velho tem os bugs). 4 = OpCallEspalha/
+// OpBoraEspalha, formato na interpolacao e builtin tipo.
+const formatoGSC = 4
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

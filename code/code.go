@@ -81,6 +81,11 @@ const (
 	// push/pop da constante nem o segundo dispatch.
 	OpBinConst // constIdx (2) + opcode da operacao (1)
 	OpPow      // pop exp, pop base, push base ** exp
+	// chamada com `...lista`: o operando e o indice de uma constante texto
+	// tipo "010" (1 = arg espalhado; o tamanho e o argc). Ficam fora do
+	// OpCall pra nao pesar no caminho quente das chamadas normais.
+	OpCallEspalha // maskIdx (2): igual OpCall, abrindo as listas marcadas
+	OpBoraEspalha // maskIdx (2): igual OpBoraCall, abrindo as listas marcadas
 	OpHalt   // para execucao
 )
 
@@ -155,6 +160,8 @@ var definitions = map[Opcode]*Definition{
 	OpDup:    {"OpDup", []int{}},
 	OpIsNada: {"OpIsNada", []int{}},
 	OpPow:    {"OpPow", []int{}},
+	OpCallEspalha: {"OpCallEspalha", []int{2}},
+	OpBoraEspalha: {"OpBoraEspalha", []int{2}},
 	OpHalt:   {"OpHalt", []int{}},
 }
 

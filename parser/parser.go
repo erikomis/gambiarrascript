@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -116,6 +117,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.BORA, p.parseBora)               // bora fn(args) -> Futuro
 	p.registerPrefix(token.GAMBIARRA, p.parseFuncaoLiteral) // lambda anonima
 	p.registerPrefix(token.SE_COLAR, p.parseTernario)       // se_colar cond entao a se_nao_colar b
+	p.registerPrefix(token.ELLIPSIS, p.parseEspalhaSolto)   // `...` fora de chamada = erro
 
 	p.infixParseFns = map[token.TokenType]infixParseFn{}
 	for _, tt := range []token.TokenType{
@@ -253,7 +255,7 @@ func (p *Parser) parseTexto() ast.Expression {
 	if !strings.Contains(lit, "${") {
 		return &ast.TextoLiteral{Token: tok, Value: lit}
 	}
-	parts, ok := interpolar(p, tok, lit)
+	parts, formatos, ok := interpolar(p, tok, lit)
 	if !ok {
 		return &ast.TextoLiteral{Token: tok, Value: lit}
 	}
@@ -261,21 +263,28 @@ func (p *Parser) parseTexto() ast.Expression {
 		return &ast.TextoLiteral{Token: tok, Value: ""}
 	}
 	// otimizacao: textos sem expressao vira TextoLiteral direto
-	if len(parts) == 1 {
+	if len(parts) == 1 && formatos == nil {
 		if t, ok := parts[0].(*ast.TextoLiteral); ok {
 			return t
 		}
 	}
-	return &ast.TextoInterpolado{Token: tok, Parts: parts}
+	return &ast.TextoInterpolado{Token: tok, Parts: parts, Formatos: formatos}
 }
 
 // interpolar percorre `lit` e separa em *TextoLiteral e Expression nos
 // pontos onde ha `${expr}`. Escapes: `\${` vira `${` literal. Expressoes
-// podem conter chaves aninhadas (conta balanceada).
-// Erros de parse dentro de ${} viram erros do parser pai (acrescentados em p.errs).
-func interpolar(p *Parser, tok token.Token, lit string) ([]ast.Expression, bool) {
+// podem conter chaves aninhadas (conta balanceada). `${expr:fmt}` tem formato
+// (ver separaFormato), devolvido em formatos alinhado com parts (nil se
+// nenhuma parte tem). Erros de parse dentro de ${} viram erros do parser pai.
+func interpolar(p *Parser, tok token.Token, lit string) ([]ast.Expression, []string, bool) {
 	var parts []ast.Expression
+	var formatos []string // alinhado com parts
+	algumFormato := false
 	var sb strings.Builder
+	erro := func(formato string, args ...interface{}) ([]ast.Expression, []string, bool) {
+		p.addErro(tok.Line, tok.Coluna, formato, args...)
+		return nil, nil, false
+	}
 	i := 0
 	for i < len(lit) {
 		// escape \${ -> drop \ e mantem ${
@@ -289,6 +298,7 @@ func interpolar(p *Parser, tok token.Token, lit string) ([]ast.Expression, bool)
 			// flush literal ate aqui
 			if sb.Len() > 0 {
 				parts = append(parts, &ast.TextoLiteral{Token: tok, Value: sb.String()})
+				formatos = append(formatos, "")
 				sb.Reset()
 			}
 			// scan balanceado ate a chave que fecha
@@ -313,24 +323,39 @@ func interpolar(p *Parser, tok token.Token, lit string) ([]ast.Expression, bool)
 				i = len(lit)
 				break
 			}
-			exprSrc := lit[start:j]
+			exprSrc, formato, temFormato := separaFormato(lit[start:j])
+			if temFormato && !formatoValido(formato) {
+				return erro("formato %q invalido em ${...}: usa os verbos do formata sem o %%, tipo ${x:.2f}, ${n:05d}, ${t:-8}", formato)
+			}
+			if temFormato && !strings.ContainsAny(formato[len(formato)-1:], "vsdfFeEgGxXobcq") {
+				formato += "v" // sem verbo (`${t:-8}`) vale %v
+			}
+			if strings.TrimSpace(exprSrc) == "" {
+				return erro("expressao vazia em ${...}")
+			}
 			// parser recursivo: sub-lexer + sub-parser (New ja carrega cur+
 			// peek token, nao chamamos nextToken duas vezes aqui — senao
 			// consumimos o primeiro token da expressao).
 			sub := New(lexer.New(exprSrc))
 			expr := sub.parseExpression(LOWEST)
-			if expr == nil {
-				p.errs = append(p.errs, ErroParse{Linha: tok.Line, Coluna: tok.Coluna, Msg: "expressao vazia em ${...}"})
-				return nil, false
+			// sobrou token depois da expressao: antes era descartado calado
+			// (`${3.14:.2f}` imprimia 3.14 sem o formato). Agora e erro.
+			if len(sub.errs) == 0 && !sub.peekTokenIs(token.EOF) {
+				sub.addErro(sub.peekToken.Line, sub.peekToken.Coluna,
+					"sobrou %q depois da expressao em ${...}", sub.peekToken.Literal)
 			}
-			// so pra garantir: lexer sempre emite EOF; aceitar trailing EOF
-			for !sub.curTokenIs(token.EOF) {
-				// se sobrou algo, ignora — expressao simples
-				sub.nextToken()
+			if len(sub.errs) > 0 || expr == nil {
+				for _, e := range sub.errs {
+					p.addErro(tok.Line, tok.Coluna, "%s", e.Msg)
+				}
+				if len(sub.errs) == 0 {
+					p.addErro(tok.Line, tok.Coluna, "expressao vazia em ${...}")
+				}
+				return nil, nil, false
 			}
 			parts = append(parts, expr)
-			// acumula erros do sub-parser pro pai
-			p.errs = append(p.errs, sub.errs...)
+			formatos = append(formatos, formato)
+			algumFormato = algumFormato || temFormato
 			i = j + 1
 			continue
 		}
@@ -339,9 +364,53 @@ func interpolar(p *Parser, tok token.Token, lit string) ([]ast.Expression, bool)
 	}
 	if sb.Len() > 0 {
 		parts = append(parts, &ast.TextoLiteral{Token: tok, Value: sb.String()})
+		formatos = append(formatos, "")
 	}
-	return parts, true
+	if !algumFormato {
+		formatos = nil
+	}
+	return parts, formatos, true
 }
+
+// separaFormato acha o `:fmt` de `${expr:fmt}`: o ULTIMO `:` fora de
+// parenteses/colchetes/chaves e fora de texto. Dentro da expressao o `:` so
+// aparece aninhado (dicionario, fatia) ou em texto, entao um `:` no nivel 0
+// nunca e expressao valida — sempre e formato.
+func separaFormato(src string) (expr, formato string, ok bool) {
+	depth := 0
+	ultimo := -1
+	for k := 0; k < len(src); k++ {
+		switch c := src[k]; c {
+		case '"', '`':
+			// pula o texto inteiro (com escape \ so no de aspas)
+			for k++; k < len(src) && src[k] != c; k++ {
+				if c == '"' && src[k] == '\\' {
+					k++
+				}
+			}
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			depth--
+		case ':':
+			if depth == 0 {
+				ultimo = k
+			}
+		}
+	}
+	if ultimo < 0 {
+		return src, "", false
+	}
+	return src[:ultimo], strings.TrimSpace(src[ultimo+1:]), true
+}
+
+// formatoValido aceita o que o formata entende depois do %: flags, largura,
+// precisao e um verbo (sem verbo vale %v). Ex.: .2f, 05d, -8, x, +d.
+func formatoValido(f string) bool {
+	return f != "" && reFormato.MatchString(f)
+}
+
+var reFormato = regexp.MustCompile(`^[-+#0]*[0-9]*(\.[0-9]*)?[vsdfFeEgGxXobcq]?$`)
 
 func (p *Parser) parseBooleano() ast.Expression {
 	return &ast.BooleanoLiteral{Token: p.curToken, Value: p.curTokenIs(token.DEU_BOM)}
@@ -486,7 +555,52 @@ func (p *Parser) parseDicionario() ast.Expression {
 }
 
 func (p *Parser) parseCall(fn ast.Expression) ast.Expression {
-	return &ast.CallExpression{Token: p.curToken, Function: fn, Arguments: p.parseExpressionList(token.RPAREN)}
+	call := &ast.CallExpression{Token: p.curToken, Function: fn, Arguments: []ast.Expression{}}
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return call
+	}
+	for {
+		p.nextToken()
+		// `...lista` espalha a lista em argumentos posicionais
+		espalha := false
+		if p.curTokenIs(token.ELLIPSIS) {
+			if p.peekTokenIs(token.RPAREN) || p.peekTokenIs(token.COMMA) {
+				p.addErro(p.curToken.Line, p.curToken.Coluna,
+					"faltou a lista depois do `...` (tipo f(...xs))")
+				if p.peekTokenIs(token.RPAREN) {
+					p.nextToken() // fecha a chamada: sem erro em cascata no `)`
+				}
+				return nil
+			}
+			espalha = true
+			p.nextToken()
+		}
+		arg := p.parseExpression(LOWEST)
+		if espalha && call.Espalhados == nil {
+			call.Espalhados = make([]bool, len(call.Arguments), len(call.Arguments)+1)
+		}
+		call.Arguments = append(call.Arguments, arg)
+		if call.Espalhados != nil {
+			call.Espalhados = append(call.Espalhados, espalha)
+		}
+		if !p.peekTokenIs(token.COMMA) {
+			break
+		}
+		p.nextToken()
+	}
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+	return call
+}
+
+// parseEspalhaSolto: `...` no comeco de expressao fora de chamada (lista,
+// bota...) nao existe — erro claro em vez do generico.
+func (p *Parser) parseEspalhaSolto() ast.Expression {
+	p.addErro(p.curToken.Line, p.curToken.Coluna,
+		"`...` so vale dentro da chamada (f(...lista)) ou no ultimo parametro da gambiarra (gambiarra f(...resto))")
+	return nil
 }
 
 func (p *Parser) parseIndex(left ast.Expression) ast.Expression {

@@ -97,6 +97,7 @@ var builtinsCompletion = []string{
 	// erros
 	"quebra", "erro_msg", "erro_linha", "erro_tipo", "erro_pilha",
 	"erro_causa", "envolve_erro",
+	"tipo",
 }
 
 // builtinsSet espelha builtinsCompletion num map pra lookup rapido.
@@ -204,6 +205,7 @@ var docsBuiltin = map[string]string{
 	"escreve_csv":   "escreve_csv(caminho, lista, [cabecalhos]): escreve uma lista de dicts num CSV. 3o arg opcional reordena/seleciona colunas.",
 	"gzip_comprime":    "gzip_comprime(texto) -> texto (base64): comprime o texto com gzip e devolve em base64.",
 	"gzip_descomprime": "gzip_descomprime(texto) -> texto: recebe um base64 de gzip_comprime e devolve o texto original.",
+	"tipo": "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"nativo\"). Gambiarra, lambda e builtin sao todas \"funcao\".",
 }
 
 // docsKeyword descreve cada keyword pro hover do LSP.

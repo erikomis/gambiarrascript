@@ -42,6 +42,19 @@ type Object interface {
 	Inspect() string
 }
 
+// NomeTipo e o nome do tipo como a linguagem mostra (builtin tipo() e
+// mensagens de erro): o ObjectType em minusculo, so que builtin tambem e
+// "funcao" — pra quem chama, gambiarra, lambda e builtin sao a mesma coisa.
+func NomeTipo(o Object) string {
+	if o == nil {
+		return "nada"
+	}
+	if o.Type() == BUILTIN_OBJ {
+		return "funcao"
+	}
+	return strings.ToLower(string(o.Type()))
+}
+
 // FormatNumero imprime inteiros sem casa decimal e o resto com precisao minima.
 func FormatNumero(f float64) string {
 	if !math.IsInf(f, 0) && !math.IsNaN(f) && f == math.Trunc(f) {

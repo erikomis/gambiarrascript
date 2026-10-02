@@ -240,7 +240,7 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 		// reconstruir a string com `${...}` — usa o Literal do token (o texto cru
 		// que o lexer leu, com markers `${...}` preservados). Sicaro parse sempre
 		// passa pelo lexer, que mantem `${...}` no Literal.
-		return strconv.Quote(n.Token.Literal)
+		return citaInterpolado(n.Token.Literal)
 	case *ast.BooleanoLiteral:
 		if n.Value {
 			return "deu_bom"
@@ -287,6 +287,9 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 		args := make([]string, len(n.Arguments))
 		for i, a := range n.Arguments {
 			args[i] = f.emitExpr(a)
+			if n.Espalha(i) {
+				args[i] = "..." + args[i]
+			}
 		}
 		return f.emitExprPrec(n.Function, precCall) + "(" + strings.Join(args, ", ") + ")"
 	case *ast.RangeExpression:
@@ -343,4 +346,47 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 		return "bora"
 	}
 	return ""
+}
+
+// citaInterpolado poe aspas no texto cru com `${...}` escapando SO o que esta
+// fora das marcas: o lexer copia o miolo do ${} cru, entao escapar o `"` la
+// dentro quebrava `${junta(xs, " ")}`. `\${...}` (escapado) sai igual veio.
+func citaInterpolado(lit string) string {
+	var sb strings.Builder
+	sb.WriteByte('"')
+	fora := 0 // inicio do trecho fora de ${}
+	for i := 0; i < len(lit); i++ {
+		ini := i
+		if lit[i] == '\\' && strings.HasPrefix(lit[i+1:], "${") {
+			i++
+		}
+		if !strings.HasPrefix(lit[i:], "${") {
+			i = ini
+			continue
+		}
+		q := strconv.Quote(lit[fora:ini])
+		sb.WriteString(q[1 : len(q)-1])
+		// copia cru ate a chave que fecha (ou o fim, se nao fechou)
+		depth, j := 0, i+1
+		for ; j < len(lit); j++ {
+			if lit[j] == '{' {
+				depth++
+			} else if lit[j] == '}' {
+				depth--
+				if depth == 0 {
+					break
+				}
+			}
+		}
+		if j >= len(lit) {
+			j = len(lit) - 1
+		}
+		sb.WriteString(lit[ini : j+1])
+		i = j
+		fora = j + 1
+	}
+	q := strconv.Quote(lit[fora:])
+	sb.WriteString(q[1 : len(q)-1])
+	sb.WriteByte('"')
+	return sb.String()
 }

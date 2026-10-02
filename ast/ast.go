@@ -377,6 +377,17 @@ func (e *TextoLiteral) String() string       { return `"` + e.Value + `"` }
 type TextoInterpolado struct {
 	Token token.Token
 	Parts []Expression // *TextoLiteral (literal) ou Expression (interp)
+	// Formatos e o `:fmt` de cada parte (`${preco:.2f}` -> ".2f"), alinhado
+	// com Parts; "" = sem formato. nil quando nenhuma parte tem formato.
+	Formatos []string
+}
+
+// FormatoDa devolve o formato da parte i ("" se nao tem).
+func (e *TextoInterpolado) FormatoDa(i int) string {
+	if i < len(e.Formatos) {
+		return e.Formatos[i]
+	}
+	return ""
 }
 
 func (e *TextoInterpolado) expressionNode()      {}
@@ -384,7 +395,11 @@ func (e *TextoInterpolado) TokenLiteral() string { return e.Token.Literal }
 func (e *TextoInterpolado) String() string {
 	var sb strings.Builder
 	sb.WriteByte('"')
-	for _, p := range e.Parts {
+	for i, p := range e.Parts {
+		if f := e.FormatoDa(i); f != "" {
+			sb.WriteString("${" + p.String() + ":" + f + "}")
+			continue
+		}
 		sb.WriteString(p.String())
 	}
 	sb.WriteByte('"')
@@ -450,6 +465,14 @@ type CallExpression struct {
 	Token     token.Token
 	Function  Expression
 	Arguments []Expression
+	// Espalhados marca os args `...lista` (spread), alinhado com Arguments.
+	// nil quando a chamada nao espalha nada — o caminho normal nem olha.
+	Espalhados []bool
+}
+
+// Espalha diz se o argumento i e um `...lista`.
+func (e *CallExpression) Espalha(i int) bool {
+	return i < len(e.Espalhados) && e.Espalhados[i]
 }
 
 func (e *CallExpression) expressionNode()      {}
@@ -458,6 +481,9 @@ func (e *CallExpression) String() string {
 	args := make([]string, len(e.Arguments))
 	for i, a := range e.Arguments {
 		args[i] = a.String()
+		if e.Espalha(i) {
+			args[i] = "..." + args[i]
+		}
 	}
 	return e.Function.String() + "(" + strings.Join(args, ", ") + ")"
 }

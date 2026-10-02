@@ -2,6 +2,7 @@ package interpreter
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"gambiarrascript/object"
@@ -35,7 +36,50 @@ func builtinFormata(args []object.Object) object.Object {
 			vals[i] = a.Inspect()
 		}
 	}
+	ajustaNumerosPorVerbo(modelo.Value, vals)
 	return &object.Texto{Value: fmt.Sprintf(modelo.Value, vals...)}
+}
+
+// ajustaNumerosPorVerbo casa o numero com o verbo: inteiro em %f/%e/%g vira
+// float e float inteiro (10 / 2) em %d/%x/%o/%b vira inteiro — sem isso o Go
+// imprimia %!f(int64=3). Modelo com `*` ou `[n]` (arg fora de ordem) fica
+// como esta.
+func ajustaNumerosPorVerbo(modelo string, vals []interface{}) {
+	arg := 0
+	for k := 0; k < len(modelo); k++ {
+		if modelo[k] != '%' {
+			continue
+		}
+		k++
+		// pula flags, largura e precisao ate o verbo
+		for k < len(modelo) && strings.IndexByte("+-# 0123456789.", modelo[k]) >= 0 {
+			k++
+		}
+		if k >= len(modelo) {
+			return
+		}
+		verbo := modelo[k]
+		switch {
+		case verbo == '%':
+			continue
+		case verbo == '*' || verbo == '[':
+			return
+		}
+		if arg >= len(vals) {
+			return
+		}
+		switch v := vals[arg].(type) {
+		case int64:
+			if strings.IndexByte("eEfFgG", verbo) >= 0 {
+				vals[arg] = float64(v)
+			}
+		case float64:
+			if strings.IndexByte("dxXob", verbo) >= 0 && v == math.Trunc(v) && math.Abs(v) < 1<<63 {
+				vals[arg] = int64(v)
+			}
+		}
+		arg++
+	}
 }
 
 func builtinSepara(args []object.Object) object.Object {
