@@ -1,0 +1,123 @@
+# Release: ao dar push de uma tag v* (ex: v0.2.0) testa, cross-compila o gs
+# pras 5 plataformas, empacota a extensao do VSCode e publica um GitHub
+# Release com notas automaticas + checksums.txt.
+#
+# Rodar na mao (Actions > release > Run workflow) e um ensaio: monta tudo e
+# sobe como artifact da run, mas NAO publica release nenhum.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: 'versao do ensaio (sem v); nada e publicado'
+        required: false
+        default: '0.0.0-ensaio'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - name: versao
+        id: versao
+        env:
+          VERSAO_MANUAL: ${{ inputs.versao }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            v="${GITHUB_REF_NAME#v}"
+          else
+            v="${VERSAO_MANUAL:-0.0.0-ensaio}"
+            v="${v#v}"
+          fi
+          case "$v" in
+            ''|*[!0-9A-Za-z.+-]*) echo "::error::versao invalida: '$v'"; exit 1 ;;
+          esac
+          echo "versao=$v" >> "$GITHUB_OUTPUT"
+          echo "versao: $v"
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
+
+      - name: extensao VSCode (.vsix)
+        working-directory: editors/vscode
+        env:
+          VERSAO: ${{ steps.versao.outputs.versao }}
+        run: |
+          npm ci --no-audit --no-fund
+          npm run compile
+          npm version "$VERSAO" --no-git-tag-version --allow-same-version
+          mkdir -p ../../dist/release
+          npx --yes @vscode/vsce@3 package --allow-missing-repository --skip-license \
+            -o "../../dist/release/gambiarrascript-$VERSAO.vsix"
+
+      - name: binarios + checksums + formula
+        env:
+          VERSAO: ${{ steps.versao.outputs.versao }}
+        run: ./scripts/release "$VERSAO"
+
+      - name: resumo (formula Homebrew pra copiar)
+        env:
+          VERSAO: ${{ steps.versao.outputs.versao }}
+        run: |
+          {
+            echo "## Release $VERSAO"
+            echo
+            echo '### checksums.txt'
+            echo '```'
+            cat dist/release/checksums.txt
+            echo '```'
+            echo
+            echo '### Formula Homebrew (cole em erikomis/homebrew-tap: Formula/gambiarrascript.rb)'
+            echo '```ruby'
+            cat dist/release/gambiarrascript.rb
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gs-${{ steps.versao.outputs.versao }}
+          path: dist/release/
+          if-no-files-found: error
+
+      - name: publica o release
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          extra=()
+          # tag com hifen (v1.0.0-rc1) vira pre-release
+          case "$TAG" in *-*) extra+=(--prerelease) ;; esac
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "GambiarraScript $TAG" \
+            --generate-notes \
+            --verify-tag \
+            "${extra[@]}" \
+            dist/release/gs_* \
+            dist/release/*.vsix \
+            dist/release/checksums.txt

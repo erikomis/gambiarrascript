@@ -119,7 +119,7 @@ func main() {
 		cmdGet(os.Args[2:])
 	case "build":
 		cmdBuild(os.Args[2:])
-	case "--version", "-v", "version":
+	case "--version", "-v", "version", "versao":
 		fmt.Println("gs (GambiarraScript) " + Versao)
 	case "--help", "-h", "ajuda":
 		uso()
@@ -148,9 +148,10 @@ func uso() {
 	fmt.Println("  gs build <arquivo.gs> [-o saida]       # gera binario standalone com o script")
 	fmt.Println("  gs repl                                # abre o modo interativo (multiline)")
 	fmt.Println("  gs testa [--tree] [<dir>]              # roda os testes (*_test.gs) e soma os asserts")
+	fmt.Println("  gs doc <arquivo.gs|dir>                # gera markdown com as gambiarras e cravas documentadas")
 	fmt.Println("  gs disasm <arquivo.gs>                 # disassembla o bytecode (VM)")
 	fmt.Println("  gs lsp                                 # inicia o language server (usado pela extensao do VSCode)")
-	fmt.Println("  gs --version                           # mostra a versao")
+	fmt.Println("  gs --version  (ou gs versao)           # mostra a versao")
 	fmt.Println("  gs --help                              # mostra esta ajuda")
 }
 
