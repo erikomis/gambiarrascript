@@ -1,88 +1,144 @@
-// Carrega o runtime WASM do GambiarraScript (gs.wasm) uma unica vez por
-// aba e expoe uma funcao `evaluate` pra usar no playground.
+// Cliente do runtime WASM do GambiarraScript. O gs.wasm roda dentro de um Web
+// Worker (public/gs-worker.js), nunca na thread da pagina: um laco infinito
+// trava so o worker, e "parar" e literalmente `worker.terminate()` + um worker
+// novo.
 //
-// O arquivo `wasm_exec.js` foi copiado de `lib/wasm` do Go; ele define
-// `Go` no escopo global. O bundle do Next nao o inclui, entao injetamos
-// via <script> na tag <head> (ver Playground).
+// O worker e um arquivo estatico em public/ (nao passa pelo bundler). Com
+// `output: "export"` o Next so copia ele pra out/, e aqui a gente prefixa com
+// o basePath. Dentro do worker os caminhos do wasm sao relativos a URL dele.
 
-declare global {
-  interface Window {
-    Go?: any;
-    GambiarraScript?: { evaluate: (code: string) => { saida: string; erros: string } };
-    __gsWasmReady?: { ready: boolean };
-  }
-}
+// prefixo do deploy (ex.: /gambiarrascript no GitHub Pages); vazio em dev.
+const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
-let loadPromise: Promise<void> | null = null;
+// tempo maximo de uma execucao antes de matar o worker
+export const TIMEOUT_PADRAO_MS = 10_000;
 
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[data-src="${src}"]`);
-    if (existing) {
-      resolve();
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = src;
-    s.async = true;
-    s.dataset.src = src;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`falhou carregar ${src}`));
-    document.head.appendChild(s);
-  });
-}
-
-export function ensureWasmRuntime(): Promise<void> {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("wasm so roda no navegador"));
-  }
-  if (!loadPromise) {
-    loadPromise = (async () => {
-      await loadScript("/wasm_exec.js");
-      if (!window.Go) {
-        throw new Error("Go runtime nao encontrado apos carregar wasm_exec.js");
-      }
-      const go = new window.Go();
-      let instance: WebAssembly.Instance;
-      try {
-        // caminho rapido: streaming quando o navegador suporta
-        const streaming = await WebAssembly.instantiateStreaming(
-          fetch("/gs.wasm"),
-          go.importObject
-        );
-        instance = streaming.instance;
-      } catch {
-        // fallback: baixa o binario inteiro e instancia do buffer
-        const res = await fetch("/gs.wasm");
-        const buf = await res.arrayBuffer();
-        const instantiated = await WebAssembly.instantiate(
-          buf,
-          go.importObject
-        );
-        instance =
-          instantiated instanceof WebAssembly.Instance
-            ? instantiated
-            : instantiated.instance;
-      }
-      go.run(instance);
-      // GambiarraScript.evaluate deve ter sido registrado por cmd/wasm
-      if (!window.GambiarraScript?.evaluate) {
-        throw new Error("gs.wasm nao expôs GambiarraScript.evaluate");
-      }
-    })().catch((err) => {
-      loadPromise = null; // permite retry
-      throw err;
-    });
-  }
-  return loadPromise;
-}
+export type EstadoRuntime =
+  | { tipo: "carregando" }
+  | { tipo: "pronto" }
+  | { tipo: "erro"; mensagem: string };
 
 export interface EvalResult {
   saida: string;
   erros: string;
+  // preenchido quando a execucao nao terminou sozinha
+  interrompido?: "parado" | "timeout";
 }
 
-export async function evaluate(code: string): Promise<EvalResult> {
-  await ensureWasmRuntime();
-  return window.GambiarraScript!.evaluate(code);
+interface Execucao {
+  id: number;
+  resolver: (r: EvalResult) => void;
+  onSaida?: (texto: string) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+type MsgWorker =
+  | { tipo: "modulo"; modulo: WebAssembly.Module }
+  | { tipo: "pronto" }
+  | { tipo: "erro-carga"; mensagem: string }
+  | { tipo: "saida"; id: number; texto: string }
+  | { tipo: "fim"; id: number; saida: string; erros: string }
+  | { tipo: "morreu" };
+
+// modulo ja compilado, guardado pra o proximo worker nao baixar/compilar o
+// gs.wasm de novo depois de um Parar.
+let moduloCache: WebAssembly.Module | null = null;
+
+export class RuntimeGS {
+  private worker: Worker | null = null;
+  private execucao: Execucao | null = null;
+  private proximoId = 1;
+  private destruido = false;
+
+  constructor(private onEstado: (e: EstadoRuntime) => void) {
+    this.iniciarWorker();
+  }
+
+  private iniciarWorker() {
+    this.onEstado({ tipo: "carregando" });
+    const w = new Worker(`${base}/gs-worker.js`);
+    this.worker = w;
+    w.onmessage = (ev: MessageEvent<MsgWorker>) => {
+      if (this.worker !== w) return; // worker velho, ja descartado
+      const msg = ev.data;
+      switch (msg.tipo) {
+        case "modulo":
+          moduloCache = msg.modulo;
+          break;
+        case "pronto":
+          this.onEstado({ tipo: "pronto" });
+          break;
+        case "erro-carga":
+          this.onEstado({ tipo: "erro", mensagem: msg.mensagem });
+          break;
+        case "saida":
+          if (this.execucao?.id === msg.id) this.execucao.onSaida?.(msg.texto);
+          break;
+        case "fim":
+          if (this.execucao?.id === msg.id) {
+            this.encerrar({ saida: msg.saida, erros: msg.erros });
+          }
+          break;
+        case "morreu":
+          // o Go saiu (panic): esse worker nao roda mais nada, troca por outro
+          this.parar();
+          break;
+      }
+    };
+    w.onerror = (ev) => {
+      if (this.worker !== w) return;
+      ev.preventDefault();
+      const mensagem = ev.message || "o worker do runtime caiu";
+      this.onEstado({ tipo: "erro", mensagem });
+      this.encerrar({ saida: "", erros: mensagem });
+    };
+    w.postMessage({ tipo: "init", modulo: moduloCache ?? undefined });
+  }
+
+  private encerrar(r: EvalResult) {
+    const ex = this.execucao;
+    if (!ex) return;
+    clearTimeout(ex.timer);
+    this.execucao = null;
+    ex.resolver(r);
+  }
+
+  get rodando() {
+    return this.execucao !== null;
+  }
+
+  // roda o codigo; `onSaida` recebe a saida em pedacos, ao vivo
+  rodar(
+    codigo: string,
+    opts: { onSaida?: (texto: string) => void; timeoutMs?: number } = {}
+  ): Promise<EvalResult> {
+    if (this.destruido || !this.worker) {
+      return Promise.resolve({ saida: "", erros: "runtime encerrado" });
+    }
+    if (this.execucao) this.parar();
+    const id = this.proximoId++;
+    return new Promise<EvalResult>((resolver) => {
+      const timer = setTimeout(
+        () => this.parar("timeout"),
+        opts.timeoutMs ?? TIMEOUT_PADRAO_MS
+      );
+      this.execucao = { id, resolver, onSaida: opts.onSaida, timer };
+      this.worker!.postMessage({ tipo: "rodar", id, codigo });
+    });
+  }
+
+  // mata o worker (e o que estiver rodando nele) e sobe um novo
+  parar(motivo: "parado" | "timeout" = "parado") {
+    this.worker?.terminate();
+    this.worker = null;
+    this.encerrar({ saida: "", erros: "", interrompido: motivo });
+    if (!this.destruido) this.iniciarWorker();
+  }
+
+  destruir() {
+    this.destruido = true;
+    this.worker?.terminate();
+    this.worker = null;
+    this.encerrar({ saida: "", erros: "", interrompido: "parado" });
+  }
 }

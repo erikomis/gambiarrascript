@@ -25,3 +25,7 @@ web/.source/
 web/out/
 web/next-env.d.ts
 web/*.tsbuildinfo
+# runtime do playground — gerado por scripts/build-web
+web/public/gs.wasm
+web/public/gs.wasm.gz
+web/public/wasm_exec.js

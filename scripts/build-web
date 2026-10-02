@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Gera o runtime do playground: web/public/gs.wasm (+ gs.wasm.gz) e
+# web/public/wasm_exec.js. O wasm_exec.js tem que vir do MESMO Go que
+# compilou o .wasm, senao quebra.
+# Com --site tambem builda o site estatico em web/out/.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "==> cmd/wasm -> web/public/gs.wasm"
+# -s -w tira tabela de simbolos e DWARF; -trimpath tira caminhos locais.
+# (wasm-opt -Oz foi testado: ~9% menor cru, mas so ~1% depois do gzip — nao
+# compensa o passo extra nem o risco de mexer no binario do Go.)
+GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o web/public/gs.wasm ./cmd/wasm
+cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/public/wasm_exec.js
+
+# versao pre-comprimida: o worker baixa o .gz e descomprime com
+# DecompressionStream("gzip"); se nao der, cai no gs.wasm cru.
+gzip -9 -n -c web/public/gs.wasm > web/public/gs.wasm.gz
+ls -lh web/public/gs.wasm web/public/gs.wasm.gz | awk '{print "    " $9 ": " $5}'
+
+if [ "${1:-}" = "--site" ]; then
+  echo "==> site estatico -> web/out/"
+  (cd web && npm ci && npm run build)
+fi

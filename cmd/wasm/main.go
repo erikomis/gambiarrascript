@@ -1,8 +1,12 @@
+//go:build js && wasm
+
 package main
 
 import (
 	"bytes"
+	"io"
 	"strings"
+	"sync"
 	"syscall/js"
 
 	"gambiarrascript/compiler"
@@ -16,8 +20,25 @@ import (
 // Versao do runtime WASM — mantida em sincronia visual com cmd/gs/version.go
 // quando alterada, recompile o wasm (scripts/build-web).
 
-// avaliar roda o codigo GambiarraScript e devolve {saida, erros}.
-func avaliar(code string) map[string]any {
+// escritorJS repassa cada escrita do programa (mostra & cia) pra uma funcao
+// JS, assim o playground mostra a saida ao vivo em vez de so no fim. O mutex
+// segura escritas de goroutines do `bora` (no wasm e uma thread so, mas nao
+// custa nada).
+type escritorJS struct {
+	mu sync.Mutex
+	fn js.Value
+}
+
+func (e *escritorJS) Write(p []byte) (int, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.fn.Invoke(string(p))
+	return len(p), nil
+}
+
+// avaliar roda o codigo GambiarraScript e devolve {saida, erros}. Se onSaida
+// for uma funcao JS, a saida vai sendo entregue nela e `saida` volta vazia.
+func avaliar(code string, onSaida js.Value) map[string]any {
 	p := parser.New(lexer.New(code))
 	prog := p.ParseProgram()
 	if errs := p.Errors(); len(errs) != 0 {
@@ -25,14 +46,18 @@ func avaliar(code string) map[string]any {
 	}
 
 	var buf bytes.Buffer
-	interp := interpreter.New(&buf)
+	var out io.Writer = &buf
+	if onSaida.Type() == js.TypeFunction {
+		out = &escritorJS{fn: onSaida}
+	}
+	interp := interpreter.New(out)
 
 	// roda na VM, igual `gs roda` — o playground tem que mostrar o mesmo
 	// comportamento (e a mesma velocidade) do engine de verdade. Codigo que a
 	// VM nao compila cai no tree-walker, que e mais permissivo.
 	comp := compiler.New()
 	if err := comp.Compile(prog); err == nil {
-		maq := vm.NovaComInterp(comp.Bytecode(), &buf, interp)
+		maq := vm.NovaComInterp(comp.Bytecode(), out, interp)
 		erros := ""
 		if err := maq.Run(); err != nil {
 			if e := vm.ErroDoRun(err); e != nil {
@@ -54,13 +79,16 @@ func avaliar(code string) map[string]any {
 	return map[string]any{"saida": buf.String(), "erros": erros}
 }
 
-// gsEvaluate ponte JS: gsEvaluate(code) -> {saida, erros}
+// gsEvaluate ponte JS: gsEvaluate(code, onSaida?) -> {saida, erros}
 func gsEvaluate(this js.Value, args []js.Value) any {
-	if len(args) != 1 {
-		return map[string]any{"saida": "", "erros": "gsEvaluate quer 1 argumento (codigo)"}
+	if len(args) < 1 || len(args) > 2 {
+		return map[string]any{"saida": "", "erros": "gsEvaluate quer o codigo (e opcionalmente onSaida)"}
 	}
-	code := args[0].String()
-	return avaliar(code)
+	onSaida := js.Undefined()
+	if len(args) == 2 {
+		onSaida = args[1]
+	}
+	return avaliar(args[0].String(), onSaida)
 }
 
 func main() {
