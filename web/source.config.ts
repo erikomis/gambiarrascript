@@ -6,6 +6,7 @@ import {
 // O mesmo grammar TextMate da extensao do VSCode — fonte unica de verdade pro
 // highlight. Importado (e nao copiado) pra docs e editor nunca divergirem.
 import gambiarraGrammar from "../editors/vscode/syntaxes/gambiarrascript.tmLanguage.json";
+import { transformerPlayground } from "./lib/transformer-playground";
 
 type LinguagemShiki = NonNullable<RehypeCodeOptions["langs"]>[number];
 
@@ -27,6 +28,11 @@ export default defineConfig({
     rehypeCodeOptions: {
       ...rehypeCodeDefaultOptions,
       langs: [gambiarrascript, "bash", "json"],
+      // blocos gambiarrascript ganham o link "Rodar no playground"
+      transformers: [
+        ...(rehypeCodeDefaultOptions.transformers ?? []),
+        transformerPlayground(),
+      ],
       // lingua desconhecida vira texto puro (em vez de quebrar o build)
       fallbackLanguage: "text",
     },
