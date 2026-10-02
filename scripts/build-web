@@ -11,7 +11,15 @@ echo "==> cmd/wasm -> web/public/gs.wasm"
 # (wasm-opt -Oz foi testado: ~9% menor cru, mas so ~1% depois do gzip — nao
 # compensa o passo extra nem o risco de mexer no binario do Go.)
 GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o web/public/gs.wasm ./cmd/wasm
-cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/public/wasm_exec.js
+# Go >= 1.24 guarda em lib/wasm; o 1.23 do go.mod (e do CI) em misc/wasm
+goroot=$(go env GOROOT)
+for d in lib/wasm misc/wasm; do
+  if [ -f "$goroot/$d/wasm_exec.js" ]; then
+    cp "$goroot/$d/wasm_exec.js" web/public/wasm_exec.js
+    break
+  fi
+done
+[ -f web/public/wasm_exec.js ] || { echo "wasm_exec.js nao achado em $goroot" >&2; exit 1; }
 
 # versao pre-comprimida: o worker baixa o .gz e descomprime com
 # DecompressionStream("gzip"); se nao der, cai no gs.wasm cru.
