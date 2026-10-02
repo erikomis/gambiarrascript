@@ -244,6 +244,10 @@ var docsKeyword = map[string]string{
 type Servidor struct {
 	docs map[string]string
 	out  io.Writer
+	// raiz e a pasta do workspace (initialize); avisos guarda as URIs que ja
+	// receberam o aviso de formatacao pulada (ver formatacao.go)
+	raiz   string
+	avisos map[string]bool
 }
 
 func NovoServidor(out io.Writer) *Servidor {
@@ -271,13 +275,16 @@ func (s *Servidor) Rodar(in io.Reader) error {
 func (s *Servidor) tratar(msg *Mensagem) bool {
 	switch msg.Method {
 	case "initialize":
+		s.guardaRaiz(msg.Params)
+		caps := map[string]interface{}{
+			"textDocumentSync":   1, // Full
+			"completionProvider": map[string]interface{}{},
+			"hoverProvider":      true,
+		}
+		capacidadesExtras(caps) // definicao, referencias, rename... (navegacao.go)
 		s.responder(msg.ID, map[string]interface{}{
-			"capabilities": map[string]interface{}{
-				"textDocumentSync":   1, // Full
-				"completionProvider": map[string]interface{}{},
-				"hoverProvider":      true,
-			},
-			"serverInfo": map[string]interface{}{"name": "gambiarrascript-lsp"},
+			"capabilities": caps,
+			"serverInfo":   map[string]interface{}{"name": "gambiarrascript-lsp"},
 		})
 	case "shutdown":
 		s.responder(msg.ID, nil)
@@ -349,6 +356,8 @@ func (s *Servidor) tratar(msg *Mensagem) bool {
 				},
 			})
 		}
+	default:
+		s.tratarRecursos(msg) // navegacao.go
 	}
 	// 'initialized' e outras notifications sem id sao ignoradas.
 	return false
