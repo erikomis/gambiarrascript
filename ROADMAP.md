@@ -304,13 +304,15 @@ Ainda abertos (pedem decisão de semântica):
       um TTY: histórico com setas ↑/↓, edição de linha, autocomplete no TAB
       (builtins + keywords + variáveis do escopo) e comandos `:ajuda`/`:limpa`.
       Cai no modo simples linha-a-linha em pipes/testes.
-- [~] **Release CI** — feito: `.github/workflows/release.yml` gera binários
+- [x] **Release CI** — `.github/workflows/release.yml` gera binários
       mac/linux/windows (CGO_ENABLED=0, versão via `-X main.Versao`) +
       checksums + `.vsix` numa GitHub Release a cada tag `v*`
       (`scripts/release`); `install.sh` (`curl | sh`, confere sha256, sem
-      sudo); CI de `go vet`/`go test` em push/PR. Falta: publicar o tap
-      `erikomis/homebrew-tap` (fórmula modelo em `packaging/homebrew/`, a
-      release imprime a pronta no job summary).
+      sudo); CI de `go vet`/`go test` em push/PR. **v0.2.0 publicada.**
+      Homebrew: `brew install erikomis/tap/gambiarrascript` (repo
+      `erikomis/homebrew-tap`; declara conflito com o ghostscript, que também
+      instala `gs`). A cada release nova, colar a fórmula que o job imprime no
+      summary por cima de `Formula/gambiarrascript.rb` do tap.
 - [x] **Playground web** — docs + playground estáticos no GitHub Pages
       (`.github/workflows/pages.yml`, `scripts/build-web`). Roda num Web
       Worker (botão Parar + timeout, laço infinito não trava a aba), link de
@@ -604,8 +606,10 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
 
 - [x] **LICENSE** — MIT. Vai junto nos tarballs da release, no `.vsix` e na
       fórmula do Homebrew.
-- [ ] **Tap do Homebrew** — criar `erikomis/homebrew-tap` e colar a fórmula
-      que a release imprime (item do Tier 6).
+- [x] **Tap do Homebrew** — `erikomis/homebrew-tap` no ar com a 0.2.0.
+- [ ] **Automatizar o tap** — hoje a fórmula é colada na mão a cada release;
+      o `release.yml` pode dar push direto no tap (precisa de um token com
+      escrita no repo do tap como secret).
 - [ ] **gofmt na árvore + gate no CI** — `ast.go`, `vm.go`, `parser.go`,
       `object.go` e outros não estão formatados; formatar num commit só de
       formatação e ligar `gofmt -l` no `ci.yml`.

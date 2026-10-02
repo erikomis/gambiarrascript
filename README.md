@@ -132,9 +132,20 @@ acabou_finalmente
 ### Jeito rápido — binário pronto (macOS / Linux)
 
 ```bash
+# Homebrew
+brew install erikomis/tap/gambiarrascript
+
+# ou o instalador (sem Homebrew)
 curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | sh
+
 gs roda examples/fizzbuzz.gs
 ```
+
+O `gs` do Ghostscript tem o mesmo nome — se você usa o Ghostscript pelo
+Homebrew, a fórmula avisa do conflito; prefira o `install.sh` com
+`GS_DIR=~/.local/bin`. A extensão do VSCode vem como `.vsix` em cada
+[release](https://github.com/erikomis/gambiarrascript/releases)
+(Extensions → `...` → Install from VSIX).
 
 Baixa o binário da última release, confere o sha256 e instala em
 `/usr/local/bin` (ou `~/.local/bin` se não tiver permissão — nunca usa sudo).
