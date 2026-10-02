@@ -121,3 +121,37 @@ jobs:
             dist/release/gs_* \
             dist/release/*.vsix \
             dist/release/checksums.txt
+
+      # Atualiza o tap do Homebrew (erikomis/homebrew-tap) com a formula ja
+      # preenchida. Usa uma deploy key com escrita SO no repo do tap (secret
+      # TAP_DEPLOY_KEY) — nada de token pessoal. Pre-release fica de fora: o
+      # `brew install` sempre pega a ultima estavel.
+      - name: atualiza o tap do Homebrew
+        if: github.event_name == 'push' && github.ref_type == 'tag' && !contains(github.ref_name, '-')
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+          VERSAO: ${{ steps.versao.outputs.versao }}
+        run: |
+          if [ -z "$TAP_DEPLOY_KEY" ]; then
+            echo "::warning::sem TAP_DEPLOY_KEY: cole a formula do summary no tap na mao"
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$TAP_DEPLOY_KEY" > ~/.ssh/tap
+          chmod 600 ~/.ssh/tap
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/tap -o IdentitiesOnly=yes"
+          git clone -q git@github.com:erikomis/homebrew-tap.git tap
+          # o template tem um cabecalho explicando o preenchimento; no tap
+          # vai so a formula, a partir da linha `class`
+          sed -n '/^class /,$p' dist/release/gambiarrascript.rb > tap/Formula/gambiarrascript.rb
+          cd tap
+          if git diff --quiet; then
+            echo "formula ja esta na $VERSAO"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "gambiarrascript $VERSAO"
+          git push -q origin HEAD:main
+          echo "tap atualizado pra $VERSAO"

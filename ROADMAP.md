@@ -311,8 +311,7 @@ Ainda abertos (pedem decisão de semântica):
       sudo); CI de `go vet`/`go test` em push/PR. **v0.2.0 publicada.**
       Homebrew: `brew install erikomis/tap/gambiarrascript` (repo
       `erikomis/homebrew-tap`; declara conflito com o ghostscript, que também
-      instala `gs`). A cada release nova, colar a fórmula que o job imprime no
-      summary por cima de `Formula/gambiarrascript.rb` do tap.
+      instala `gs`). A fórmula vai pro tap sozinha a cada tag estável.
 - [x] **Playground web** — docs + playground estáticos no GitHub Pages
       (`.github/workflows/pages.yml`, `scripts/build-web`). Roda num Web
       Worker (botão Parar + timeout, laço infinito não trava a aba), link de
@@ -607,9 +606,9 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
 - [x] **LICENSE** — MIT. Vai junto nos tarballs da release, no `.vsix` e na
       fórmula do Homebrew.
 - [x] **Tap do Homebrew** — `erikomis/homebrew-tap` no ar com a 0.2.0.
-- [ ] **Automatizar o tap** — hoje a fórmula é colada na mão a cada release;
-      o `release.yml` pode dar push direto no tap (precisa de um token com
-      escrita no repo do tap como secret).
+- [x] **Automatizar o tap** — o `release.yml` dá push da fórmula preenchida
+      no tap a cada tag estável, com uma deploy key de escrita só no repo do
+      tap (secret `TAP_DEPLOY_KEY`), sem token pessoal.
 - [ ] **gofmt na árvore + gate no CI** — `ast.go`, `vm.go`, `parser.go`,
       `object.go` e outros não estão formatados; formatar num commit só de
       formatação e ligar `gofmt -l` no `ci.yml`.

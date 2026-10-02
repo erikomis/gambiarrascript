@@ -1,15 +1,13 @@
 # Formula Homebrew do GambiarraScript (template).
 #
 # A versao e os sha256 (marcadores entre __ abaixo) sao preenchidos a cada
-# release pelo scripts/release; o workflow .github/workflows/release.yml imprime esta formula ja preenchida
-# no resumo do job (aba Summary da run), pronta pra copiar e colar.
+# release pelo scripts/release, e o .github/workflows/release.yml da push da
+# formula pronta (so a partir da linha `class`) em erikomis/homebrew-tap:
+# Formula/gambiarrascript.rb, usando a deploy key do secret TAP_DEPLOY_KEY.
+# Pre-release (tag com hifen) nao mexe no tap.
 #
-# Como publicar o tap (uma vez):
-#   1. crie o repo publico erikomis/homebrew-tap no GitHub
-#   2. coloque este arquivo (preenchido) em Formula/gambiarrascript.rb e de push
-#   3. o povo instala com:
-#        brew install erikomis/tap/gambiarrascript
-# A cada release nova: cole a formula do resumo do job por cima e de push.
+# O povo instala com:
+#   brew install erikomis/tap/gambiarrascript
 class Gambiarrascript < Formula
   desc "Linguagem de programacao em portugues, feita na base da gambiarra"
   homepage "https://erikomis.github.io/gambiarrascript/"
