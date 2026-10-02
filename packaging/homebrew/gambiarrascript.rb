@@ -12,7 +12,8 @@
 # A cada release nova: cole a formula do resumo do job por cima e de push.
 class Gambiarrascript < Formula
   desc "Linguagem de programacao em portugues, feita na base da gambiarra"
-  homepage "https://github.com/erikomis/gambiarrascript"
+  homepage "https://erikomis.github.io/gambiarrascript/"
+  license "MIT"
   version "__VERSAO__"
 
   on_macos do

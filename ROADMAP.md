@@ -22,7 +22,7 @@ Tiers 1–5 estão entregues. O backlog vivo:
 | Tier 6 | `gs instala` + lock, `build --alvo`, Homebrew, cobertura, sombreamento |
 | Tier 7 | MaxStack por função |
 | Tier 8 | POO no estilo Go (`treta`/`combinado`) — tem decisões em aberto |
-| Tier 9 | sugestões novas: `tipo()`, spread, `//`, LSP completo, marketplace, LICENSE |
+| Tier 9 | sugestões novas: `tipo()`, spread, `//`, LSP completo, marketplace |
 
 ---
 
@@ -602,8 +602,8 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
 
 **Projeto / distribuição**
 
-- [ ] **LICENSE** — repo público sem licença: ninguém pode usar legalmente, e
-      Homebrew/vsce pedem uma (MIT é o caminho comum).
+- [x] **LICENSE** — MIT. Vai junto nos tarballs da release, no `.vsix` e na
+      fórmula do Homebrew.
 - [ ] **Tap do Homebrew** — criar `erikomis/homebrew-tap` e colar a fórmula
       que a release imprime (item do Tier 6).
 - [ ] **gofmt na árvore + gate no CI** — `ast.go`, `vm.go`, `parser.go`,

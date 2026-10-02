@@ -29,3 +29,6 @@ web/*.tsbuildinfo
 web/public/gs.wasm
 web/public/gs.wasm.gz
 web/public/wasm_exec.js
+
+# macOS
+.DS_Store

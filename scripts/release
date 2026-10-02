@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Monta os arquivos de release em dist/release/ (usa Go local; e o que o
 # workflow release.yml roda, mas da pra rodar na maquina pra conferir):
-#   gs_<versao>_<os>_<arch>.tar.gz  (zip no windows) com o binario + README.md
+#   gs_<versao>_<os>_<arch>.tar.gz  (zip no windows) com o binario + README.md + LICENSE
 #   checksums.txt                   sha256 de tudo (inclui *.vsix se ja estiver la)
 #   gambiarrascript.rb              formula Homebrew preenchida com os sha256
 # Uso: scripts/release 1.2.3   (o "v" na frente e opcional)
@@ -39,12 +39,12 @@ for alvo in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64; do
   # CGO_ENABLED=0: binario estatico; o sqlite do "banco" e o modernc (Go puro)
   CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath \
     -ldflags "-s -w -X main.Versao=$VERSAO" -o "$stage/$bin" ./cmd/gs
-  cp README.md "$stage/"
+  cp README.md LICENSE "$stage/"
 
   if [ "$os" = windows ]; then
-    (cd "$stage" && zip -q -X "$OUT/$nome.zip" "$bin" README.md)
+    (cd "$stage" && zip -q -X "$OUT/$nome.zip" "$bin" README.md LICENSE)
   else
-    tar -czf "$OUT/$nome.tar.gz" -C "$stage" "$bin" README.md
+    tar -czf "$OUT/$nome.tar.gz" -C "$stage" "$bin" README.md LICENSE
   fi
 done
 

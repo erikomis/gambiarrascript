@@ -5,6 +5,10 @@
   "version": "0.1.0",
   "publisher": "local",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/erikomis/gambiarrascript"
+  },
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Programming Languages"],
   "main": "./out/extension.js",

@@ -230,4 +230,4 @@ Highlight, snippets, comando de rodar (F5) e language server com erros sublinhad
 Veja [editors/vscode/README.md](editors/vscode/README.md) — em resumo:
 `./scripts/build-extension`, abra `editors/vscode` no VSCode e aperte F5.
 
-Feito na gambiarra, com carinho. 🛠️
+Licença [MIT](LICENSE). Feito na gambiarra, com carinho. 🛠️

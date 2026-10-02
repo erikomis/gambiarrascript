@@ -71,7 +71,7 @@ jobs:
           npm run compile
           npm version "$VERSAO" --no-git-tag-version --allow-same-version
           mkdir -p ../../dist/release
-          npx --yes @vscode/vsce@3 package --allow-missing-repository --skip-license \
+          npx --yes @vscode/vsce@3 package \
             -o "../../dist/release/gambiarrascript-$VERSAO.vsix"
 
       - name: binarios + checksums + formula
