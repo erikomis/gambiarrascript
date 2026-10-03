@@ -34,9 +34,15 @@ func (i *Interpreter) builtinEnvia(args []object.Object) (resultado object.Objec
 	if len(args) != 2 {
 		return erroBuiltin("envia() quer 2 argumentos (cano, valor), veio %d", len(args))
 	}
+	if con, ok := object.ConexaoDe(args[0]); ok {
+		if err := con.Envia(args[1]); err != nil {
+			return erroBuiltinKind(KindRede, "envia(): %s", err)
+		}
+		return NADA
+	}
 	cano, ok := args[0].(*object.Cano)
 	if !ok {
-		return erroBuiltin("envia() espera um cano no 1o arg, veio %s", args[0].Type())
+		return erroBuiltin("envia() espera um cano ou conexao no 1o arg, veio %s", args[0].Type())
 	}
 	resultado = NADA
 	defer func() {
@@ -54,9 +60,19 @@ func (i *Interpreter) builtinRecebe(args []object.Object) object.Object {
 	if len(args) != 1 {
 		return erroBuiltin("recebe() quer 1 argumento (cano), veio %d", len(args))
 	}
+	if con, ok := object.ConexaoDe(args[0]); ok {
+		v, err := con.Recebe()
+		if err != nil {
+			return erroBuiltinKind(KindRede, "recebe(): %s", err)
+		}
+		if v == nil {
+			return NADA
+		}
+		return v
+	}
 	cano, ok := args[0].(*object.Cano)
 	if !ok {
-		return erroBuiltin("recebe() espera um cano, veio %s", args[0].Type())
+		return erroBuiltin("recebe() espera um cano ou conexao, veio %s", args[0].Type())
 	}
 	v, aberto := <-cano.Ch
 	if !aberto {
@@ -78,6 +94,12 @@ func (i *Interpreter) builtinFecha(args []object.Object) object.Object {
 		v.Fechar()
 		return NADA
 	case *object.Nativo:
+		if con, ok := v.Valor.(object.Conexao); ok {
+			if err := con.Fecha(); err != nil {
+				return erroBuiltinKind(KindRede, "fecha(): %s", err)
+			}
+			return NADA
+		}
 		// delega pro builtin global de banco (mesmo nome) pra fechar a conexao.
 		return builtinFecha([]object.Object{v})
 	}

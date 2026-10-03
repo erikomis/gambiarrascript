@@ -523,6 +523,29 @@ type Nativo struct {
 func (n *Nativo) Type() ObjectType { return NATIVO_OBJ }
 func (n *Nativo) Inspect() string  { return "<nativo: " + n.Rotulo + ">" }
 
+// Conexao e qualquer ponta de mensagem que nao e cano (socket TCP, WebSocket,
+// UDP...). Vive dentro de um *Nativo, e os builtins envia/recebe/fecha
+// despacham pra ca — pra linguagem, uma conexao se usa igual a um cano.
+type Conexao interface {
+	// Envia manda um valor (texto, normalmente). Erro vira erro do builtin.
+	Envia(v Object) error
+	// Recebe bloqueia ate chegar a proxima mensagem. Devolve nada (e erro
+	// nil) quando o outro lado fechou — igual cano fechado.
+	Recebe() (Object, error)
+	// Fecha e idempotente.
+	Fecha() error
+}
+
+// ConexaoDe devolve a Conexao embrulhada no objeto, se for uma.
+func ConexaoDe(o Object) (Conexao, bool) {
+	n, ok := o.(*Nativo)
+	if !ok {
+		return nil, false
+	}
+	c, ok := n.Valor.(Conexao)
+	return c, ok
+}
+
 // Futuro e o valor devolvido por `bora fn(args)`: representa uma chamada
 // concorrente em andamento. `Valor` so e preenchido quando a goroutine termina;
 // ate la `Pronto` e falso. Usa-se `espera(futuro)` pra bloquear ate resolver.
