@@ -67,14 +67,14 @@ func (i *Interpreter) builtinOrdenaCom(args []object.Object) object.Object {
 		return erroBuiltin("ordena_com() espera uma lista, veio %s", args[0].Type())
 	}
 	fn := args[1]
-	var primeiroErro *object.Erro
+	var primeiroErro object.Object // *object.Erro ou *object.Sair (sai() no comparator)
 	sort.SliceStable(l.Elements, func(a, b int) bool {
 		if primeiroErro != nil {
 			return false
 		}
 		ra := i.applyFunction(fn, []object.Object{l.Elements[a], l.Elements[b]}, 0, "<ordena_com>")
 		if isError(ra) {
-			primeiroErro = ra.(*object.Erro)
+			primeiroErro = ra
 			return false
 		}
 		// precisamos de "menor que" (bool). Aceitamos:

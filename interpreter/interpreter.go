@@ -85,6 +85,12 @@ func New(out io.Writer) *Interpreter {
 		"escuta_udp":  {Nome: "escuta_udp", Fn: i.builtinEscutaUdp},
 		"envia_udp":   {Nome: "envia_udp", Fn: builtinEnviaUdp},
 		"conecta_udp": {Nome: "conecta_udp", Fn: builtinConectaUdp},
+		// logging (stderr, nivel/formato por env) e flags de linha de comando
+		"log_debug": {Nome: "log_debug", Fn: i.builtinLogDebug},
+		"log_info":  {Nome: "log_info", Fn: i.builtinLogInfo},
+		"log_aviso": {Nome: "log_aviso", Fn: i.builtinLogAviso},
+		"log_erro":  {Nome: "log_erro", Fn: i.builtinLogErro},
+		"opcoes":    {Nome: "opcoes", Fn: i.builtinOpcoes},
 	}
 	return i
 }

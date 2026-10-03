@@ -17,7 +17,7 @@ Tiers 1–5 estão entregues. O backlog vivo:
 | Onde | O que sobra |
 |---|---|
 | Tier 2/3 | DAP (debug), multi-catch, FFI — itens grandes, levas próprias |
-| Tier 5b | libs: logging, flags, AES/senha, WebSocket/TLS, body binário no `busca` |
+| Tier 5b | libs: WebSocket/TLS, body binário no `busca` (TCP/UDP, senha/AES/JWT, log, flags e .env ✅) |
 | Bugs abertos | concorrência em dict, overflow, `importa`, erro entre engines |
 | Tier 6 | `gs instala` + lock, `build --alvo`, Homebrew, cobertura, sombreamento |
 | Tier 7 | MaxStack por função |
@@ -239,12 +239,15 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
       `endereco`; modo linha ou bruto, timeout, parada graciosa) e UDP
       (`escuta_udp`, `envia_udp`, `conecta_udp`), tudo via `envia`/`recebe`/
       `fecha` (object.Conexao). Falta: **WebSocket** (cliente e servidor) e TLS.
-- [ ] **Crypto parte 2** — AES (`encripta`/`decripta`) e hash de senha
-      (bcrypt/argon2) — md5/sha são pra checksum, não pra senha.
-- [ ] **Logging** — `log_info` / `log_aviso` / `log_erro` com timestamp,
-      nível configurável por env e saída em stderr.
-- [ ] **Parser de flags** — `opcoes({"porta": 8080, "verboso": deu_ruim})`
-      lendo `--porta 9090 --verboso` dos argumentos.
+- [x] **Crypto parte 2** — `hash_senha`/`confere_senha` (bcrypt, custo 12),
+      `encripta`/`decripta` (AES-256-GCM; chave crua ou frase via scrypt),
+      `gera_chave`, `token_aleatorio` e JWT HS256 (`jwt_assina`/`jwt_confere`,
+      recusa `alg` != HS256, erro do tipo `"jwt"`). Veja `examples/seguranca.gs`.
+- [x] **Logging** — `log_debug`/`log_info`/`log_aviso`/`log_erro` no stderr,
+      `GS_LOG_NIVEL` e `GS_LOG_FORMATO=json`, uma linha inteira por chamada.
+- [x] **Parser de flags** — `opcoes(padroes, [ajudas])` com tipo vindo do
+      padrao, `--ajuda` gerado e posicionais em `"_"`; mais `carrega_env` (.env)
+      e `env(nome, padrao)`. Veja `examples/config.gs`.
 - [ ] **Servidor parte 2** — servir pasta estática (`serve_pasta("/", "./public")`),
       helper de resposta JSON (`{"status", "corpo"}` + `Content-Type` montados
       a partir de um valor) e middleware simples (gambiarra que roda antes de

@@ -267,7 +267,67 @@ bota z = gzip_comprime("salve salve salve salve")
 mostra gzip_descomprime(z)                       # salve salve salve salve
 ```
 
-`md5`/`sha*` sao pra checksum — nao pra guardar senha.
+`md5`/`sha*` sao pra checksum — nao pra guardar senha. Pra isso tem a secao
+abaixo.
+
+## Seguranca: senha, criptografia, JWT e token
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `hash_senha(senha, [custo])` | `(texto, [numero 4..31])` | `texto` — hash bcrypt (`$2a$12$...`); custo padrao **12** |
+| `confere_senha(senha, hash)` | `(texto, texto)` | `booleano` — tempo constante; hash lixo da `deu_ruim` (nao quebra) |
+| `encripta(t, chave)` | `(texto, texto)` | `texto` base64 — AES-256-GCM, nonce aleatorio |
+| `decripta(cifrado, chave)` | `(texto, texto)` | `texto` — chave errada ou texto adulterado vira erro |
+| `gera_chave()` | `()` | `texto` — 32 bytes aleatorios em base64 (44 chars) |
+| `token_aleatorio([bytes])` | `([numero])` | `texto` base64url sem `=`; padrao 32 bytes (43 chars) |
+| `jwt_assina(dados, segredo, [opcoes])` | `(dicionario, texto, [dicionario])` | `texto` — JWT HS256 |
+| `jwt_confere(token, segredo)` | `(texto, texto)` | `dicionario` com os claims, ou erro do tipo `"jwt"` |
+
+**Senha.** O bcrypt so olha 72 bytes: senha maior da erro em vez de ser
+cortada calada. Hash de outro sistema (`$2y$` do PHP/htpasswd, `$2b$`) confere
+normal.
+
+**encripta/decripta.** A chave pode ser:
+
+- uma chave de verdade — o que o `gera_chave()` devolve (base64 de 32 bytes,
+  padrao ou url) ou 64 caracteres hex: usada direto, rapido. Saida =
+  base64(`nonce(12) + cifrado + tag(16)`), o formato AES-GCM de sempre;
+- qualquer outro texto (senha/frase): vira chave com **scrypt** (N=2^15, r=8,
+  p=1) e um sal aleatorio por mensagem, que vai na frente: base64(`sal(16) +
+  nonce + cifrado + tag`). E ~50ms por chamada **de proposito** (atrapalha
+  quem chuta a frase) — em caminho quente use `gera_chave()`.
+
+Chave errada e texto adulterado dao o mesmo erro (tipo `"builtin"`):
+`nao deu pra decriptar: chave errada ou texto adulterado`.
+
+**JWT.** So HS256, feito com a stdlib. `jwt_assina` aceita
+`{"expira_em": segundos}` (poe `iat` e `exp`). `jwt_confere` recusa — com erro
+do tipo `"jwt"`, que da pra pegar e virar 401 — assinatura errada, `exp`
+vencido, `nbf` no futuro, token mal formado e **qualquer `alg` que nao seja
+HS256** (inclusive `"none"`). A assinatura e comparada em tempo constante.
+
+```gambiarrascript
+bota hash = hash_senha("hunter2")
+mostra confere_senha("hunter2", hash)            # deu_bom
+mostra confere_senha("Hunter2", hash)            # deu_ruim
+
+bota chave = gera_chave()                        # guarda num env/cofre
+bota c = encripta("cpf 123.456.789-00", chave)
+mostra decripta(c, chave)                        # cpf 123.456.789-00
+
+crava SEGREDO = env("JWT_SEGREDO", "troca-isso")
+bota token = jwt_assina({"sub": "ze"}, SEGREDO, {"expira_em": 3600})
+arruma
+    bota claims = jwt_confere(token, SEGREDO)
+    mostra claims.sub                            # ze
+quebrou err
+    mostra erro_tipo(err)                        # jwt (vira 401)
+acabou_finalmente
+
+mostra tamanho(token_aleatorio())                # 43
+```
+
+Exemplo completo em `examples/seguranca.gs`.
 
 ## JSON
 
@@ -329,7 +389,7 @@ mostra existe("tmp")                       # deu_ruim
 | `le_tudo()` | `()` | `texto` — stdin inteiro ate EOF |
 | `le_linhas()` | `()` | `lista` de textos — stdin, uma linha por item |
 | `argumentos()` | `()` | `lista` de textos passados depois do script |
-| `env(nome)` | `(texto)` | `texto`, ou `nada` se a variavel nao existir |
+| `env(nome, [padrao])` | `(texto, [valor])` | `texto`; se a variavel nao existir, o `padrao` (ou `nada`) |
 | `roda_comando(cmd, [args])` | `(texto, [lista de textos])` | `dicionario` `{saida, erro, codigo}` |
 | `sai([codigo])` | `([numero])` | encerra o script na hora (default `0`) |
 
@@ -350,7 +410,51 @@ acabou_finalmente
 ```
 
 Rode `gs roda script.gs primeiro segundo` — `argumentos()` devolve
-`[primeiro, segundo]`.
+`[primeiro, segundo]`. Tudo que vem **depois** do arquivo e do script: as
+flags do proprio `gs` (`--tree`, `--cache`) vao antes dele.
+
+## Config: flags, .env e log
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `opcoes(padroes, [ajudas])` | `(dicionario, [dicionario])` | `dicionario` — padroes + `--flags` do `argumentos()`, posicionais em `"_"` |
+| `carrega_env([caminho], [opcoes])` | `([texto], [dicionario])` | `dicionario` das chaves do arquivo (valor efetivo no ambiente) |
+| `log_debug(msg, [campos])` / `log_info` / `log_aviso` / `log_erro` | `(valor, [dicionario])` | `nada` — uma linha no **stderr** |
+
+**opcoes.** O tipo de cada flag vem do padrao: numero (`--porta 9090` ou
+`--porta=9090`), texto, booleano (`--verboso` liga, `--no-verboso` ou
+`--sem-verboso` desliga, `--verboso=deu_ruim` tambem rola), lista (flag
+repetivel: `--tag a --tag b`) ou `nada` (texto opcional). `-` e `_` no nome
+valem igual (`--log-nivel` preenche `"log_nivel"`). O que nao e flag vai pra
+lista em `"_"`; depois de `--` tudo vai pra la. Flag desconhecida, numero zoado
+(`--porta espera numero, veio abc`) ou valor faltando viram erro com a lista
+das flags que existem. `--ajuda` (ou `--help`, `-h`) imprime a ajuda gerada —
+com as descricoes do 2o argumento — e sai com codigo 0.
+
+**carrega_env.** Le `KEY=valor` (padrao `.env`): linha em branco e `#`
+comentario sao ignoradas, `export ` na frente tambem, `valor # comentario`
+perde o comentario, aspas duplas aceitam `\n` `\t` `\"` e podem quebrar linha,
+aspas simples sao literais. Nao expande `${VAR}`. Variavel que **ja existe** no
+ambiente ganha do arquivo (12-factor), a nao ser com `{"sobrescreve": deu_bom}`.
+Arquivo que nao existe vira erro do tipo `"io"`; linha quebrada aborta sem
+aplicar nada pela metade.
+
+**log.** Formato texto: `2026-10-02T12:00:00-03:00 INFO subiu porta=8080
+modo="dev local"` (valor com espaco/aspas vai entre aspas; quebra de linha na
+mensagem vira `\n`). Com `GS_LOG_FORMATO=json` sai um objeto por linha —
+`{"time", "nivel", "msg", "campos"}` — pro coletor de log. `GS_LOG_NIVEL` =
+`debug`, `info` (padrao), `aviso` ou `erro`. As duas sao lidas a cada chamada
+(um `carrega_env` no comeco ja vale) e cada chamada escreve uma linha inteira,
+mesmo com varias goroutines logando juntas.
+
+```gambiarrascript
+carrega_env()                                    # le o .env, se tiver
+bota cfg = opcoes({"porta": 8080, "verboso": deu_ruim}, {"porta": "porta HTTP"})
+log_info("subiu", {"porta": cfg.porta, "extras": cfg._})
+```
+
+`gs roda app.gs --porta 9090 --verboso` → `cfg.porta` = `9090`,
+`cfg.verboso` = `deu_bom`. Exemplo completo em `examples/config.gs`.
 
 ## HTTP
 
@@ -413,7 +517,7 @@ fecha(c)
 | `envolve_erro(tipo, msg, causa)` | `(texto, texto, erro)` | lanca um erro novo embrulhando `causa` |
 | `erro_msg(e)` | `(erro)` | `texto` da mensagem |
 | `erro_linha(e)` | `(erro)` | `numero` da linha |
-| `erro_tipo(e)` | `(erro)` | `texto`: `"runtime"`, `"builtin"`, `"io"`, `"rede"`, `"parse"`, `"usuario"` (ou o que voce passou no `envolve_erro`) |
+| `erro_tipo(e)` | `(erro)` | `texto`: `"runtime"`, `"builtin"`, `"io"`, `"rede"`, `"parse"`, `"usuario"`, `"jwt"` (ou o que voce passou no `envolve_erro`) |
 | `erro_pilha(e)` | `(erro)` | `lista` de `{"funcao", "linha"}` |
 | `erro_causa(e)` | `(erro)` | o erro de dentro, ou `nada` |
 

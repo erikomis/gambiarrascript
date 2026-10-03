@@ -100,6 +100,11 @@ var builtinsCompletion = []string{
 	"tipo",
 	// rede baixo nivel (TCP/UDP)
 	"conecta_tcp", "escuta_tcp", "endereco", "escuta_udp", "envia_udp", "conecta_udp",
+	// seguranca
+	"hash_senha", "confere_senha", "encripta", "decripta", "gera_chave",
+	"token_aleatorio", "jwt_assina", "jwt_confere",
+	// logging, flags e .env
+	"log_debug", "log_info", "log_aviso", "log_erro", "opcoes", "carrega_env",
 }
 
 // builtinsSet espelha builtinsCompletion num map pra lookup rapido.
@@ -188,6 +193,7 @@ var docsBuiltin = map[string]string{
 	"caminho_abs":   "caminho_abs(caminho) -> texto: caminho absoluto (limpa . e .. e prefixa o cwd).",
 	"pergunta":      "pergunta([prompt]) -> texto: le uma linha do stdin.",
 	"argumentos":    "argumentos() -> lista: argumentos de linha de comando passados ao script.",
+	"env":           "env(nome, [padrao]) -> texto: valor da variavel de ambiente; se nao existir, o padrao (ou nada).",
 	// concorrencia
 	"cano":   "cano([capacidade]) -> cano: cria um canal (channel). Sem args = sincrono.",
 	"envia":  "envia(cano_ou_conexao, valor): manda um valor pro cano (bloqueia se cheio/sem receptor) ou um texto pela conexao de rede (modo linha poe \\n no fim).",
@@ -215,6 +221,23 @@ var docsBuiltin = map[string]string{
 	"escuta_udp":  "escuta_udp(porta, handler, [opcoes]): servidor UDP; handler(mensagem, remetente) por datagrama — o texto que ele devolver volta pro remetente. opcoes: pronto, para.",
 	"envia_udp":   "envia_udp(host_porta, texto): manda um datagrama UDP e esquece.",
 	"conecta_udp": "conecta_udp(host_porta, [opcoes]) -> conexao: UDP com envia/recebe (um datagrama por mensagem). opcoes: {\"timeout\": segundos}.",
+	// seguranca
+	"hash_senha":      "hash_senha(senha, [custo]) -> texto: hash bcrypt da senha (custo padrao 12, vai de 4 a 31). Senha acima de 72 bytes da erro. Guarda o hash, nunca a senha.",
+	"confere_senha":   "confere_senha(senha, hash) -> booleano: confere a senha contra o hash do hash_senha (tempo constante). Hash lixo = deu_ruim.",
+	"encripta":        "encripta(texto, chave) -> texto (base64): AES-256-GCM com nonce aleatorio. Chave do gera_chave() (ou 64 hex) e usada direto; qualquer outro texto vira chave via scrypt com sal aleatorio (mais lento, ~50ms).",
+	"decripta":        "decripta(cifrado, chave) -> texto: desfaz o encripta. Chave errada ou texto adulterado = erro \"nao deu pra decriptar: chave errada ou texto adulterado\".",
+	"gera_chave":      "gera_chave() -> texto: 32 bytes aleatorios (crypto/rand) em base64 — chave pro encripta/decripta ou segredo do jwt_assina.",
+	"token_aleatorio": "token_aleatorio([bytes]) -> texto: token seguro (crypto/rand) em base64url sem padding; padrao 32 bytes. Pra sessao, reset de senha, API key.",
+	"jwt_assina":      "jwt_assina(dados, segredo, [opcoes]) -> texto: JWT HS256 com os dados como claims. Opcoes: {\"expira_em\": segundos} poe iat e exp.",
+	"jwt_confere":     "jwt_confere(token, segredo) -> dicionario: os claims se o token for valido. Assinatura errada, expirado (exp), nbf no futuro, mal formado ou alg diferente de HS256 = erro do tipo \"jwt\".",
+	// logging
+	"log_debug": "log_debug(mensagem, [campos]): log nivel debug no stderr (so aparece com GS_LOG_NIVEL=debug).",
+	"log_info":  "log_info(mensagem, [campos]): log no stderr: `2026-10-02T12:00:00-03:00 INFO mensagem chave=valor`. GS_LOG_FORMATO=json = um JSON por linha; GS_LOG_NIVEL = debug|info|aviso|erro.",
+	"log_aviso": "log_aviso(mensagem, [campos]): log nivel AVISO no stderr.",
+	"log_erro":  "log_erro(mensagem, [campos]): log nivel ERRO no stderr.",
+	// config
+	"opcoes":      "opcoes(padroes, [ajudas]) -> dicionario: le --flags do argumentos() por cima dos padroes (tipo vem do padrao: numero/texto/booleano/lista). --ajuda imprime a ajuda e sai; posicionais ficam em \"_\".",
+	"carrega_env": "carrega_env([caminho], [opcoes]) -> dicionario: le um .env (CHAVE=valor, # comentario, export, aspas) pro ambiente. Nao sobrescreve variavel que ja existe, a nao ser com {\"sobrescreve\": deu_bom}. Sem arquivo = erro \"io\".",
 }
 
 // docsKeyword descreve cada keyword pro hover do LSP.

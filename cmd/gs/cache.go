@@ -31,7 +31,8 @@ func init() {
 // contador escondido (bytecode velho tem os bugs). 4 = OpCallEspalha/
 // OpBoraEspalha, formato na interpolacao e builtin tipo. 5 = builtins de
 // rede (conecta_tcp, escuta_tcp, endereco, escuta_udp, envia_udp, conecta_udp).
-const formatoGSC = 5
+// 6 = seguranca/log/flags/.env no fim da lista (hash_senha..carrega_env).
+const formatoGSC = 6
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

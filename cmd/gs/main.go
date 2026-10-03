@@ -35,6 +35,12 @@ func main() {
 		var scriptArgs []string
 		proximoEArquivo := true
 		for _, a := range os.Args[2:] {
+			// depois do arquivo, TUDO e do script: `gs roda app.gs --cache`
+			// manda --cache pro opcoes()/argumentos(), nao pro gs.
+			if arquivo != "" {
+				scriptArgs = append(scriptArgs, a)
+				continue
+			}
 			if a == "--vm" { // aceito por compatibilidade; a VM ja e o padrao
 				usarVM = true
 				continue

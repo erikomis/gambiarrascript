@@ -145,6 +145,10 @@ func (vm *VM) chamaCompilada(cf *object.CompiledFunction, args []object.Object) 
 	defer func() {
 		if r := recover(); r != nil {
 			if vme, ok := r.(VMError); ok {
+				if vme.sai != nil {
+					res = vme.sai
+					return
+				}
 				res = vme.err
 				return
 			}
@@ -154,6 +158,12 @@ func (vm *VM) chamaCompilada(cf *object.CompiledFunction, args []object.Object) 
 	if err := sub.execFrame(sub.currentFrame()); err != nil {
 		if enc, ok := err.(erroNaoCapturado); ok {
 			return enc.err // preserva Line/Kind do erro original
+		}
+		// sai() dentro da gambiarra chamada por um builtin (mapeia,
+		// ordena_com...): devolve o Sair pro builtin repassar e o
+		// OpCallBuiltin desenrolar ate o Run — nao vira erro "sai com codigo".
+		if sr, ok := err.(SaiRequisicao); ok {
+			return &object.Sair{Codigo: sr.Codigo}
 		}
 		return &object.Erro{Message: err.Error(), Kind: "runtime"}
 	}

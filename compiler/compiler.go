@@ -255,6 +255,11 @@ var nomesBuiltins = []string{
 	"tipo",
 	// rede baixo nivel (TCP/UDP)
 	"conecta_tcp", "escuta_tcp", "endereco", "escuta_udp", "envia_udp", "conecta_udp",
+	// seguranca (Tier 5b)
+	"hash_senha", "confere_senha", "encripta", "decripta", "gera_chave",
+	"token_aleatorio", "jwt_assina", "jwt_confere",
+	// logging, flags e .env (Tier 5b)
+	"log_debug", "log_info", "log_aviso", "log_erro", "opcoes", "carrega_env",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que

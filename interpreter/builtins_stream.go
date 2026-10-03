@@ -80,10 +80,12 @@ func (i *Interpreter) builtinEscreveErro(args []object.Object) object.Object {
 	return NADA
 }
 
-// builtinEnv devolve o valor de uma variavel de ambiente. Sem arg → nada.
+// builtinEnv devolve o valor de uma variavel de ambiente. Se ela nao existir
+// devolve o padrao (2o arg, qualquer valor) ou nada. Variavel definida mas
+// vazia ("") conta como existente: devolve "".
 func (i *Interpreter) builtinEnv(args []object.Object) object.Object {
-	if len(args) != 1 {
-		return erroBuiltin("env() quer 1 argumento (nome), veio %d", len(args))
+	if len(args) < 1 || len(args) > 2 {
+		return erroBuiltin("env() quer (nome, [padrao]), veio %d", len(args))
 	}
 	nome, ok := args[0].(*object.Texto)
 	if !ok {
@@ -91,6 +93,9 @@ func (i *Interpreter) builtinEnv(args []object.Object) object.Object {
 	}
 	v, existe := os.LookupEnv(nome.Value)
 	if !existe {
+		if len(args) == 2 {
+			return args[1]
+		}
 		return NADA
 	}
 	return &object.Texto{Value: v}

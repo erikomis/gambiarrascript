@@ -62,8 +62,20 @@ func erroBuiltinKind(kind, formato string, args ...interface{}) *object.Erro {
 // isError verifica se obj e um *object.Erro NAO-Handled. Um erro capturado
 // por `arruma` e marcado Handled pra poder ser usado em expressoes (string
 // concat, log) sem voltar a propagar — entao isError devolve false nele.
+//
+// sai(codigo) (*object.Sair) tambem conta: nao e erro, mas tem que desenrolar
+// por todo lugar que um erro desenrolaria. Sem isso `bota cfg = opcoes(...)`
+// com --ajuda (ou `bota x = sai(1)`) guardava o Sair na variavel e o script
+// seguia rodando no tree-walker — a VM ja parava. O `arruma` olha o tipo
+// ERRO_OBJ, entao um sai() dentro dele nao vira erro capturado.
 func isError(obj object.Object) bool {
-	if obj == nil || obj.Type() != object.ERRO_OBJ {
+	if obj == nil {
+		return false
+	}
+	if obj.Type() == object.SAIR_OBJ {
+		return true
+	}
+	if obj.Type() != object.ERRO_OBJ {
 		return false
 	}
 	if e, ok := obj.(*object.Erro); ok {

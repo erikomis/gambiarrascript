@@ -20,7 +20,8 @@ func rodar(t *testing.T, input string) string {
 	var buf bytes.Buffer
 	i := New(&buf)
 	res := i.Eval(prog, object.NewEnvironment())
-	if isError(res) {
+	// sai() tambem desenrola (isError da true pra ele), mas nao e erro
+	if e, ok := res.(*object.Erro); ok && !e.Handled {
 		t.Fatalf("erro de runtime inesperado: %s", res.Inspect())
 	}
 	return buf.String()

@@ -163,6 +163,19 @@ var builtins = map[string]*object.Builtin{
 	"base32_decodifica": {Nome: "base32_decodifica", Fn: builtinBase32Decodifica},
 	"hex_codifica":      {Nome: "hex_codifica", Fn: builtinHexCodifica},
 	"hex_decodifica":    {Nome: "hex_decodifica", Fn: builtinHexDecodifica},
+
+	// seguranca: senha (bcrypt), AES-256-GCM, JWT HS256, token aleatorio
+	"hash_senha":      {Nome: "hash_senha", Fn: builtinHashSenha},
+	"confere_senha":   {Nome: "confere_senha", Fn: builtinConfereSenha},
+	"encripta":        {Nome: "encripta", Fn: builtinEncripta},
+	"decripta":        {Nome: "decripta", Fn: builtinDecripta},
+	"gera_chave":      {Nome: "gera_chave", Fn: builtinGeraChave},
+	"token_aleatorio": {Nome: "token_aleatorio", Fn: builtinTokenAleatorio},
+	"jwt_assina":      {Nome: "jwt_assina", Fn: builtinJwtAssina},
+	"jwt_confere":     {Nome: "jwt_confere", Fn: builtinJwtConfere},
+
+	// config: arquivo .env
+	"carrega_env": {Nome: "carrega_env", Fn: builtinCarregaEnv},
 }
 
 func builtinTamanho(args []object.Object) object.Object {
