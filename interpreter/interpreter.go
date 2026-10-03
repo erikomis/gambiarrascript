@@ -77,6 +77,14 @@ func New(out io.Writer) *Interpreter {
 		"envia":  {Nome: "envia", Fn: i.builtinEnvia},
 		"recebe": {Nome: "recebe", Fn: i.builtinRecebe},
 		"fecha":  {Nome: "fecha", Fn: i.builtinFecha},
+		// rede baixo nivel (builtins_rede.go; stub no wasm): as conexoes
+		// usam o envia/recebe/fecha de cima via object.Conexao
+		"conecta_tcp": {Nome: "conecta_tcp", Fn: i.builtinConectaTcp},
+		"escuta_tcp":  {Nome: "escuta_tcp", Fn: i.builtinEscutaTcp},
+		"endereco":    {Nome: "endereco", Fn: builtinEndereco},
+		"escuta_udp":  {Nome: "escuta_udp", Fn: i.builtinEscutaUdp},
+		"envia_udp":   {Nome: "envia_udp", Fn: builtinEnviaUdp},
+		"conecta_udp": {Nome: "conecta_udp", Fn: builtinConectaUdp},
 	}
 	return i
 }

@@ -108,6 +108,10 @@ linguagem.
 | `recebe(cano)` | o valor (ou `nada` se o cano fechou e esvaziou) |
 | `fecha(cano)` | `nada` (pode chamar de novo sem dar erro) |
 
+Os mesmos tres servem pra **conexao de rede** (`conecta_tcp`, `escuta_tcp`,
+`conecta_udp`): o laco `enquanto` que consome um cano consome um socket. Veja
+[Rede (TCP/UDP)](/docs/rede).
+
 ### Produtor / consumidor
 
 ```gambiarrascript

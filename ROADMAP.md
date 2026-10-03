@@ -17,7 +17,7 @@ Tiers 1–5 estão entregues. O backlog vivo:
 | Onde | O que sobra |
 |---|---|
 | Tier 2/3 | DAP (debug), multi-catch, FFI — itens grandes, levas próprias |
-| Tier 5b | libs: logging, flags, AES/senha, TCP/WebSocket, body binário no `busca` |
+| Tier 5b | libs: logging, flags, AES/senha, WebSocket/TLS, body binário no `busca` |
 | Bugs abertos | concorrência em dict, overflow, `importa`, erro entre engines |
 | Tier 6 | `gs instala` + lock, `build --alvo`, Homebrew, cobertura, sombreamento |
 | Tier 7 | MaxStack por função |
@@ -235,8 +235,10 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 - [~] **HTTP cliente turbinado** — feito: `busca(url, {metodo, corpo,
       cabecalhos, timeout})` com GET/POST/PUT/DELETE/PATCH. Falta: **body
       binário** (upload de arquivo, resposta não-texto) e `HEAD`/`OPTIONS`.
-- [ ] **Rede baixo nível** — TCP/UDP (`conecta_tcp`, `escuta_tcp`) e
-      WebSocket (cliente e servidor).
+- [~] **Rede baixo nível** — feito: TCP (`conecta_tcp`, `escuta_tcp`,
+      `endereco`; modo linha ou bruto, timeout, parada graciosa) e UDP
+      (`escuta_udp`, `envia_udp`, `conecta_udp`), tudo via `envia`/`recebe`/
+      `fecha` (object.Conexao). Falta: **WebSocket** (cliente e servidor) e TLS.
 - [ ] **Crypto parte 2** — AES (`encripta`/`decripta`) e hash de senha
       (bcrypt/argon2) — md5/sha são pra checksum, não pra senha.
 - [ ] **Logging** — `log_info` / `log_aviso` / `log_erro` com timestamp,

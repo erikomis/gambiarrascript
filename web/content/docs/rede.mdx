@@ -1,0 +1,191 @@
+---
+title: Rede (TCP/UDP)
+description: "conecta_tcp, escuta_tcp, escuta_udp: socket cru que se usa igual a um cano."
+---
+
+Pra falar protocolo que nao e HTTP (chat, eco, Redis na unha, jogo, telnet de
+maquina velha) tem socket cru. A regra de ouro: **uma conexao se usa igual a
+um [cano](/docs/concorrencia#cano-canal-de-mensagens)** — `envia(c, texto)`,
+`recebe(c)` e `fecha(c)`.
+
+<Callout title="So no gs nativo">
+  Navegador nao abre socket cru, entao no playground (wasm) esses builtins
+  devolvem erro `"rede nao funciona no navegador"`.
+</Callout>
+
+## Cliente TCP
+
+```gambiarrascript
+bota c = conecta_tcp("127.0.0.1:9000", {"timeout": 5})
+envia(c, "salve")          # vai "salve\n"
+mostra recebe(c)           # a proxima linha que chegar, sem o \n
+fecha(c)
+```
+
+`conecta_tcp("host:porta", [opcoes])` devolve a conexao. Opcoes:
+
+| opcao | padrao | o que faz |
+| --- | --- | --- |
+| `"modo"` | `"linha"` | `"linha"` ou `"bruto"` (veja abaixo) |
+| `"timeout"` | sem limite | segundos (aceita `0.5`). Vale pra conectar e pra **cada** `recebe`/`envia` |
+
+### Modo linha (padrao)
+
+- `recebe(c)` devolve a **proxima linha**, sem o `\n` do fim (e sem `\r` se
+  veio `\r\n` — da pra falar com telnet e protocolo de internet velho).
+- `envia(c, texto)` manda `texto + "\n"`. Se o texto tiver `\n` no meio, do
+  outro lado chegam varias linhas.
+- Se o outro lado desligar no meio de uma linha, esse pedaco final chega como
+  ultima linha; o `recebe` seguinte da `nada`.
+- Linha com mais de 1 MB sem `\n` da erro (isso nao e protocolo de linha —
+  use o modo bruto).
+
+### Modo bruto: `{"modo": "bruto"}`
+
+- `recebe(c)` devolve **o pedaco que chegou** (ate 64 KB), do jeito que veio.
+  TCP e um rio de bytes: um `envia` do outro lado pode chegar em dois pedacos,
+  ou dois `envia` num pedaco so. Quem enquadra a mensagem e o seu protocolo.
+- `envia(c, texto)` manda **exatamente** o texto, sem `\n`.
+- O texto carrega os bytes crus, mesmo que nao sejam UTF-8 valido (binario).
+  Pra enxergar use `hex_codifica(x)` / `base64_codifica(x)`; pra montar bytes
+  use `hex_decodifica("00ff")` / `base64_decodifica(...)`. Nada de base64
+  automatico: o que chega e o que foi mandado.
+
+```gambiarrascript
+bota c = conecta_tcp("127.0.0.1:6379", {"modo": "bruto", "timeout": 2})
+envia(c, "PING" + hex_decodifica("0d0a"))    # \r\n na mao
+mostra tira_espaco(recebe(c))                 # +PONG (chega com o \r\n)
+fecha(c)
+```
+
+### O que `envia` aceita
+
+Texto vai como esta; numero e booleano viram texto (`envia(c, 42)` manda
+`42`). Lista e dicionario dao erro — serialize antes com `pra_json(x)`.
+
+## Servidor TCP: `escuta_tcp`
+
+```gambiarrascript
+gambiarra eco(c)
+    mostra "chegou " + endereco(c)
+    enquanto deu_bom
+        bota linha = recebe(c)        # nada = o cliente desligou
+        se_colar linha == nada
+            vaza
+        acabou_finalmente
+        envia(c, "eco: " + linha)
+    acabou_finalmente
+acabou_finalmente   # o handler voltou: a conexao fecha sozinha
+
+escuta_tcp(9000, eco)
+```
+
+`escuta_tcp(porta_ou_endereco, handler, [opcoes])`:
+
+- A porta pode ser numero (`9000`, escuta em todas as interfaces) ou texto
+  (`"127.0.0.1:9000"`, `"9000"`). Porta `0` = o sistema sorteia uma livre.
+- Cada conexao aceita roda `handler(conexao)` **na propria goroutine** (igual
+  handler de `rota` e `bora`): dois clientes sao atendidos ao mesmo tempo.
+- Quando o handler volta, a conexao e fechada.
+- Erro dentro do handler **nao derruba o servidor**: vai pro stderr
+  (`escuta_tcp: o handler de 127.0.0.1:51814 quebrou: ...`), aquela conexao
+  fecha e o resto segue.
+- `endereco(c)` devolve `"ip:porta"` de quem conectou.
+- Bloqueia pra sempre, igual `escuta`. No **ctrl+c** (SIGINT) ou SIGTERM ele
+  para com calma: fecha a porta, fecha as conexoes abertas (o `recebe` delas
+  devolve `nada`, entao os lacos terminam sozinhos), espera os handlers (ate
+  5s) e devolve `nada` — o script continua depois do `escuta_tcp`. Um segundo
+  ctrl+c mata na hora.
+
+Opcoes:
+
+| opcao | o que faz |
+| --- | --- |
+| `"modo"`, `"timeout"` | iguais ao `conecta_tcp`, valem pra toda conexao aceita |
+| `"pronto"` | um cano: assim que a porta abre, o servidor manda nele o endereco real (`"127.0.0.1:54321"`) — util com porta `0` |
+| `"para"` | um cano: quando alguem fechar (ou mandar qualquer coisa nele), o servidor para igual no ctrl+c |
+
+Com `pronto` e `para` da pra subir o servidor dentro do proprio script (teste,
+ferramenta):
+
+```gambiarrascript
+gambiarra atende(c)
+    envia(c, "salve, " + recebe(c))
+acabou_finalmente
+
+bota pronto = cano(1)
+bota para = cano()
+bota srv = bora escuta_tcp("127.0.0.1:0", atende, {"pronto": pronto, "para": para})
+bota end = recebe(pronto)
+
+bota c = conecta_tcp(end)
+envia(c, "tropa")
+mostra recebe(c)          # salve, tropa
+
+fecha(para)               # derruba o servidor
+espera(srv)               # e espera ele terminar
+```
+
+## Timeout
+
+Com `{"timeout": n}`, um `recebe` que passar `n` segundos sem chegar nada
+quebra com erro do tipo `"rede"` — da pra pegar com `arruma`. A conexao
+continua de pe: da pra tentar de novo.
+
+```gambiarrascript
+arruma
+    bota resposta = recebe(c)
+quebrou erro
+    se_colar erro_tipo(erro) == "rede"
+        mostra erro_msg(erro)   # deu ruim: recebe(): ninguem falou nada em 5s (timeout)
+    acabou_finalmente
+acabou_finalmente
+```
+
+Sem timeout o `recebe` espera pra sempre (igual cano).
+
+## Varias goroutines na mesma conexao
+
+Pode chamar `envia` na mesma conexao de varias goroutines (`bora`): cada
+`envia` sai inteiro, os bytes de um nunca se misturam com os do outro. Dois
+`recebe` concorrentes tambem nao quebram nada, mas cada mensagem vai pra um
+so deles.
+
+## UDP
+
+UDP nao tem conexao nem garantia de entrega, mas tem fronteira: **cada
+datagrama e uma mensagem inteira**. Nao tem modo linha — o texto vai e volta
+exato (o `nc -u` manda com `\n` no fim; use `tira_espaco`).
+
+```gambiarrascript
+gambiarra grita(msg, remetente)
+    mostra remetente + " mandou " + msg
+    funciona maiusculo(msg)       # devolveu texto = responde pro remetente
+acabou_finalmente
+
+escuta_udp(9001, grita)
+```
+
+| Builtin | O que faz |
+| --- | --- |
+| `escuta_udp(porta, handler, [opcoes])` | servidor: cada datagrama roda `handler(mensagem, remetente)` numa goroutine. Se o handler devolver texto (ou numero), ele volta como resposta; `nada` = nao responde. Bloqueia e para igual o `escuta_tcp` (opcoes `pronto` e `para`) |
+| `envia_udp("host:porta", texto)` | manda um datagrama e esquece |
+| `conecta_udp("host:porta", [opcoes])` | conexao UDP: cada `envia` e um datagrama, cada `recebe` espera o proximo que vier daquele endereco. Opcao `timeout` — sem ela, se a resposta se perder, o `recebe` espera pra sempre |
+
+```gambiarrascript
+bota u = conecta_udp("127.0.0.1:9001", {"timeout": 2})
+envia(u, "salve")
+mostra recebe(u)          # SALVE
+fecha(u)
+```
+
+## Erros
+
+Tudo que e falha de rede (nao conectou, porta ocupada, timeout, conexao
+resetada) e erro do tipo `"rede"`. Uso errado (opcao que nao existe, handler
+que nao e gambiarra) e `"builtin"`. Depois do `fecha(c)`, `recebe(c)` devolve
+`nada` e `envia(c, ...)` da erro `conexao fechada, nao da pra mandar mais
+nada` — igual cano.
+
+Exemplos completos: `examples/eco_tcp.gs` (servidor de eco),
+`examples/cliente_tcp.gs` (cliente dele) e `examples/udp.gs`.

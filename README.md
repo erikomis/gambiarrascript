@@ -70,6 +70,30 @@ Cada requisição roda na própria goroutine (o `net/http` já entrega assim), e
 o servidor atende em paralelo — o lock só protege a tabela de rotas.
 Cabeçalhos e query usam a forma canônica nas chaves (ex.: `pedido["cabecalhos"]["X-Teste"]`, com maiúscula); quando um cabeçalho ou parâmetro de query vem com múltiplos valores, eles chegam unidos por `", "`.
 
+## Rede crua (TCP/UDP)
+
+```
+gambiarra eco(c)
+    enquanto deu_bom
+        bota linha = recebe(c)      # nada = o cliente desligou
+        se_colar linha == nada
+            vaza
+        acabou_finalmente
+        envia(c, "eco: " + linha)
+    acabou_finalmente
+acabou_finalmente
+
+escuta_tcp(9000, eco)               # teste com: nc 127.0.0.1 9000
+```
+
+Conexao de rede se usa igual a cano: `envia`, `recebe` e `fecha`.
+`conecta_tcp("host:porta", {"timeout": 5})` abre o cliente; por padrao cada
+`recebe` devolve uma linha (sem o `\n`) e cada `envia` manda o texto + `\n` —
+`{"modo": "bruto"}` troca por bytes crus. `escuta_tcp` roda cada conexao na
+propria goroutine e para com calma no ctrl+c. UDP: `escuta_udp(porta,
+gambiarra(msg, remetente) ...)`, `envia_udp` e `conecta_udp`. Exemplos em
+`examples/eco_tcp.gs`, `examples/cliente_tcp.gs` e `examples/udp.gs`.
+
 ## JSON
 
 ```

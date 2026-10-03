@@ -253,6 +253,8 @@ var nomesBuiltins = []string{
 	"gzip_comprime", "gzip_descomprime",
 	// introspeccao (sempre no FIM: indice novo nao mexe nos de antes)
 	"tipo",
+	// rede baixo nivel (TCP/UDP)
+	"conecta_tcp", "escuta_tcp", "endereco", "escuta_udp", "envia_udp", "conecta_udp",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que

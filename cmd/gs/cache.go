@@ -29,8 +29,9 @@ func init() {
 // Versao do gs nao tenha mudado (build de dev). 2 = OpPow (`**`).
 // 3 = codegen novo de `??`, arruma no escopo da funcao e pra_cada com
 // contador escondido (bytecode velho tem os bugs). 4 = OpCallEspalha/
-// OpBoraEspalha, formato na interpolacao e builtin tipo.
-const formatoGSC = 4
+// OpBoraEspalha, formato na interpolacao e builtin tipo. 5 = builtins de
+// rede (conecta_tcp, escuta_tcp, endereco, escuta_udp, envia_udp, conecta_udp).
+const formatoGSC = 5
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)
