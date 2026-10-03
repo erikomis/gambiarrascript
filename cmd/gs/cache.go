@@ -32,7 +32,8 @@ func init() {
 // OpBoraEspalha, formato na interpolacao e builtin tipo. 5 = builtins de
 // rede (conecta_tcp, escuta_tcp, endereco, escuta_udp, envia_udp, conecta_udp).
 // 6 = seguranca/log/flags/.env no fim da lista (hash_senha..carrega_env).
-const formatoGSC = 6
+// 7 = servidor parte 2 e websocket (responde_json..conecta_ws).
+const formatoGSC = 7
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

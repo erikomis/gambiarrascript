@@ -16,6 +16,9 @@ var builtins = map[string]*object.Builtin{
 	"busca":    {Nome: "busca", Fn: builtinBusca},
 	"de_json":  {Nome: "de_json", Fn: builtinDeJson},
 	"pra_json": {Nome: "pra_json", Fn: builtinPraJson},
+	// servidor/rede (o resto do servidor e por instancia, no New)
+	"responde_json": {Nome: "responde_json", Fn: builtinRespondeJson},
+	"conecta_ws":    {Nome: "conecta_ws", Fn: builtinConectaWs},
 	"tipo":     {Nome: "tipo", Fn: builtinTipo},
 
 	// texto

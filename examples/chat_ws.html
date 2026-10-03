@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat da Gambiarra</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+  #log { border: 1px solid #ccc; border-radius: 6px; height: 50vh; overflow-y: auto; padding: .5rem; }
+  #log p { margin: .25rem 0; }
+  .sistema { color: #777; font-style: italic; }
+  form { display: flex; gap: .5rem; margin-top: .5rem; }
+  #texto { flex: 1; }
+</style>
+</head>
+<body>
+<h1>Chat da Gambiarra</h1>
+<div id="log"></div>
+<form id="form">
+  <input id="texto" autocomplete="off" placeholder="manda a braba..." autofocus>
+  <button>Envia</button>
+</form>
+<script>
+  // cliente minimo do examples/chat_ws.gs: o servidor manda JSON
+  // {"tipo": "entrou"|"msg"|"saiu", "nome": ..., "texto": ...}
+  const nome = prompt("teu nome:") || "anonimo";
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}/chat?nome=${encodeURIComponent(nome)}`);
+  const log = document.getElementById("log");
+
+  function linha(txt, sistema) {
+    const p = document.createElement("p");
+    p.textContent = txt;
+    if (sistema) p.className = "sistema";
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.tipo === "msg") linha(`${m.nome}: ${m.texto}`);
+    else linha(`${m.nome} ${m.tipo}`, true);
+  };
+  ws.onclose = () => linha("conexao caiu", true);
+
+  document.getElementById("form").onsubmit = (ev) => {
+    ev.preventDefault();
+    const campo = document.getElementById("texto");
+    if (campo.value) ws.send(campo.value);
+    campo.value = "";
+  };
+</script>
+</body>
+</html>

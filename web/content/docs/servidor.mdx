@@ -1,6 +1,6 @@
 ---
 title: Servidor HTTP
-description: rota() e escuta() — sobe um servidor HTTP no GambiarraScript.
+description: rota(), escuta(), middleware, CORS, arquivos estaticos e WebSocket — API REST e tempo real no GambiarraScript.
 ---
 
 ```gambiarrascript
@@ -12,53 +12,268 @@ rota("GET", "/", ola)
 escuta(8080)
 ```
 
+Exemplos completos: `examples/api_rest.gs` (CRUD com auth e CORS) e
+`examples/chat_ws.gs` (chat com broadcast por WebSocket).
+
 ## rota(metodo, caminho, handler)
 
-Registra uma rota. O casamento e **exato** por metodo + caminho (sem
-parametros tipo `/usuarios/:id` — pra isso, use `query` ou quebre o
-`caminho` na mao). Pedido sem rota recebe `404`.
+Registra uma rota. O caminho pode ter **parametros** e um **curinga** no fim:
 
-O `handler` e uma `gambiarra` (com nome ou lambda) que recebe um dicionario
-`pedido` com:
+| padrao              | casa com                    | `pedido["params"]`              |
+| ------------------- | --------------------------- | ------------------------------- |
+| `/usuarios`         | so `/usuarios`              | `{}`                            |
+| `/usuarios/:id`     | `/usuarios/42`              | `{"id": "42"}`                  |
+| `/u/:id/posts/:p`   | `/u/7/posts/9`              | `{"id": "7", "p": "9"}`         |
+| `/arquivos/*resto`  | `/arquivos/css/site.css`    | `{"resto": "css/site.css"}` (pode vir `""`) |
 
-| chave        | tipo | conteudo                                          |
-| ------------ | ---- | ------------------------------------------------- |
-| `metodo`     | texto | metodo HTTP (`"GET"`, `"POST"`...)               |
-| `caminho`    | texto | path da URL (`"/"`, `"/usuarios"`)                |
-| `corpo`      | texto | corpo do request (use `de_json` pra parsear)      |
-| `cabecalhos` | dic  | headers, com o nome na forma canonica do Go (`Content-Type`, `X-Teste`) |
-| `query`      | dic  | query string (`?nome=ze` → `pedido.query.nome`)   |
+- Parametro casa **um** pedaco nao-vazio, ja desescapado (`%2F` vira `/`
+  dentro do valor, sem rachar a rota). Valor sempre texto.
+- Quando mais de uma rota casa, ganha a mais especifica: pedaco fixo ganha de
+  parametro, que ganha de curinga (`/usuarios/eu` ganha de `/usuarios/:id`).
+- Nada casou → `404 rota nao encontrada, parca`. O caminho existe com outro
+  metodo → `405` com o cabecalho `Allow` (ex.: `Allow: DELETE, GET, HEAD`).
+- `HEAD` sem rota propria usa a de `GET` (sem corpo).
+- Registrar de novo o mesmo metodo + caminho troca o handler.
 
-Quando um header ou parametro de query vem repetido, os valores chegam juntos
-com `", "`.
+O `handler` e uma `gambiarra` (com nome ou lambda). Pode declarar menos
+parametros do que recebe: `gambiarra() funciona "ok" acabou_finalmente` vale.
+Ele recebe o dicionario `pedido`:
+
+| chave        | tipo  | conteudo                                          |
+| ------------ | ----- | ------------------------------------------------- |
+| `metodo`     | texto | metodo HTTP (`"GET"`, `"POST"`...)                |
+| `caminho`    | texto | path da URL (`"/usuarios/42"`)                    |
+| `corpo`      | texto | corpo cru do request                              |
+| `cabecalhos` | dic   | headers, com o nome canonico do Go (`Content-Type`, `X-Teste`) |
+| `query`      | dic   | query string (`?nome=ze` → `pedido.query.nome`)   |
+| `params`     | dic   | parametros do caminho (`:id`, `*resto`)           |
+| `json`       | valor | corpo ja parseado quando o `Content-Type` e `application/json` (ou `...+json`); `nada` se nao for JSON ou vier vazio |
+| `ip`         | texto | IP de quem pediu (o da conexao; atras de proxy, leia `X-Forwarded-For` nos cabecalhos) |
+| `cookies`    | dic   | cookies do request (`nome → valor`)               |
+
+Header ou parametro de query repetido chega junto com `", "`.
+
+**JSON quebrado** com `Content-Type: application/json` nem chega no handler:
+o servidor responde `400` com `esse json do corpo ta quebrado, parca: <onde>`.
+Quer tratar na mao? Mande outro `Content-Type` e use `de_json(pedido.corpo)`
+dentro de `arruma`.
 
 ## Resposta
 
 O handler devolve:
 
-- um **texto** → corpo, status 200;
-- `nada` → status 200 com corpo vazio;
-- um **dicionario** `{"status": numero, "corpo": texto, "cabecalhos": dic}` —
-  tudo opcional (status default 200; fora de 100–599 vira 500).
+| devolveu | resposta |
+| -------- | -------- |
+| texto | `200` com o texto |
+| `nada` | `200` com corpo vazio |
+| lista | `200` com a lista em JSON (`Content-Type: application/json; charset=utf-8`) |
+| dicionario **de resposta** | `{"status": numero, "corpo": ..., "cabecalhos": dic}` — tudo opcional |
+| qualquer outro dicionario | `200` com o dicionario em JSON |
 
-Se o handler estourar um erro, o cliente recebe `500` com a mensagem.
+Dicionario **de resposta** e o que so tem as chaves `status`, `corpo` e/ou
+`cabecalhos` (com `status` numero e `cabecalhos` dicionario). O resto e dado:
+`{"status": "ok"}` (status texto) e `{"corpo": 1, "id": 2}` viram JSON. Na
+duvida, seja explicito com `responde_json`.
+
+- `status` fora de 100–599 vira `500`.
+- `corpo` lista/dicionario vira JSON (e ganha o `Content-Type` de JSON se voce
+  nao mandou outro).
+- Valor de cabecalho pode ser texto, numero, booleano ou **lista** de textos
+  (varias linhas do mesmo cabecalho — e assim que se manda dois cookies).
 
 ```gambiarrascript
-gambiarra api(pedido)
-    arruma
-        bota dados = de_json(pedido["corpo"])
-        funciona pra_json({"ok": deu_bom, "recebido": dados})
-    quebrou erro
-        funciona {"status": 400, "corpo": "json zuado", "cabecalhos": {"Content-Type": "text/plain"}}
-    acabou_finalmente
-acabou_finalmente
-
-rota("POST", "/api", api)
-escuta(8090)
+rota("POST", "/login", gambiarra(pedido)
+    funciona {
+        "status": 204,
+        "cabecalhos": {"Set-Cookie": ["sessao=abc; Path=/; HttpOnly", "tema=escuro; Path=/"]}
+    }
+acabou_finalmente)
 ```
+
+### responde_json(valor, [status])
+
+Monta a resposta JSON pronta: `{"status": status, "corpo": pra_json(valor),
+"cabecalhos": {"Content-Type": "application/json; charset=utf-8"}}`. Status
+default `200`; tem que ser inteiro de 100 a 599.
+
+```gambiarrascript
+rota("GET", "/usuarios/:id", gambiarra(pedido)
+    se_colar pedido.params.id != "1"
+        funciona responde_json({"erro": "nao achei"}, 404)
+    acabou_finalmente
+    funciona {"id": 1, "nome": "Ze"} # dicionario de dado: JSON 200
+acabou_finalmente)
+```
+
+### Erro no handler
+
+Se o handler (ou um middleware) estoura um erro, o cliente recebe **`500`**
+com o corpo generico `deu ruim no servidor (erro interno), parca` — nada de
+vazar mensagem interna. O erro completo (mensagem com linha e traço de
+pilha) vai pro **stderr**, e o servidor segue atendendo:
+
+```
+servidor: GET /usuarios/abc estourou em <rota GET /usuarios/:id>
+  deu ruim na linha 12: nao da pra dividir por zero, parca — nem na gambiarra
+```
+
+## Middleware: antes() e depois()
+
+`antes(gambiarra(pedido) ...)` roda antes de **toda rota** (inclusive
+`rota_ws`), na ordem de registro:
+
+- devolveu `nada` → segue pro proximo middleware e depois pra rota;
+- devolveu qualquer outra coisa → **essa e a resposta**, a rota nem roda;
+- pode mexer no `pedido` (`bota pedido["usuario"] = ...`) e o handler ve.
+
+`depois(gambiarra(pedido, resposta) ...)` roda depois, com a resposta ja
+normalizada em `{"status", "corpo", "cabecalhos"}`. Devolveu `nada` → vale a
+resposta (inclusive se voce mexeu nela no lugar); devolveu outra coisa → troca.
+Bom pra log e cabecalho padrao.
+
+Middleware so roda em pedido que casou com rota (404/405 e arquivo estatico
+passam direto).
+
+```gambiarrascript
+antes(gambiarra(pedido)
+    se_colar pedido.cabecalhos["Authorization"] != "Bearer segredo"
+        funciona responde_json({"erro": "sem token"}, 401)
+    acabou_finalmente
+    bota pedido["usuario"] = "admin"
+acabou_finalmente)
+
+depois(gambiarra(pedido, resposta)
+    mostra "${pedido.metodo} ${pedido.caminho} -> ${resposta.status}"
+    bota resposta["cabecalhos"]["X-Servidor"] = "gambiarra"
+acabou_finalmente)
+```
+
+## cors([opcoes])
+
+Liga CORS no servidor todo: responde o preflight (`OPTIONS` com
+`Access-Control-Request-Method`) com `204` e poe
+`Access-Control-Allow-Origin` nas respostas pra origem liberada.
+
+```gambiarrascript
+cors() # qualquer origem
+
+cors({
+    "origens": ["https://meusite.com"],
+    "metodos": ["GET", "POST"],
+    "cabecalhos": ["Authorization", "Content-Type"],
+    "credenciais": deu_bom,
+    "max_idade": 600
+})
+```
+
+| opcao | default | |
+| ----- | ------- | - |
+| `origens` | `["*"]` | lista de origens exatas (`"https://x.com"`); `"*"` libera geral |
+| `metodos` | `GET, POST, PUT, PATCH, DELETE, OPTIONS` | |
+| `cabecalhos` | o que o navegador pediu | `Access-Control-Allow-Headers` |
+| `credenciais` | `deu_ruim` | com `deu_bom`, ecoa a origem (o navegador nao aceita `*` com cookie) |
+| `max_idade` | `600` | segundos de cache do preflight |
+
+Preflight de origem nao liberada leva `403`. Chamar `cors()` de novo troca a
+configuracao. Opcao com nome errado da erro.
+
+## serve_pasta(prefixo, pasta)
+
+Serve arquivos estaticos debaixo do prefixo (so `GET`/`HEAD`):
+
+```gambiarrascript
+serve_pasta("/publico", "./public") # /publico/css/site.css → ./public/css/site.css
+serve_pasta("/", "./site")          # site estatico inteiro
+```
+
+- Pasta → `index.html` dela (sem `index.html` da `404`: nada de listar
+  conteudo). `/publico` sem barra redireciona pra `/publico/`.
+- `Content-Type` pela extensao, `Range` e `If-Modified-Since` funcionam.
+- Seguranca: `..` nao sai da pasta, symlink pra fora nao vale e arquivo/pasta
+  com ponto na frente (`.env`, `.git`) nao e servido.
+- `rota()` registrada no mesmo caminho ganha da pasta. O caminho da pasta e
+  relativo a onde o `gs` foi rodado.
 
 ## escuta(porta)
 
-Bloqueia e serve. Cada requisicao roda **em paralelo** (uma goroutine por
-conexao). Por isso, cuidado ao mexer em lista/dicionario compartilhado entre
-handlers: nao tem lock (veja [Concorrencia](/docs/concorrencia#estado-compartilhado)).
+Sobe o servidor e **bloqueia**. Aceita numero (`8080`) ou texto com o
+endereco (`":8080"`, `"127.0.0.1:3000"`, `"0"`/`"127.0.0.1:0"` = porta livre
+qualquer). Mostra no **stderr** o endereco de verdade:
+
+```
+servidor de pe em http://localhost:8080 (ctrl+c pra parar)
+```
+
+- **ctrl+c / SIGTERM** desliga com calma: para de aceitar conexao, espera ate
+  5s os pedidos em andamento, avisa os WebSockets ("going away") e o
+  `escuta` **volta** — o codigo depois dele roda (feche banco, salve estado).
+  Um segundo ctrl+c mata na hora.
+- Timeouts: 10s pra chegar o cabecalho do pedido, 60s pra ler o corpo, 120s
+  de conexao ociosa (keep-alive).
+
+Cada requisicao roda **em paralelo** (uma goroutine por pedido). Por isso,
+cuidado ao mexer em lista/dicionario compartilhado entre handlers (veja
+[Concorrencia](/docs/concorrencia#estado-compartilhado)) — o
+`examples/api_rest.gs` usa um `cano(1)` como trava.
+
+## WebSocket: rota_ws(caminho, handler)
+
+```gambiarrascript
+bota conexoes = []
+
+rota_ws("/chat", gambiarra(ws, pedido)
+    adiciona(conexoes, ws)
+    enquanto deu_bom
+        bota msg = recebe(ws) # bloqueia; nada = o cliente saiu
+        se_colar msg == nada
+            vaza
+        acabou_finalmente
+        pra_cada c em conexoes
+            envia(c, {"de": pedido.query.nome, "texto": msg})
+        acabou_finalmente
+    acabou_finalmente
+    remove(conexoes, ws)
+acabou_finalmente)
+
+escuta(8080)
+```
+
+- O handler roda **uma vez por conexao**, na goroutine dela, e recebe a
+  conexao `ws` e o mesmo `pedido` das rotas HTTP (`params`, `query`,
+  `cabecalhos`, `cookies`...). Caminho aceita `:param`/`*curinga`.
+- `antes()` roda antes do handshake: devolver resposta (ex.: `401`) recusa a
+  conexao.
+- `recebe(ws)` bloqueia ate a proxima mensagem e devolve **texto**. Devolve
+  `nada` quando o cliente fechou, caiu ou o servidor esta desligando — e o
+  sinal pra sair do laco.
+- `envia(ws, x)`: texto vai como esta; **lista/dicionario vao como JSON**
+  (`pra_json`); numero/booleano viram texto. Pode chamar da mesma conexao em
+  varias goroutines ao mesmo tempo (o envio e serializado por conexao).
+  Mandar pra conexao que **ja caiu nao estoura** (a mensagem se perde) — o
+  broadcast nao quebra por causa de um cliente que saiu. Mandar depois de
+  voce mesmo chamar `fecha(ws)` e erro. Cliente que nao le por 10s e
+  derrubado.
+- `fecha(ws)` fecha (idempotente). Quando o handler termina, a conexao fecha
+  sozinha; se ele estourar erro, fecha com codigo 1011 e o erro vai pro stderr.
+- Keepalive: o servidor manda ping a cada 30s enquanto alguem esta no
+  `recebe`; sem pong em 15s a conexao e derrubada e o `recebe` devolve `nada`.
+- Origem: sem `cors()`, so aceita navegador da mesma origem (protege de
+  CSRF); com `cors()`, valem as mesmas origens. Cliente fora do navegador
+  (sem `Origin`) sempre entra.
+- Mensagem de ate 1 MiB.
+
+`GET` normal (sem upgrade) numa `rota_ws` leva `426`.
+
+### conecta_ws(url, [opcoes]) — cliente
+
+```gambiarrascript
+bota ws = conecta_ws("ws://localhost:8080/chat?nome=ze", {"cabecalhos": {"Authorization": "Bearer x"}, "timeout": 5})
+envia(ws, "salve")
+mostra recebe(ws)
+fecha(ws)
+```
+
+Mesma conexao do servidor: `envia`/`recebe`/`fecha` funcionam igual.
+`timeout` (segundos, default 30) vale so pra conectar. Falhou → erro de rede
+(`conecta_ws(): nao consegui conectar em "ws://..." (o servidor respondeu 401): ...`).
+WebSocket nao roda no playground (navegador).

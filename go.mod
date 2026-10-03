@@ -3,6 +3,7 @@ module gambiarrascript
 go 1.23.12
 
 require (
+	github.com/coder/websocket v1.8.14
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/jackc/pgx/v5 v5.7.2
 	golang.org/x/crypto v0.41.0

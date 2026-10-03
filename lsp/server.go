@@ -124,8 +124,8 @@ var docsBuiltin = map[string]string{
 	"texto":           "texto(valor) -> texto: converte qualquer valor em texto.",
 	"numero":          "numero(texto) -> numero: converte texto em numero.",
 	"busca":           "busca(url, [opcoes]) -> dicionario: faz uma requisicao HTTP.",
-	"rota":            "rota(metodo, caminho, handler): registra uma rota no servidor HTTP.",
-	"escuta":          "escuta(porta): sobe o servidor HTTP e bloqueia.",
+	"rota":            "rota(metodo, caminho, handler): registra uma rota no servidor HTTP. Caminho aceita parametro (/usuarios/:id → pedido.params.id) e curinga no fim (/arquivos/*resto).",
+	"escuta":          "escuta(porta): sobe o servidor HTTP e bloqueia. Porta numero ou texto (\":8080\", \"127.0.0.1:0\"); ctrl+c desliga com calma.",
 	"de_json":         "de_json(texto) -> valor: converte JSON em valor GambiarraScript.",
 	"pra_json":        "pra_json(valor) -> texto: serializa um valor pra JSON.",
 	"separa":          "separa(texto, separador) -> lista: quebra o texto em partes.",
@@ -238,6 +238,13 @@ var docsBuiltin = map[string]string{
 	// config
 	"opcoes":      "opcoes(padroes, [ajudas]) -> dicionario: le --flags do argumentos() por cima dos padroes (tipo vem do padrao: numero/texto/booleano/lista). --ajuda imprime a ajuda e sai; posicionais ficam em \"_\".",
 	"carrega_env": "carrega_env([caminho], [opcoes]) -> dicionario: le um .env (CHAVE=valor, # comentario, export, aspas) pro ambiente. Nao sobrescreve variavel que ja existe, a nao ser com {\"sobrescreve\": deu_bom}. Sem arquivo = erro \"io\".",
+	"responde_json": "responde_json(valor, [status]) -> dicionario: resposta HTTP com o valor em JSON e Content-Type de JSON (status default 200).",
+	"antes":         "antes(gambiarra(pedido)): middleware que roda antes de toda rota, na ordem de registro. Devolveu nada → segue; devolveu resposta → corta (ex.: 401).",
+	"depois":        "depois(gambiarra(pedido, resposta)): middleware de saida (log, cabecalho). Devolveu nada → vale a resposta (mexida ou nao); outra coisa → troca.",
+	"cors":          "cors([opcoes]): libera CORS e responde o preflight OPTIONS. Opcoes: origens, metodos, cabecalhos (listas), credenciais, max_idade.",
+	"serve_pasta":   "serve_pasta(prefixo, pasta): serve arquivos estaticos (GET/HEAD), index.html em pasta, sem sair da pasta nem mostrar dotfile.",
+	"rota_ws":       "rota_ws(caminho, gambiarra(ws, pedido)): endpoint WebSocket. Use recebe(ws) (nada = cliente saiu), envia(ws, msg) e fecha(ws).",
+	"conecta_ws":    "conecta_ws(url, [opcoes]) -> conexao: cliente WebSocket (ws:// ou wss://). Opcoes: cabecalhos, timeout. Usa com envia/recebe/fecha.",
 }
 
 // docsKeyword descreve cada keyword pro hover do LSP.

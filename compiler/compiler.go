@@ -260,6 +260,8 @@ var nomesBuiltins = []string{
 	"token_aleatorio", "jwt_assina", "jwt_confere",
 	// logging, flags e .env (Tier 5b)
 	"log_debug", "log_info", "log_aviso", "log_erro", "opcoes", "carrega_env",
+	// servidor parte 2 + websocket
+	"responde_json", "antes", "depois", "cors", "serve_pasta", "rota_ws", "conecta_ws",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que

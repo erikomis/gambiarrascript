@@ -17,7 +17,7 @@ Tiers 1–5 estão entregues. O backlog vivo:
 | Onde | O que sobra |
 |---|---|
 | Tier 2/3 | DAP (debug), multi-catch, FFI — itens grandes, levas próprias |
-| Tier 5b | libs: WebSocket/TLS, body binário no `busca` (TCP/UDP, senha/AES/JWT, log, flags e .env ✅) |
+| Tier 5b | libs: TLS no TCP cru (HTTP/API, WebSocket, TCP/UDP, senha/AES/JWT, log, flags e .env ✅) |
 | Bugs abertos | concorrência em dict, overflow, `importa`, erro entre engines |
 | Tier 6 | `gs instala` + lock, `build --alvo`, Homebrew, cobertura, sombreamento |
 | Tier 7 | MaxStack por função |
@@ -232,13 +232,14 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 
 ### Tier 5b — Libs que ainda faltam
 
-- [~] **HTTP cliente turbinado** — feito: `busca(url, {metodo, corpo,
-      cabecalhos, timeout})` com GET/POST/PUT/DELETE/PATCH. Falta: **body
-      binário** (upload de arquivo, resposta não-texto) e `HEAD`/`OPTIONS`.
+- [x] **HTTP cliente turbinado** — `busca(url, {metodo, corpo, json,
+      corpo_base64, cabecalhos, timeout})` com GET/POST/PUT/DELETE/PATCH/
+      HEAD/OPTIONS; resposta não-texto ganha `corpo_base64`.
 - [~] **Rede baixo nível** — feito: TCP (`conecta_tcp`, `escuta_tcp`,
-      `endereco`; modo linha ou bruto, timeout, parada graciosa) e UDP
-      (`escuta_udp`, `envia_udp`, `conecta_udp`), tudo via `envia`/`recebe`/
-      `fecha` (object.Conexao). Falta: **WebSocket** (cliente e servidor) e TLS.
+      `endereco`; modo linha ou bruto, timeout, parada graciosa), UDP
+      (`escuta_udp`, `envia_udp`, `conecta_udp`) e WebSocket (`rota_ws` no
+      servidor, `conecta_ws` no cliente), tudo via `envia`/`recebe`/`fecha`
+      (object.Conexao). Falta: TLS no TCP cru.
 - [x] **Crypto parte 2** — `hash_senha`/`confere_senha` (bcrypt, custo 12),
       `encripta`/`decripta` (AES-256-GCM; chave crua ou frase via scrypt),
       `gera_chave`, `token_aleatorio` e JWT HS256 (`jwt_assina`/`jwt_confere`,
@@ -248,10 +249,11 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 - [x] **Parser de flags** — `opcoes(padroes, [ajudas])` com tipo vindo do
       padrao, `--ajuda` gerado e posicionais em `"_"`; mais `carrega_env` (.env)
       e `env(nome, padrao)`. Veja `examples/config.gs`.
-- [ ] **Servidor parte 2** — servir pasta estática (`serve_pasta("/", "./public")`),
-      helper de resposta JSON (`{"status", "corpo"}` + `Content-Type` montados
-      a partir de um valor) e middleware simples (gambiarra que roda antes de
-      toda rota: log, auth).
+- [x] **Servidor parte 2** — rota com `:param`/`*curinga` (404/405 com
+      `Allow`), `pedido` com `params`/`json`/`ip`/`cookies`, `responde_json`
+      e lista/dicionário virando JSON, `antes`/`depois` (middleware), `cors()`,
+      `serve_pasta`, `escuta` com endereço texto + desligamento com calma
+      (SIGINT/SIGTERM) + timeouts, erro no handler = 500 genérico + log.
 
 ### Bugs de motor — corrigidos e abertos
 

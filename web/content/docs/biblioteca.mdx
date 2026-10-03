@@ -460,11 +460,18 @@ log_info("subiu", {"porta": cfg.porta, "extras": cfg._})
 
 | Builtin | Assinatura | Devolve |
 | --- | --- | --- |
-| `busca(url, [opcoes])` | `(texto, [dicionario])` | `dicionario` `{status, ok, corpo, cabecalhos}` |
-| `rota(metodo, caminho, handler)` | `(texto, texto, gambiarra)` | `nada` — registra a rota |
-| `escuta(porta)` | `(numero)` | bloqueia servindo (cada requisicao em paralelo) |
+| `busca(url, [opcoes])` | `(texto, [dicionario])` | `dicionario` `{status, ok, corpo, cabecalhos, [corpo_base64]}` |
+| `rota(metodo, caminho, handler)` | `(texto, texto, gambiarra)` | `nada` — registra a rota (`/usuarios/:id`, `/arquivos/*resto`) |
+| `escuta(porta)` | `(numero ou texto)` | bloqueia servindo (cada requisicao em paralelo); ctrl+c desliga com calma |
+| `responde_json(valor, [status])` | `(valor, [numero])` | `dicionario` de resposta com o JSON |
+| `antes(handler)` | `(gambiarra(pedido))` | `nada` — middleware antes das rotas |
+| `depois(handler)` | `(gambiarra(pedido, resposta))` | `nada` — middleware depois das rotas |
+| `cors([opcoes])` | `([dicionario])` | `nada` — liga CORS + preflight |
+| `serve_pasta(prefixo, pasta)` | `(texto, texto)` | `nada` — arquivos estaticos |
+| `rota_ws(caminho, handler)` | `(texto, gambiarra(ws, pedido))` | `nada` — endpoint WebSocket |
+| `conecta_ws(url, [opcoes])` | `(texto, [dicionario])` | conexao WebSocket (usa `envia`/`recebe`/`fecha`) |
 
-Opcoes do `busca` (`metodo`, `corpo`, `cabecalhos`, `timeout`) em
+Opcoes do `busca` (`metodo`, `corpo`, `json`, `corpo_base64`, `cabecalhos`, `timeout`) em
 [HTTP (cliente)](/docs/http); `pedido` e resposta do handler em
 [Servidor HTTP](/docs/servidor).
 

@@ -122,7 +122,10 @@ rota("POST", "/cria", cria)`
 		{`{quebrado`, "json ruim", 400},
 	}
 	for _, c := range casos {
-		resp, err := http.Post(srv.URL+"/cria", "application/json", strings.NewReader(c.corpo))
+		// text/plain de proposito: com application/json o servidor ja barra
+		// json quebrado com 400 antes do handler (pedido["json"]), e aqui o
+		// que interessa e o arruma do handler.
+		resp, err := http.Post(srv.URL+"/cria", "text/plain", strings.NewReader(c.corpo))
 		if err != nil {
 			t.Fatal(err)
 		}

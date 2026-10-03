@@ -20,6 +20,7 @@ acabou_finalmente
 | `ok`         | booleano| `deu_bom` se 2xx                       |
 | `corpo`      | texto   | corpo da resposta                      |
 | `cabecalhos` | dic     | headers canonizados (ex.: `Content-Type`); varios valores vem juntos com `", "` |
+| `corpo_base64` | texto | **so** quando o corpo nao e texto UTF-8 valido (imagem, zip, pdf): os bytes em base64 |
 
 Status 4xx/5xx **nao** e erro: vem no `status`/`ok` pra voce decidir. Erro de
 verdade (DNS, conexao recusada, timeout) estoura — pegue com `arruma`.
@@ -37,11 +38,32 @@ mostra r.status
 mostra de_json(r.corpo).json.msg      # salve
 ```
 
-- `metodo`: `"GET"` (default), `"POST"`, `"PUT"`, `"DELETE"` ou `"PATCH"`
-  (maiuscula ou minuscula). Outro metodo da erro.
+- `metodo`: `"GET"` (default), `"POST"`, `"PUT"`, `"DELETE"`, `"PATCH"`,
+  `"HEAD"` ou `"OPTIONS"` (maiuscula ou minuscula). Outro metodo da erro.
 - `corpo`: texto do corpo da requisicao.
+- `json`: qualquer valor — vai serializado igual ao `pra_json` e ja manda
+  `Content-Type: application/json; charset=utf-8` (a menos que voce mande
+  outro em `cabecalhos`).
+- `corpo_base64`: corpo **binario** em base64 (upload de arquivo).
+  `corpo`, `json` e `corpo_base64` sao exclusivos: mandar dois da erro.
 - `cabecalhos`: dicionario texto → texto.
 - `timeout`: em segundos (aceita fracao); default 30.
+
+## JSON e binario
+
+```gambiarrascript
+bota r = busca("https://httpbin.org/post", {"metodo": "POST", "json": {"msg": "salve"}})
+mostra de_json(r.corpo).json.msg # salve
+
+# baixar imagem: o corpo nao e texto, entao vem corpo_base64
+bota img = busca("https://httpbin.org/image/png")
+se_colar tem(img, "corpo_base64")
+    mostra "veio binario: " + tamanho(img.corpo_base64) + " letras de base64"
+acabou_finalmente
+```
+
+A regra do `corpo_base64` e simples: corpo que nao e UTF-8 valido ganha a
+chave (o `corpo` continua com os bytes crus). Texto, JSON e HTML nunca tem.
 
 ## Bloqueante, mas da pra paralelizar
 
@@ -56,4 +78,5 @@ pra_cada r em respostas
 acabou_finalmente
 ```
 
-Veja [Concorrencia](/docs/concorrencia).
+Veja [Concorrencia](/docs/concorrencia). Cliente de WebSocket:
+[`conecta_ws`](/docs/servidor#conecta_wsurl-opcoes--cliente).

@@ -51,10 +51,15 @@ type Interpreter struct {
 
 func New(out io.Writer) *Interpreter {
 	i := &Interpreter{out: out, erroOut: os.Stderr, in: os.Stdin}
-	i.servidor = &servidorEstado{rotas: map[string]object.Object{}, i: i}
+	i.servidor = novoServidorEstado(i)
 	i.builtinsInstancia = map[string]*object.Builtin{
 		"rota":         {Nome: "rota", Fn: i.servidor.builtinRota},
 		"escuta":       {Nome: "escuta", Fn: i.servidor.builtinEscuta},
+		"rota_ws":      {Nome: "rota_ws", Fn: i.servidor.builtinRotaWs},
+		"antes":        {Nome: "antes", Fn: i.servidor.builtinAntes},
+		"depois":       {Nome: "depois", Fn: i.servidor.builtinDepois},
+		"cors":         {Nome: "cors", Fn: i.servidor.builtinCors},
+		"serve_pasta":  {Nome: "serve_pasta", Fn: i.servidor.builtinServePasta},
 		"mapeia":       {Nome: "mapeia", Fn: i.builtinMapeia},
 		"filtra":       {Nome: "filtra", Fn: i.builtinFiltra},
 		"ordena_com":   {Nome: "ordena_com", Fn: i.builtinOrdenaCom},

@@ -62,13 +62,18 @@ rota("GET", "/", ola)
 escuta(8080)
 ```
 
-`rota(metodo, caminho, handler)` registra uma rota; o `handler` é uma `gambiarra`
-que recebe um dicionário-pedido (`pedido["metodo"]`, `["caminho"]`, `["corpo"]`,
-`["cabecalhos"]`, `["query"]`) e devolve um texto (corpo, status 200) ou um
-dicionário `{"status", "corpo", "cabecalhos"}`. `escuta(porta)` sobe o servidor.
-Cada requisição roda na própria goroutine (o `net/http` já entrega assim), então
-o servidor atende em paralelo — o lock só protege a tabela de rotas.
-Cabeçalhos e query usam a forma canônica nas chaves (ex.: `pedido["cabecalhos"]["X-Teste"]`, com maiúscula); quando um cabeçalho ou parâmetro de query vem com múltiplos valores, eles chegam unidos por `", "`.
+`rota(metodo, caminho, handler)` registra uma rota (com parametro e curinga:
+`/usuarios/:id` → `pedido["params"]["id"]`, `/arquivos/*resto`); o `handler`
+recebe o dicionario-pedido (`metodo`, `caminho`, `corpo`, `cabecalhos`,
+`query`, `params`, `json` ja parseado, `ip`, `cookies`) e devolve texto, lista
+ou dicionario (viram JSON), `responde_json(valor, status)` ou
+`{"status", "corpo", "cabecalhos"}`. Tem middleware (`antes`/`depois`),
+`cors()`, `serve_pasta(prefixo, pasta)` e WebSocket (`rota_ws` no servidor,
+`conecta_ws` no cliente, com `envia`/`recebe`/`fecha`). `escuta(porta)` sobe
+o servidor e desliga com calma no ctrl+c. Erro no handler vira `500`
+generico pro cliente e o detalhe vai pro stderr. Cada requisicao roda na
+propria goroutine. Exemplos: `examples/api_rest.gs` e `examples/chat_ws.gs`;
+doc completa em [Servidor HTTP](https://erikomis.github.io/gambiarrascript/docs/servidor/).
 
 ## Rede crua (TCP/UDP)
 

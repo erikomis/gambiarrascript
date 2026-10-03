@@ -1,11 +1,14 @@
 package interpreter
 
 import (
+	"bytes"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gambiarrascript/object"
 )
@@ -39,16 +42,21 @@ func builtinBusca(args []object.Object) object.Object {
 		if !metodoValido(metodo) {
 			return erroBuiltin("metodo HTTP desconhecido: %q", metodo)
 		}
-		if v, erro := opcaoTexto(opcoes, "corpo"); erro != nil {
+		corpo, tipoCorpo, erro := opcaoCorpo(opcoes)
+		if erro != nil {
 			return erro
-		} else if v != "" {
-			corpoReq = strings.NewReader(v)
+		}
+		if corpo != nil {
+			corpoReq = bytes.NewReader(corpo)
 		}
 		cab, erro := opcaoCabecalhos(opcoes)
 		if erro != nil {
 			return erro
 		}
 		cabecalhos = cab
+		if tipoCorpo != "" && !temCabecalho(cabecalhos, "Content-Type") {
+			cabecalhos["Content-Type"] = tipoCorpo
+		}
 		if t, erro := opcaoTimeout(opcoes); erro != nil {
 			return erro
 		} else if t > 0 {
@@ -76,12 +84,63 @@ func builtinBusca(args []object.Object) object.Object {
 		return erroBuiltin("deu ruim lendo a resposta de %q: %v", urlObj.Value, err)
 	}
 
-	return montaResposta(resp, string(corpo))
+	return montaResposta(resp, corpo)
+}
+
+// opcaoCorpo le o corpo da requisicao de UMA das opcoes: "corpo" (texto),
+// "corpo_base64" (bytes crus, pra upload binario) ou "json" (qualquer valor,
+// serializado igual ao pra_json — e ja manda o Content-Type de JSON).
+func opcaoCorpo(d *object.Dicionario) ([]byte, string, *object.Erro) {
+	var achadas []string
+	for _, k := range []string{"corpo", "corpo_base64", "json"} {
+		if _, ok := d.Pares[(&object.Texto{Value: k}).ChaveHash()]; ok {
+			achadas = append(achadas, k)
+		}
+	}
+	if len(achadas) > 1 {
+		return nil, "", erroBuiltin("busca(): escolhe um so entre \"corpo\", \"corpo_base64\" e \"json\", veio %s", strings.Join(achadas, " e "))
+	}
+	if len(achadas) == 0 {
+		return nil, "", nil
+	}
+	switch achadas[0] {
+	case "corpo":
+		v, erro := opcaoTexto(d, "corpo")
+		if erro != nil || v == "" {
+			return nil, "", erro
+		}
+		return []byte(v), "", nil
+	case "corpo_base64":
+		v, erro := opcaoTexto(d, "corpo_base64")
+		if erro != nil {
+			return nil, "", erro
+		}
+		bs, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			return nil, "", erroBuiltin("busca(): \"corpo_base64\" nao e base64 valido, parca: %v", err)
+		}
+		return bs, "", nil
+	}
+	par := d.Pares[(&object.Texto{Value: "json"}).ChaveHash()]
+	var buf bytes.Buffer
+	if e := escreveJson(&buf, par.Valor); e != nil {
+		return nil, "", e
+	}
+	return buf.Bytes(), tipoJSON, nil
+}
+
+func temCabecalho(cab map[string]string, nome string) bool {
+	for k := range cab {
+		if strings.EqualFold(k, nome) {
+			return true
+		}
+	}
+	return false
 }
 
 func metodoValido(m string) bool {
 	switch m {
-	case "GET", "POST", "PUT", "DELETE", "PATCH":
+	case "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS":
 		return true
 	}
 	return false
@@ -137,7 +196,11 @@ func opcaoTimeout(d *object.Dicionario) (time.Duration, *object.Erro) {
 	return time.Duration(n.Value * float64(time.Second)), nil
 }
 
-func montaResposta(resp *http.Response, corpo string) object.Object {
+// montaResposta monta o dicionario de resposta. Corpo que nao e UTF-8 valido
+// (imagem, zip, pdf...) tambem vem em "corpo_base64" — o "corpo" continua com
+// os bytes crus, que nao imprimem direito mas servem pro escreve_arquivo.
+func montaResposta(resp *http.Response, bruto []byte) object.Object {
+	corpo := string(bruto)
 	dic := object.NovoDicionario()
 	set := func(chave string, valor object.Object) {
 		k := &object.Texto{Value: chave}
@@ -153,6 +216,9 @@ func montaResposta(resp *http.Response, corpo string) object.Object {
 		cab.Bota(k.ChaveHash(), object.ParDic{Chave: k, Valor: &object.Texto{Value: strings.Join(resp.Header[nome], ", ")}})
 	}
 	set("cabecalhos", cab)
+	if !utf8.Valid(bruto) {
+		set("corpo_base64", &object.Texto{Value: base64.StdEncoding.EncodeToString(bruto)})
+	}
 
 	return dic
 }
