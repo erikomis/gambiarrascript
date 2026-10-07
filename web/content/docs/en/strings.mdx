@@ -1,0 +1,223 @@
+---
+title: Strings
+description: Double quotes with escapes, interpolation, backticks for raw strings, index/slice and the family of text builtins.
+---
+
+Text (`texto`) in GambiarraScript has two literals, interpolation, index/slice
+and a family of builtins.
+
+## Literals
+
+### Double quotes `"..."`
+
+They accept escapes: `\n` (newline), `\t` (tab), `\"` (quote), `\\` (backslash).
+Any other `\x` (like `\d`, `\m`) is kept literally — backslash and all.
+
+```gambiarrascript
+mostra "linha1\nlinha2"
+mostra "aspas: \"gota\""
+mostra "regex: \d+"          # regex: \d+ (backslash stays)
+```
+
+### Backticks `` `...` `` (raw string)
+
+No escape processing at all, multiline is fine and you don't need to escape
+double quotes. Perfect for JSON, regex, Windows paths:
+
+```gambiarrascript
+bota j = `{"nome": "Erik", "tags": ["go", "gs"]}`
+mostra de_json(j)["nome"]                    # Erik
+mostra `c:\Users\erik\arquivo.txt`           # c:\Users\erik\arquivo.txt
+mostra `linha1
+linha2
+linha3`                                      # multiline
+```
+
+Inside backticks, `\n` is a literal backslash + n. For a real escape, use
+double quotes. Only one thing still gets processed inside backticks: the
+`${...}` interpolation (below).
+
+## Interpolation
+
+`${expression}` inside a string evaluates the expression and pastes in the
+result — any expression goes: variable, arithmetic, call, index.
+
+```gambiarrascript
+bota nome = "Erik"
+bota itens = ["cafe", "pao"]
+mostra "salve, ${nome}! tem ${tamanho(itens)} itens: ${junta(itens, ", ")}"
+# salve, Erik! tem 2 itens: cafe, pao
+mostra "conta: ${2 + 3 * 4}"               # conta: 14
+mostra "preco: \${nao interpola}"          # preco: ${nao interpola}
+```
+
+`\${` escapes it (you get a literal `${`). Whatever goes inside `${...}` must be
+**a single** expression: leftovers (`"${x y}"`) are a syntax error —
+`sobrou "y" depois da expressao em ${...}`.
+
+## Format in interpolation
+
+Decimal places, zero padding, alignment: put `:format` at the end of the
+`${...}`. The format is the same verb as in [`formata`](/docs/en/biblioteca#text)
+(printf), **without the `%`**:
+
+```gambiarrascript
+bota preco = 4.5
+bota n = 7
+bota item = "cafe"
+
+mostra "R$ ${preco:.2f}"                  # R$ 4.50
+mostra "pedido #${n:05d}"                 # pedido #00007
+mostra "|${item:-8}|${preco:6.2f}|"       # |cafe    |  4.50|
+mostra "|${item:8}|"                      # |    cafe|
+mostra "${255:x} ${255:X} ${255:b}"       # ff FF 11111111
+mostra "${10:+d} ${"oi":q}"               # +10 "oi"
+mostra "${3:.2f}"                         # 3.00 (integer gets converted for f)
+mostra "total: ${preco * 3:.1f}"          # total: 13.5
+```
+
+- With no verb at the end (`${item:-8}`, `${item:8}`), the verb is `v`: just
+  width and alignment — negative hugs the left, positive the right.
+- The value is converted to fit the verb, just like in `formata`: an integer
+  with `.2f` becomes `3.00`.
+- Works inside backticks too: `` `${x:.3f}` ``.
+
+The format is whatever comes after the **last** `:` that sits outside `()`,
+`[]`, `{}` and string literals. So the `:` of a dict, a slice or inside a
+string doesn't confuse anything:
+
+```gambiarrascript
+mostra "${[1, 2, 3][1:]}"                 # [2, 3]
+mostra "${{"x": 1}}"                      # {"x": 1}
+mostra "${"a:b"}"                         # a:b
+mostra "|${"a:b":6}|"                     # |   a:b|
+```
+
+A format that doesn't exist is a syntax error, caught before running:
+
+```gambiarrascript
+bota x = 1
+mostra "${x:zz}"
+# formato "zz" invalido em ${...}: usa os verbos do formata sem o %, tipo ${x:.2f}, ${n:05d}, ${t:-8}
+```
+
+(`${x:%d}` too: the `%` stays out.)
+
+## Concatenation
+
+`+` concatenates if **either** side is a string (the other side becomes text
+exactly the way `mostra` ("show") would print it):
+
+```gambiarrascript
+mostra "saldo: " + 100          # saldo: 100
+mostra "1" + 2                  # 12
+mostra 1 + 2 + "x"              # 3x (adds first, then concatenates)
+mostra "dev " + deu_bom         # dev deu_bom
+```
+
+It evaluates left to right: that's why `1 + 2 + "x"` becomes `"3x"`, not
+`"12x"`.
+
+## Index and slice
+
+Strings are indexed just like lists, counting **characters** (not bytes — an
+accented letter counts as 1). A negative index counts from the end. The slice
+`t[i:j]` goes from `i` up to just before `j`; either end can be left out.
+
+```gambiarrascript
+bota t = "gambiarra"
+mostra t[0]          # g
+mostra t[-1]         # a
+mostra t[0:4]        # gamb
+mostra t[4:]         # iarra
+mostra t[:-5]        # gamb
+mostra "café"[3]     # é
+```
+
+An index outside the string is a runtime error. Strings are immutable:
+`bota t[0] = "x"` is a no-go.
+
+## Comparison and equality
+
+`==` and `!=` compare strings character by character. `< > <= >=` are **not**
+defined for strings (numbers only). To sort strings, use `ordena(lista)`.
+
+## Text builtins
+
+| Builtin | Signature | Returns | Notes |
+| --- | --- | --- | --- |
+| `tamanho(t)` | `(texto)` | `numero` | counts characters (not bytes) — an accented letter counts as 1 |
+| `maiusculo(t)` | `(texto)` | `texto` | |
+| `minusculo(t)` | `(texto)` | `texto` | |
+| `tira_espaco(t)` | `(texto)` | `texto` | strips spaces, tabs and line breaks from both ends |
+| `substitui(t, antigo, novo)` | `(texto, texto, texto)` | `texto` | replaces **every** occurrence |
+| `separa(t, sep)` | `(texto, texto)` | `lista` | splits on the separator |
+| `junta(lista, sep)` | `(lista, texto)` | `texto` | joins with the separator |
+| `fatia(t, inicio, [fim])` | `(texto, numero, [numero])` | `texto` | same as `t[i:j]`, but clamps out-of-range bounds instead of erroring |
+| `contem(t, pedaco)` | `(texto, texto)` | `booleano` | |
+| `comeca_com(t, prefixo)` | `(texto, texto)` | `booleano` | |
+| `termina_com(t, sufixo)` | `(texto, texto)` | `booleano` | |
+| `formata(modelo, ...)` | `(texto, qualquer...)` | `texto` | printf: `%v %s %d %f %x`, `%05d`, `%.2f`, `%-10s`; converts the value to fit the verb (`formata("%.2f", 3)` → `3.00`). In interpolation: `"${x:.2f}"` |
+| `numero(t)` | `(texto)` | `numero` | a string that isn't a number **is an error** |
+| `texto(v)` | `(qualquer)` | `texto` | universal conversion |
+
+Regex (`busca_regex`, `acha_regex`, `combina_regex`, `substitui_regex`,
+`separa_regex`) and hashing/encoding (`sha256`, `base64_codifica`...) live in
+the [Standard library](/docs/en/biblioteca#regex).
+
+### Full example
+
+```gambiarrascript
+bota frase = "  GambiarraScript e 10/10  "
+bota limpa = tira_espaco(frase)
+
+mostra limpa                              # GambiarraScript e 10/10
+mostra maiusculo(limpa)                   # GAMBIARRASCRIPT E 10/10
+mostra minusculo(limpa)                   # gambiarrascript e 10/10
+mostra contem(limpa, "10/10")             # deu_bom
+mostra comeca_com(limpa, "Gambiarra")     # deu_bom
+mostra termina_com(limpa, "10/10")        # deu_bom
+
+bota partes = separa("salve,tropa,da,gambiarra", ",")
+mostra partes                             # [salve, tropa, da, gambiarra]
+mostra junta(partes, " | ")               # salve | tropa | da | gambiarra
+
+mostra substitui("banana", "a", "o")      # bonono (every occurrence)
+mostra fatia("gambiarra", 0, 4)           # gamb
+mostra fatia("gambiarra", 4)              # iarra
+mostra tamanho("caju")                    # 4
+mostra tamanho("cajú")                    # 4 (not 5)
+mostra formata("%-6s|%6.2f|", "cafe", 4.5)   # cafe  |  4.50|
+```
+
+Notice that `mostra` on a list prints the strings **without quotes**
+(`[salve, tropa, ...]`). If you need the quotes, use `pra_json(lista)`.
+
+## Quick recipes
+
+```gambiarrascript
+# reverse a string: split into letters, reverse the list, join
+gambiarra inverte_texto(s)
+    bota letras = separa(s, "")
+    inverte(letras)
+    funciona junta(letras, "")
+acabou_finalmente
+mostra inverte_texto("gambiarra")         # arraibmag
+
+# repeat a string N times
+gambiarra repete(s, n)
+    bota out = ""
+    pra_cada i de 1 ate n
+        out += s
+    acabou_finalmente
+    funciona out
+acabou_finalmente
+mostra repete("ba", 3)                    # bababa
+
+# parse a simple CSV line (for real CSV files there's le_csv)
+bota linha = "Erik;25;Sao Paulo"
+bota [nome, idade, cidade] = separa(linha, ";")
+mostra "${nome} tem ${numero(idade) + 1} ano que vem"   # Erik tem 26 ano que vem
+```
+
+More in the [Standard library](/docs/en/biblioteca) and [Recipes](/docs/en/exemplos).

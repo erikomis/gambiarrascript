@@ -1,0 +1,112 @@
+---
+title: JSON
+description: de_json and pra_json — parsing and serializing JSON.
+---
+
+```gambiarrascript
+bota dados = de_json(`{"nome": "Erik", "langs": ["go", "gs"]}`)
+mostra dados["nome"]                          # Erik
+mostra dados.langs[0]                         # go
+mostra pra_json({"ok": deu_bom, "n": 42})     # {"ok":true,"n":42}
+```
+
+Write the JSON between backticks (`` `...` ``) so you don't have to escape the
+quotes.
+
+## de_json(texto)
+
+Turns JSON ("from JSON") into a language value:
+
+| JSON | GambiarraScript |
+| --- | --- |
+| object | dictionary (keys always **text**, in document order) |
+| array | list |
+| string | text |
+| number without a decimal point | exact integer |
+| number with a decimal point | real number |
+| `true` / `false` | `deu_bom` / `deu_ruim` |
+| `null` | `nada` |
+
+Malformed JSON is an error (catch it with `arruma` if it comes from outside).
+
+## pra_json(valor)
+
+Goes the other way ("to JSON") — **compact** output (no spaces), keeping the
+dictionary's insertion order. Number/boolean keys become strings (`{1: "x"}` →
+`{"1":"x"}`). Sets, gambiarras, canos and futures don't become JSON (error).
+Neither does a list or dictionary that contains itself (`adiciona(xs, xs)`):
+`pra_json(): estrutura que contem ela mesma nao vira JSON, parca`.
+
+```gambiarrascript
+mostra pra_json({"nada": nada, "pi": 3.14, "lista": [1, "a"]})   # {"nada":null,"pi":3.14,"lista":[1,"a"]}
+mostra pra_json(de_json(`{"z": 1, "a": 2}`))                     # {"z":1,"a":2}
+```
+
+The `de_json` → `pra_json` round trip preserves key order.
+
+## Validating what came in
+
+JSON from outside can be anything: an array where you expected an object,
+`"dois"` where there should be a number, a missing field. `tipo(x)` returns
+the type's name as text, so you can check before using it (a field that
+doesn't exist becomes `nada`, and `tipo(nada)` is `"nada"`):
+
+```gambiarrascript
+gambiarra valida_pedido(json)
+    bota p = de_json(json)
+    se_colar tipo(p) != "dicionario"
+        quebra("esperava um objeto, veio ${tipo(p)}")
+    acabou_finalmente
+    se_colar tipo(p.item) != "texto"
+        quebra("item tem que ser texto, veio ${tipo(p.item)}")
+    acabou_finalmente
+    se_colar tipo(p.qtd) != "numero"
+        quebra("qtd tem que ser numero, veio ${tipo(p.qtd)}")
+    acabou_finalmente
+    funciona p
+acabou_finalmente
+
+bota entradas = [
+    `{"item": "cafe", "qtd": 2}`,
+    `[1, 2]`,
+    `{"item": "pao", "qtd": "dois"}`,
+    `{"qtd": 1}`
+]
+pra_cada entrada em entradas
+    arruma
+        bota p = valida_pedido(entrada)
+        mostra "ok: ${p.qtd}x ${p.item}"
+    quebrou erro
+        mostra "recusado: " + erro_msg(erro)
+    acabou_finalmente
+acabou_finalmente
+# ok: 2x cafe
+# recusado: quebra: esperava um objeto, veio lista
+# recusado: quebra: qtd tem que ser numero, veio texto
+# recusado: quebra: item tem que ser texto, veio nada
+```
+
+In a [server](/docs/en/servidor), `quebrou` ("it broke") is the place to
+return a `400` with the message.
+
+## REST API
+
+Together with `rota` and `escuta`, you can write a whole JSON API:
+
+```gambiarrascript
+gambiarra eco(pedido)
+    bota corpo = de_json(pedido["corpo"])
+    funciona {
+        "status": 200,
+        "corpo": pra_json({"eco": corpo["msg"]}),
+        "cabecalhos": {"Content-Type": "application/json"}
+    }
+acabou_finalmente
+
+rota("POST", "/eco", eco)
+escuta(8080)
+```
+
+Remember to set the `Content-Type: application/json` header on the response
+when you want the client to understand it. More in
+[HTTP server](/docs/en/servidor).

@@ -1,0 +1,579 @@
+---
+title: Standard library
+description: Complete reference of GambiarraScript's builtins, by category.
+---
+
+This page lists **every** builtin. Each one is a global function — no
+`importa` needed. They behave the same on the VM (the default engine of
+`gs roda`) and on the tree-walker (`gs roda --tree`).
+
+<Callout title="Builtins are functions, `mostra` isn't">
+  `mostra` ("show") is a **statement** (a keyword), not a builtin: it takes no
+  parentheses. The builtins below are called like functions: `tamanho(x)`,
+  `mapeia(...)`, etc. `bora` ("let's go") is a keyword too (see
+  [Concurrency](/docs/en/concorrencia)).
+</Callout>
+
+<Callout type="warn" title="A builtin error is a real error">
+  When a builtin complains (wrong argument, file that doesn't exist, network
+  down...), it **throws** the error: the script stops, unless it's inside an
+  `arruma` ("fix it"). See [Arruma / quebrou](/docs/en/erros).
+</Callout>
+
+## Conversion, length and type
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `texto(v)` | `(qualquer)` | `texto` — universal conversion (the same thing `mostra` prints) |
+| `numero(t)` | `(texto)` | `numero` — accepts `"42"`, `" 3.5 "`, `"1e3"`; non-numeric text **throws** |
+| `tamanho(x)` | `(texto, lista, dicionario ou conjunto)` | `numero` — on text it counts characters (UTF-8), not bytes |
+| `tipo(x)` | `(qualquer)` | `texto` — `"numero"`, `"texto"`, `"booleano"`, `"nada"`, `"lista"`, `"dicionario"`, `"conjunto"`, `"funcao"`, `"erro"`, `"futuro"`, `"cano"`, `"trava"` or `"nativo"` |
+
+```gambiarrascript
+mostra tipo(3.14)                # numero
+mostra tipo([1, 2])              # lista
+mostra tipo(maiusculo)           # funcao
+mostra tipo(de_json(`null`))     # nada
+```
+
+Named gambiarras, lambdas and builtins are all `"funcao"`; `"nativo"` is what
+`conecta` returns (a database connection). Integers and floats are both
+`"numero"`. Typical use: validating JSON that came from outside — see
+[JSON](/docs/en/json#validating-what-came-in). More in
+[Types](/docs/en/tipos#what-type-is-this-tipox).
+
+## Text
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `maiusculo(t)` / `minusculo(t)` | `(texto)` | `texto` |
+| `tira_espaco(t)` | `(texto)` | `texto` without spaces/tabs/newlines at the ends |
+| `substitui(t, antigo, novo)` | `(texto, texto, texto)` | `texto` — replaces **every** occurrence |
+| `separa(t, sep)` | `(texto, texto)` | `lista` of texts (an empty `sep` splits character by character) |
+| `junta(lista, sep)` | `(lista, texto)` | `texto` (each item becomes text) |
+| `fatia(t, inicio, [fim])` | `(texto, numero, [numero])` | `texto` — bounds are clamped to the text's length |
+| `contem(t, pedaco)` | `(texto, texto)` | `booleano` |
+| `comeca_com(t, prefixo)` / `termina_com(t, sufixo)` | `(texto, texto)` | `booleano` |
+| `formata(modelo, valores...)` | `(texto, qualquer...)` | `texto` — printf with Go's verbs (`%v %s %d %f %x`, `%05d`, `%.2f`, `%-10s`); the value is converted to fit the verb (`%.2f` accepts an integer, `%d` accepts a whole float) |
+
+```gambiarrascript
+mostra formata("%-8s|%5.2f|%03d", "cafe", 3.14159, 7)   # cafe    | 3.14|007
+mostra formata("%v e %v", deu_bom, nada)                 # deu_bom e nada
+mostra formata("%x", 255)                                # ff
+mostra formata("%.2f", 3)                                # 3.00 (an integer works with %f)
+mostra formata("%5.1f%%", 12)                            #  12.0%
+```
+
+Most of the time, [interpolation](/docs/en/strings#interpolation) `"${expr}"`
+gets the job done without `formata` — formatting included: `"${preco:.2f}"`,
+`"${n:05d}"`, `"${nome:-10}"` use the same verbs, just without the `%`
+(see [formatting in interpolation](/docs/en/strings#format-in-interpolation)). Indexing and slicing text directly (`t[0]`, `t[1:3]`) also
+works — see [Strings](/docs/en/strings).
+
+## Regex
+
+Patterns use Go's RE2 syntax. Tip: write the pattern between backticks
+(`` `\d+` ``) so you don't have to fight the backslashes.
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `busca_regex(padrao, t)` | `(texto, texto)` | `booleano` — did it match anywhere? |
+| `acha_regex(padrao, t)` | `(texto, texto)` | `texto` of the first match, or `nada` |
+| `combina_regex(padrao, t)` | `(texto, texto)` | `lista` of matches; each match is `[inteiro, grupo1, grupo2, ...]` |
+| `substitui_regex(padrao, novo, t, [n])` | `(texto, texto, texto, [numero])` | `texto` — `novo` accepts `$1`, `$2`; `n` limits how many replacements |
+| `separa_regex(padrao, t, [n])` | `(texto, texto, [numero])` | `lista` of texts |
+
+```gambiarrascript
+mostra busca_regex(`\d{2}`, "azeite23litros")              # deu_bom
+mostra acha_regex(`\d+`, "abc 123 def 45")                  # 123
+mostra combina_regex(`(\d+)-(\d+)`, "10-20 e 3-4")          # [[10-20, 10, 20], [3-4, 3, 4]]
+mostra substitui_regex(`(\w+)@(\w+)`, "$2/$1", "ze@xx")     # xx/ze
+mostra separa_regex(`\s+`, "oi   tropa  do  bem")           # [oi, tropa, do, bem]
+```
+
+## List
+
+The ones that **mutate** the list they get (and return `nada`):
+
+| Builtin | Signature | Notes |
+| --- | --- | --- |
+| `adiciona(lista, item)` | `(lista, valor)` | appends at the end |
+| `remove(lista, item)` | `(lista, valor)` | `nada` — removes the **first** equal occurrence (`==`); if not found, does nothing. Also deletes a dictionary key and a set item (below) |
+| `ordena(lista)` | `(lista)` | ascending, stable; only numbers **or** only texts (mixing throws) |
+| `ordena_com(lista, fn)` | `(lista, gambiarra)` | `fn(a, b)` returns a boolean (does `a` come first?) or a number (`<0`, `0`, `>0`) |
+| `inverte(lista)` | `(lista)` | reverses in place |
+
+The ones that **return something new** (the original stays untouched):
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `mapeia(lista, fn)` | `(lista, gambiarra)` | `lista` with `fn(item)` for each one |
+| `filtra(lista, fn)` | `(lista, gambiarra)` | `lista` with only the items where `fn(item)` is truthy |
+| `reduz(lista, fn, [inicial])` | `(lista, gambiarra, [valor])` | accumulated `fn(acc, item)`; without `inicial` it starts from the 1st item |
+| `acha(lista, fn)` | `(lista, gambiarra)` | first item where `fn` is truthy, or `nada` |
+| `acha_indice(lista, fn)` | `(lista, gambiarra)` | index of the first one, or `-1` |
+| `unicos(lista)` | `(lista)` | `lista` without duplicates (keeps the order) |
+| `achatada(lista)` | `(lista)` | `lista` flattened **one** level |
+| `ordena_por(lista, campo)` | `(lista de dicionarios, texto)` | new `lista` sorted by the field (ascending) |
+| `agrupa_por(lista, fn)` | `(lista, gambiarra)` | `dicionario` `{chave: [itens]}` with the key coming from `fn(item)` |
+| `zip(a, b)` | `(lista, lista)` | `lista` of pairs `[a[i], b[i]]` (stops at the shorter one) |
+| `enumera(lista)` | `(lista)` | `lista` of pairs `[indice, item]` |
+| `soma(lista)` | `(lista de numeros)` | `numero` (empty list = `0`) |
+| `media(lista)` | `(lista de numeros)` | `numero` (empty list throws) |
+| `embaralha(lista)` | `(lista)` | new shuffled `lista` |
+| `escolhe_um(lista)` | `(lista)` | one randomly picked item (empty list throws) |
+
+`tamanho(lista)` and `junta(lista, sep)` work on lists too. Examples in
+[Lists and dictionaries](/docs/en/colecoes).
+
+## Dictionary
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `chaves(dic)` | `(dicionario)` | `lista` of keys, in **insertion order** |
+| `tem(dic, chave)` | `(dicionario, valor)` | `booleano` |
+| `tamanho(dic)` | `(dicionario)` | `numero` of pairs |
+| `remove(dic, chave)` | `(dicionario, texto/numero/booleano)` | `nada` — **deletes** the key (mutates); a key that doesn't exist does nothing |
+
+```gambiarrascript
+bota d = {"a": 1, "b": 2}
+remove(d, "a")
+mostra d                     # {"b": 2}
+remove(d, "nem_tem")         # does nothing (not even an error)
+```
+
+## Set
+
+A set (`conjunto`) is its own type: no duplicates, compared with `==`. Just
+like the dictionary, it **remembers insertion order**: `mostra`, `pra_cada`
+and `uniao`/`intersecao`/`diferenca` always come out in the same order.
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `conjunto(x)` | `(lista, texto, dicionario ou conjunto)` | `conjunto` (from text: one item per character; from a dictionary: its keys) |
+| `contem_conjunto(c, v)` | `(conjunto, valor)` | `booleano` |
+| `adiciona_conjunto(c, v)` | `(conjunto, valor)` | the set itself (mutates) |
+| `remove_conjunto(c, v)` | `(conjunto, valor)` | the set itself (mutates) |
+| `remove(c, v)` | `(conjunto, valor)` | `nada` — removes the item (mutates), same contract as the list `remove` |
+| `tamanho(c)` | `(conjunto)` | `numero` of items |
+| `uniao(a, b)` / `intersecao(a, b)` / `diferenca(a, b)` | `(conjunto, conjunto)` | new `conjunto` |
+
+```gambiarrascript
+bota s = conjunto([1, 2, 3, 2, 1])
+mostra s                                                 # {1, 2, 3}
+mostra tamanho(s)                                        # 3
+mostra contem_conjunto(s, 2)                             # deu_bom
+mostra intersecao(conjunto([3, 2, 1]), conjunto([2, 3, 4]))   # {3, 2}
+remove(s, 1)
+pra_cada x em s
+    mostra x                                             # 2, then 3
+acabou_finalmente
+```
+
+## Numbers and math
+
+| Builtin | Signature | Returns | Notes |
+| --- | --- | --- | --- |
+| `raiz(n)` | `(numero)` | `numero` | square root |
+| `abs(n)` | `(numero)` | `numero` | absolute value |
+| `arredonda(n)` | `(numero)` | `numero` | halves round away from zero (`2.5` → `3`, `-2.5` → `-3`) |
+| `teto(n)` / `chao(n)` | `(numero)` | `numero` | rounds up / down (ceiling / floor) |
+| `min(n1, n2, ...)` / `max(n1, n2, ...)` | `(numero...)` | `numero` | at least 1 number (doesn't take a list directly — spread it: `max(...xs)`) |
+| `seno(x)` / `cosseno(x)` / `tangente(x)` | `(numero)` | `numero` | angle in **radians** |
+| `log(x)` | `(numero)` | `numero` | natural logarithm; `x <= 0` throws |
+| `log10(x)` | `(numero)` | `numero` | base-10 logarithm; `x <= 0` throws |
+| `exp(x)` | `(numero)` | `numero` | e raised to `x` (undoes `log`) |
+| `pi` | value, **no parentheses** | `numero` | `3.141592653589793` |
+
+Exponentiation is an operator, not a builtin: `2 ** 10` (see [Types](/docs/en/tipos#power)).
+One name per concept: that's why there's no `potencia()` (it's `**`) and no
+`dorme()` (it's `espera_ms`).
+
+```gambiarrascript
+mostra raiz(144)         # 12
+mostra abs(-42)          # 42
+mostra teto(3.14)        # 4
+mostra chao(3.99)        # 3
+mostra arredonda(3.5)    # 4
+mostra min(7, 2, 9, 1)   # 1
+mostra max(7, 2, 9, 1)   # 9
+mostra 7 / 2             # 3.5
+mostra 6 / 3             # 2
+mostra 2 ** 10           # 1024
+
+bota r = 3
+mostra formata("%.4f", pi * r ** 2)            # 28.2743 (circle area)
+bota rad = 60 * pi / 180                        # degrees -> radians
+mostra formata("%.4f", seno(rad))              # 0.8660
+mostra arredonda(tangente(pi / 4))             # 1
+mostra log10(1000)                             # 3
+mostra exp(0)                                  # 1
+mostra arredonda(log(exp(5)))                  # 5
+```
+
+## Random
+
+Everything comes from one shared generator. Call `semente(n)` ("seed") and the
+sequence becomes reproducible (affects `aleatorio`, `embaralha`, `escolhe_um`
+and `uuid`).
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `aleatorio([max])` | `([numero])` | `numero` in `[0, 1)`; with `max`, in `[0, max)` |
+| `semente(n)` | `(numero)` | `nada` — sets the seed |
+| `embaralha(lista)` | `(lista)` | new shuffled `lista` |
+| `escolhe_um(lista)` | `(lista)` | one randomly picked item |
+| `uuid()` | `()` | `texto` — UUID v4 (don't use it for security) |
+
+```gambiarrascript
+semente(42)                              # same luck every time
+bota dado = chao(aleatorio(6)) + 1       # 1 to 6
+mostra "deu " + dado
+mostra escolhe_um(["vermelho", "verde", "azul"])
+```
+
+## Time and dates
+
+Instants are **ISO 8601 text** (`"2024-06-15T13:45:00Z"`) or a **number** (unix
+seconds). Durations are numbers in **nanoseconds**. Formats use Go's reference
+layout: `2006-01-02 15:04:05`.
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `agora()` | `()` | ISO 8601 `texto` (UTC) |
+| `agora_num()` / `agora_ns()` | `()` | unix `numero` in seconds / nanoseconds |
+| `formata_tempo(formato, instante)` | `(texto, texto ou numero)` | `texto` |
+| `parse_tempo(formato, t)` | `(texto, texto)` | ISO 8601 `texto` |
+| `duracao(dic)` | `(dicionario)` | `numero` (ns) from `{"h", "m", "s", "ms", "us", "ns"}` |
+| `duracao(inst1, inst2)` | `(instante, instante)` | `numero` (ns) from `inst1` to `inst2` |
+| `soma_tempo(inst, ns)` / `sub_tempo(inst, ns)` | `(instante, numero)` | ISO 8601 `texto` |
+| `dia_da_semana(inst)` | `(instante)` | `texto` (`"domingo"`, `"segunda"`, ..., `"sabado"`) — weekday names in Portuguese |
+| `diferenca_dias(i1, i2)` / `diferenca_horas(i1, i2)` | `(instante, instante)` | integer `numero` (can be negative) |
+| `converte_tz(inst, tz)` | `(instante, texto)` | ISO 8601 `texto` in the time zone (e.g. `"America/Sao_Paulo"`) |
+| `espera_ms(ms)` | `(numero)` | `nada` — sleeps `ms` milliseconds |
+
+```gambiarrascript
+bota natal = parse_tempo("2006-01-02 15:04", "2024-12-25 10:00")
+mostra natal                                        # 2024-12-25T10:00:00Z
+mostra formata_tempo("02/01/2006", natal)           # 25/12/2024
+mostra dia_da_semana(natal)                         # quarta
+mostra soma_tempo(natal, duracao({"h": 2}))         # 2024-12-25T12:00:00Z
+mostra converte_tz(natal, "America/Sao_Paulo")      # 2024-12-25T07:00:00-03:00
+espera_ms(10)                                       # 10ms nap
+```
+
+## Crypto, encoding and compression
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `md5(t)` / `sha1(t)` / `sha256(t)` / `sha512(t)` | `(texto)` | hex hash `texto` |
+| `hmac_sha256(chave, t)` | `(texto, texto)` | hex `texto` |
+| `base64_codifica(t)` / `base64_decodifica(t)` | `(texto)` | `texto` |
+| `base32_codifica(t)` / `base32_decodifica(t)` | `(texto)` | `texto` |
+| `hex_codifica(t)` / `hex_decodifica(t)` | `(texto)` | `texto` |
+| `gzip_comprime(t)` | `(texto)` | `texto` — base64 of the gzipped bytes |
+| `gzip_descomprime(t)` | `(texto)` | the original `texto` |
+
+```gambiarrascript
+mostra md5("gambiarra")                          # f964fedd110c1d0d999b9592473a05c5
+mostra base64_codifica("tropa")                  # dHJvcGE=
+mostra hex_codifica("AB")                        # 4142
+bota z = gzip_comprime("salve salve salve salve")
+mostra gzip_descomprime(z)                       # salve salve salve salve
+```
+
+`md5`/`sha*` are for checksums — not for storing passwords. For that there's
+the section below.
+
+## Security: passwords, encryption, JWT and tokens
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `hash_senha(senha, [custo])` | `(texto, [numero 4..31])` | `texto` — bcrypt hash (`$2a$12$...`); default cost **12** |
+| `confere_senha(senha, hash)` | `(texto, texto)` | `booleano` — constant time; a garbage hash gives `deu_ruim` (false) instead of throwing |
+| `encripta(t, chave)` | `(texto, texto)` | base64 `texto` — AES-256-GCM, random nonce |
+| `decripta(cifrado, chave)` | `(texto, texto)` | `texto` — a wrong key or tampered text throws |
+| `gera_chave()` | `()` | `texto` — 32 random bytes in base64 (44 chars) |
+| `token_aleatorio([bytes])` | `([numero])` | base64url `texto` without `=`; default 32 bytes (43 chars) |
+| `jwt_assina(dados, segredo, [opcoes])` | `(dicionario, texto, [dicionario])` | `texto` — HS256 JWT |
+| `jwt_confere(token, segredo)` | `(texto, texto)` | `dicionario` with the claims, or an error of type `"jwt"` |
+
+**Passwords.** bcrypt only looks at 72 bytes: a longer password throws instead
+of being silently truncated. Hashes from other systems (`$2y$` from
+PHP/htpasswd, `$2b$`) verify normally.
+
+**encripta/decripta.** The key can be:
+
+- a real key — what `gera_chave()` returns (base64 of 32 bytes, standard or
+  url) or 64 hex characters: used directly, fast. Output =
+  base64(`nonce(12) + cifrado + tag(16)`), the usual AES-GCM format;
+- any other text (password/passphrase): turned into a key with **scrypt**
+  (N=2^15, r=8, p=1) and a random salt per message, which goes in front:
+  base64(`sal(16) + nonce + cifrado + tag`). That's ~50ms per call **on
+  purpose** (it slows down whoever is guessing the phrase) — on a hot path use
+  `gera_chave()`.
+
+A wrong key and tampered text give the same error (type `"builtin"`):
+`nao deu pra decriptar: chave errada ou texto adulterado`.
+
+**JWT.** HS256 only, built with the stdlib. `jwt_assina` accepts
+`{"expira_em": segundos}` (sets `iat` and `exp`). `jwt_confere` rejects — with
+an error of type `"jwt"`, which you can catch and turn into a 401 — a wrong
+signature, an expired `exp`, an `nbf` in the future, a malformed token and
+**any `alg` that isn't HS256** (including `"none"`). The signature is compared
+in constant time.
+
+```gambiarrascript
+bota hash = hash_senha("hunter2")
+mostra confere_senha("hunter2", hash)            # deu_bom
+mostra confere_senha("Hunter2", hash)            # deu_ruim
+
+bota chave = gera_chave()                        # keep it in an env var/vault
+bota c = encripta("cpf 123.456.789-00", chave)
+mostra decripta(c, chave)                        # cpf 123.456.789-00
+
+crava SEGREDO = env("JWT_SEGREDO", "troca-isso")
+bota token = jwt_assina({"sub": "ze"}, SEGREDO, {"expira_em": 3600})
+arruma
+    bota claims = jwt_confere(token, SEGREDO)
+    mostra claims.sub                            # ze
+quebrou err
+    mostra erro_tipo(err)                        # jwt (becomes a 401)
+acabou_finalmente
+
+mostra tamanho(token_aleatorio())                # 43
+```
+
+Full example in `examples/seguranca.gs`.
+
+## JSON
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `de_json(t)` | `(texto)` | dictionary / list / text / number / boolean / `nada` |
+| `pra_json(v)` | `(valor)` | compact `texto` (no spaces); a list/dictionary that contains itself throws |
+
+Key order is preserved both ways. See [JSON](/docs/en/json).
+
+## CSV
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `le_csv(caminho)` | `(texto)` | `lista` of dictionaries — the 1st line becomes the header; values are always text |
+| `escreve_csv(caminho, lista, [cabecalhos])` | `(texto, lista de dicionarios, [lista de textos])` | `nada` — without `cabecalhos`, uses the keys of the 1st dictionary |
+
+## Files and the filesystem
+
+Relative paths are relative to the **directory `gs` was run from** (not to the
+script). Disk failures become errors of type `"io"`.
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `le_arquivo(caminho)` | `(texto)` | `texto` |
+| `escreve_arquivo(caminho, t)` | `(texto, texto)` | `nada` — creates or **overwrites** |
+| `anexa_arquivo(caminho, t)` | `(texto, texto)` | `nada` — appends at the end (creates it if missing) |
+| `existe(caminho)` | `(texto)` | `booleano` |
+| `eh_dir(caminho)` | `(texto)` | `booleano` |
+| `cria_dir(caminho)` | `(texto)` | `nada` — like `mkdir -p` |
+| `le_dir(caminho)` | `(texto)` | `lista` of names (1 level, alphabetical order) |
+| `deleta(caminho)` | `(texto)` | `nada` — file or folder (recursive); not existing isn't an error |
+| `copia(de, pra)` / `move(de, pra)` | `(texto, texto)` | `nada` |
+| `tamanho_arquivo(caminho)` | `(texto)` | `numero` of bytes |
+| `modificado_em(caminho)` | `(texto)` | unix `numero` in seconds (goes straight into `formata_tempo`) |
+| `glob(padrao)` | `(texto)` | `lista` of paths (`*`, `?`, `[...]`); no match = `[]` |
+| `caminho_junta(p1, p2, ...)` | `(texto...)` | `texto` |
+| `caminho_base(c)` / `caminho_dir(c)` / `caminho_ext(c)` | `(texto)` | `texto` (`"nota.txt"`, `"tmp/a"`, `".txt"`) |
+| `caminho_abs(c)` | `(texto)` | absolute `texto` |
+
+```gambiarrascript
+cria_dir("tmp/a")
+escreve_arquivo("tmp/a/nota.txt", "linha 1\n")
+anexa_arquivo("tmp/a/nota.txt", "linha 2\n")
+mostra le_arquivo("tmp/a/nota.txt")        # linha 1 / linha 2
+mostra le_dir("tmp/a")                     # [nota.txt]
+mostra caminho_ext("tmp/a/nota.txt")       # .txt
+deleta("tmp")
+mostra existe("tmp")                       # deu_ruim
+```
+
+## Console, stdin and process
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `escreve(t)` | `(qualquer)` | `nada` — stdout **without** a newline |
+| `escreve_erro(t)` | `(qualquer)` | `nada` — stderr |
+| `pergunta([prompt])` | `([texto])` | `texto` — reads one line from stdin |
+| `le_tudo()` | `()` | `texto` — the whole stdin until EOF |
+| `le_linhas()` | `()` | `lista` of texts — stdin, one line per item |
+| `argumentos()` | `()` | `lista` of texts passed after the script |
+| `env(nome, [padrao])` | `(texto, [valor])` | `texto`; if the variable doesn't exist, the `padrao` (or `nada`) |
+| `roda_comando(cmd, [args])` | `(texto, [lista de textos])` | `dicionario` `{saida, erro, codigo}` |
+| `sai([codigo])` | `([numero])` | ends the script right away (default `0`) |
+
+`roda_comando` doesn't go through a shell: the command and the arguments are
+passed separately. A non-zero exit code is **not** an error — it comes in
+`codigo` for you to decide. It only throws when the command can't even start.
+
+```gambiarrascript
+bota r = roda_comando("echo", ["salve, tropa"])
+mostra tira_espaco(r.saida)        # salve, tropa
+mostra r.codigo                    # 0
+
+bota f = roda_comando("sh", ["-c", "exit 2"])
+se_colar f.codigo != 0
+    escreve_erro("falhou com codigo ${f.codigo}\n")
+    sai(f.codigo)
+acabou_finalmente
+```
+
+Run `gs roda script.gs primeiro segundo` — `argumentos()` returns
+`[primeiro, segundo]`. Everything that comes **after** the file belongs to the
+script: `gs`'s own flags (`--tree`, `--cache`) go before it.
+
+## Config: flags, .env and logging
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `opcoes(padroes, [ajudas])` | `(dicionario, [dicionario])` | `dicionario` — defaults + the `--flags` from `argumentos()`, positionals in `"_"` |
+| `carrega_env([caminho], [opcoes])` | `([texto], [dicionario])` | `dicionario` of the file's keys (effective value in the environment) |
+| `log_debug(msg, [campos])` / `log_info` / `log_aviso` / `log_erro` | `(valor, [dicionario])` | `nada` — one line on **stderr** |
+
+**opcoes.** Each flag's type comes from its default: number (`--porta 9090` or
+`--porta=9090`), text, boolean (`--verboso` turns it on, `--no-verboso` or
+`--sem-verboso` turns it off, `--verboso=deu_ruim` works too), list (a
+repeatable flag: `--tag a --tag b`) or `nada` (optional text). `-` and `_` in
+the name are interchangeable (`--log-nivel` fills `"log_nivel"`). Anything
+that isn't a flag goes into the list in `"_"`; after `--` everything goes
+there. An unknown flag, a broken number
+(`--porta espera numero, veio abc`) or a missing value become an error listing
+the flags that exist. `--ajuda` (or `--help`, `-h`) prints the generated help —
+with the descriptions from the 2nd argument — and exits with code 0.
+
+**carrega_env.** Reads `KEY=valor` (default `.env`): blank lines and `#`
+comments are ignored, so is a leading `export `, `valor # comentario` loses the
+comment, double quotes accept `\n` `\t` `\"` and can span lines, single quotes
+are literal. It doesn't expand `${VAR}`. A variable that **already exists** in
+the environment wins over the file (12-factor), unless you pass
+`{"sobrescreve": deu_bom}`. A file that doesn't exist becomes an error of type
+`"io"`; a broken line aborts without applying anything halfway.
+
+**log.** Text format: `2026-10-02T12:00:00-03:00 INFO subiu porta=8080
+modo="dev local"` (values with spaces/quotes get quoted; a newline in the
+message becomes `\n`). With `GS_LOG_FORMATO=json` you get one object per line —
+`{"time", "nivel", "msg", "campos"}` — for your log collector. `GS_LOG_NIVEL` =
+`debug`, `info` (default), `aviso` or `erro`. Both are read on every call (a
+`carrega_env` at the start already counts) and each call writes a whole line,
+even with several goroutines logging at once.
+
+```gambiarrascript
+carrega_env()                                    # reads .env, if there is one
+bota cfg = opcoes({"porta": 8080, "verboso": deu_ruim}, {"porta": "porta HTTP"})
+log_info("subiu", {"porta": cfg.porta, "extras": cfg._})
+```
+
+`gs roda app.gs --porta 9090 --verboso` → `cfg.porta` = `9090`,
+`cfg.verboso` = `deu_bom`. Full example in `examples/config.gs`.
+
+## HTTP
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `busca(url, [opcoes])` | `(texto, [dicionario])` | `dicionario` `{status, ok, corpo, cabecalhos, [corpo_base64]}` |
+| `rota(metodo, caminho, handler)` | `(texto, texto, gambiarra)` | `nada` — registers the route (`/usuarios/:id`, `/arquivos/*resto`) |
+| `escuta(porta, [opcoes])` | `(numero ou texto, [dicionario])` | blocks while serving (each request in parallel); ctrl+c shuts down gracefully. HTTPS with `{"tls": {"cert": "cert.pem", "chave": "chave.pem"}}` |
+| `responde_json(valor, [status])` | `(valor, [numero])` | response `dicionario` with the JSON |
+| `antes(handler)` | `(gambiarra(pedido))` | `nada` — middleware before the routes |
+| `depois(handler)` | `(gambiarra(pedido, resposta))` | `nada` — middleware after the routes |
+| `cors([opcoes])` | `([dicionario])` | `nada` — turns on CORS + preflight |
+| `serve_pasta(prefixo, pasta)` | `(texto, texto)` | `nada` — static files |
+| `rota_ws(caminho, handler)` | `(texto, gambiarra(ws, pedido))` | `nada` — WebSocket endpoint |
+| `conecta_ws(url, [opcoes])` | `(texto, [dicionario])` | WebSocket connection (use `envia`/`recebe`/`fecha`) |
+| `gera_certificado([hosts])` | `([lista de texto])` | `dicionario` `{cert, chave}` in PEM — self-signed, **dev only** |
+
+Options for `busca` (`metodo`, `corpo`, `json`, `corpo_base64`, `cabecalhos`, `timeout`, `ca`, `inseguro`) in
+[HTTP (client)](/docs/en/http); the `pedido` (request) and the handler's response in
+[HTTP server](/docs/en/servidor).
+
+## Network (TCP/UDP)
+
+Raw sockets. Doesn't work in the playground (wasm). A connection is used just
+like a `cano` ("pipe"): `envia`, `recebe` (blocks; `nada` when the other side
+closed) and `fecha`.
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `conecta_tcp(end, [opcoes])` | `(texto "host:porta", [dicionario])` | connection — options `{"modo": "linha"/"bruto", "timeout": segundos, "tls": deu_bom ou {"servidor", "inseguro", "ca"}}` |
+| `escuta_tcp(porta, handler, [opcoes])` | `(numero ou texto, gambiarra(conexao), [dicionario])` | blocks while serving; each connection in a goroutine. Options: `modo`, `timeout`, `pronto`, `para`, `tls` (`{"cert", "chave"}`) |
+| `endereco(con)` | `(conexao)` | `texto` `"ip:porta"` of the other side |
+| `conecta_udp(end, [opcoes])` | `(texto, [dicionario])` | UDP connection (one datagram per `envia`/`recebe`); option `timeout` |
+| `escuta_udp(porta, handler, [opcoes])` | `(numero ou texto, gambiarra(mensagem, remetente), [dicionario])` | blocks; whatever text the handler returns goes back to the sender. Options: `pronto`, `para` |
+| `envia_udp(end, texto)` | `(texto, texto)` | `nada` — sends one datagram and forgets about it |
+
+Framing, timeouts, TLS and graceful shutdown in [Network (TCP/UDP)](/docs/en/rede).
+
+## Database
+
+SQLite, MySQL/MariaDB and Postgres. Doesn't work in the playground (wasm).
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `conecta(url)` | `(texto)` | connection — `"sqlite::memory:"`, `"sqlite:dados.db"`, `"mysql://user:senha@host:3306/db"`, `"postgres://..."` |
+| `consulta(con, sql, params...)` | `(conexao, texto, valores ou lista)` | `lista` of dictionaries (`coluna: valor`) |
+| `executa(con, sql, params...)` | `(conexao, texto, valores ou lista)` | `numero` of affected rows |
+| `fecha(con)` | `(conexao)` | `nada` |
+
+The params can come loose or in a list; the placeholder is the driver's (`?` on
+sqlite/mysql, `$1` on postgres).
+
+```gambiarrascript
+bota c = conecta("sqlite::memory:")
+executa(c, "CREATE TABLE gente (nome TEXT, idade INTEGER)")
+executa(c, "INSERT INTO gente VALUES (?, ?)", "Ze", 30)
+executa(c, "INSERT INTO gente VALUES (?, ?)", ["Rita", 25])
+pra_cada linha em consulta(c, "SELECT nome, idade FROM gente ORDER BY idade")
+    mostra "${linha.nome} tem ${linha.idade}"     # Rita tem 25 / Ze tem 30
+acabou_finalmente
+fecha(c)
+```
+
+## Errors
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `quebra(msg, [causa])` | `(texto, [erro])` | throws an error of type `"usuario"` |
+| `envolve_erro(tipo, msg, causa)` | `(texto, texto, erro)` | throws a new error wrapping `causa` |
+| `erro_msg(e)` | `(erro)` | the message `texto` |
+| `erro_linha(e)` | `(erro)` | the line `numero` |
+| `erro_tipo(e)` | `(erro)` | `texto`: `"runtime"`, `"builtin"`, `"io"`, `"rede"`, `"parse"`, `"usuario"`, `"jwt"` (or whatever you passed to `envolve_erro`) |
+| `erro_pilha(e)` | `(erro)` | `lista` of `{"funcao", "linha"}` |
+| `erro_causa(e)` | `(erro)` | the inner error, or `nada` |
+
+Details in [Arruma / quebrou](/docs/en/erros).
+
+## Concurrency
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `cano([cap])` | `([numero])` | channel; no arg (or `0`) = synchronous |
+| `envia(cano, v)` | `(cano ou conexao, valor)` | `nada` — blocks until there's room/a receiver; a closed pipe throws |
+| `recebe(cano)` | `(cano ou conexao)` | the value, or `nada` if the pipe (or the connection) closed |
+| `fecha(cano)` | `(cano ou conexao)` | `nada` — can be called more than once |
+| `espera(futuro)` | `(futuro ou lista de futuros)` | the value (or the list of values, in order) |
+| `paralelo(lista, fn)` | `(lista, gambiarra)` | `lista` with `fn(item)` run in parallel (up to 256 at a time), in the original order |
+| `trava()` | `()` | `trava` ("lock") — a lock to use with `com_trava` |
+| `com_trava(t, fn)` | `(trava, gambiarra)` | whatever `fn()` returns, run while holding the lock (always released; errors propagate; not reentrant) |
+
+The keyword `bora fn(args)` fires the gambiarra off in a goroutine and returns
+a future. Details in [Concurrency](/docs/en/concorrencia).
+
+## Tests
+
+Used by `gs testa` (`*_test.gs` files), but they work in any script: a failure
+prints `FALHA: ...` to stderr and the script keeps going.
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `espera(recebido, esperado)` | `(valor, valor)` | `nada` — equality assert (with **2** arguments) |
+| `afirma(cond, [msg])` | `(valor, [texto])` | `nada` — truthiness assert |
+
+See [Command line](/docs/en/cli#gs-testa).

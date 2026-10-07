@@ -3,8 +3,9 @@ title: Control flow
 description: se_colar, enquanto, pra_cada, escolhe/caso, the ternary and closing blocks with acabou_finalmente.
 ---
 
-Every opened block is closed with `acabou_finalmente`. Indentation is free
-(it's not significant like in Python) — what counts is the open/close pair.
+Every opened block is closed with `acabou_finalmente` ("finally over").
+Indentation is free (it's not significant like in Python) — what counts is the
+open/close pair.
 
 ## se_colar / se_nao_colar
 
@@ -20,23 +21,28 @@ se_nao_colar
 acabou_finalmente
 ```
 
-`se_nao_colar` chains as `else if`. The last `se_nao_colar` without a condition
-is the final `else`.
+`se_colar` ("if it sticks") opens the conditional; `se_nao_colar` ("if it
+doesn't stick") chains like `else if`. The last `se_nao_colar` without a
+condition is the final `else`. Remember that only `nada` and `deu_ruim` are
+false — `0` and `""` get into the `se_colar` (see
+[Gotchas](/docs/en/pegadinhas#truthiness)).
 
-## Ternary
+## Ternary: se_colar ... entao ... se_nao_colar
 
-With `entao`, `se_colar` becomes an **expression** (no `acabou_finalmente`):
+With `entao` ("then"), `se_colar` becomes an **expression** (no
+`acabou_finalmente`):
 
 ```gambiarrascript
 bota idade = 15
-mostra se_colar idade >= 18 entao "pode entrar" se_nao_colar "volta daqui a pouco"
-# volta daqui a pouco
+bota recado = se_colar idade >= 18 entao "pode entrar" se_nao_colar "volta daqui a pouco"
+mostra recado              # volta daqui a pouco
 ```
 
 ## escolhe / caso (switch)
 
-Compares the value with each `caso` using `==`. A `caso` can list several
-values; there is no fallthrough. `se_nao_colar` is the default.
+Compares the value with each `caso` using `==`. A `caso` accepts several
+values separated by commas; there is no fallthrough (only the first one that
+matches runs). `se_nao_colar` is the "default".
 
 ```gambiarrascript
 gambiarra clima(condicao)
@@ -51,8 +57,12 @@ gambiarra clima(condicao)
 acabou_finalmente
 
 mostra clima("calor")      # bora pra praia
+mostra clima("chuva")      # fica em casa
 mostra clima("neblina")    # sei la, olha pela janela
 ```
+
+Heads up: `escolhe` ("pick") is a keyword; the random-pick builtin is
+`escolhe_um`.
 
 ## enquanto (while)
 
@@ -60,27 +70,27 @@ mostra clima("neblina")    # sei la, olha pela janela
 bota i = 0
 enquanto i < 3
     mostra i
-    bota i = i + 1
+    i += 1
 acabou_finalmente
 ```
 
-## pra_cada numeric
+## Numeric pra_cada
 
 ```gambiarrascript
-pra_cada i de 1 ate 10
+pra_cada i de 1 ate 5
     mostra i
 acabou_finalmente
 ```
 
-The range is inclusive on both ends (`de 1 ate 10` includes 10) and only
-counts up: `de 10 ate 7` runs zero times. To count down, iterate a range:
+The range is inclusive on both ends (`de 1 ate 5` includes the 5) and only
+counts up: `de 10 ate 7` doesn't run even once. To count down, use a range:
 `pra_cada i em 10..7`.
 
 ## pra_cada em (for-each)
 
-Works with lists, dicts and sets (iterates the **keys** of the dict; dicts
-and sets go in insertion order). With two names you get pairs: index + item
-for lists (and sets), key + value for dicts.
+Works with lists, dicts and sets (it iterates the **keys** of a dict; dicts
+and sets go in insertion order). With two names you get the pair: index + item
+for a list (and a set), key + value for a dict.
 
 ```gambiarrascript
 bota frutas = ["abacaxi", "goiaba", "caju"]
@@ -88,19 +98,21 @@ pra_cada fruta em frutas
     mostra "hoje tem: " + fruta
 acabou_finalmente
 
-bota dic = {"a": 1, "b": 2}
-pra_cada chave em dic
-    mostra chave + " = " + dic[chave]
+pra_cada i, fruta em frutas
+    mostra "${i + 1}. ${fruta}"
 acabou_finalmente
 
-pra_cada chave, valor em dic
-    mostra "${chave} -> ${valor}"
+bota precos = {"cafe": 5, "pao": 1}
+pra_cada item, preco em precos
+    mostra "${item} custa ${preco}"
 acabou_finalmente
 
 pra_cada n em 3..1
     mostra n               # 3, 2, 1
 acabou_finalmente
 ```
+
+Text isn't directly iterable: use `pra_cada letra em separa(t, "")`.
 
 ## vaza and continua
 
@@ -116,8 +128,12 @@ pra_cada i de 1 ate 10
 acabou_finalmente
 ```
 
-`vaza` breaks out of the loop, `continua` skips to the next iteration. Outside
-a loop, both are an error — `gs roda` reports it before running anything.
+`vaza` ("bail") leaves the loop, `continua` skips to the next iteration.
+Outside a loop both are an error — `gs roda` already complains before it
+starts running.
 
-`sai(code)` ends the whole script right away, from anywhere, with that exit
-code.
+## Exiting the script
+
+`sai(codigo)` ("exit") ends the script right away, from anywhere (inside a
+function, a loop, whatever), with that process exit code. With no argument, it
+exits with `0`.

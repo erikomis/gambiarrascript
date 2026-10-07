@@ -1,59 +1,60 @@
 ---
 title: Vocabulary
-description: The keywords of GambiarraScript — Brazilian slang, fixed, no alias.
+description: The GambiarraScript keywords, translated into the Brazilian jeitinho.
 ---
 
-GambiarraScript uses one pegada (footing) per concept — no competing aliases.
-Memorize this table and you know the language.
+GambiarraScript uses a single vibe for each concept — no competing aliases.
+Memorize this table and you've memorized the language.
 
 ## Keywords
 
-| Keyword             | Equivalent          | What it does |
-| ------------------- | ------------------ | ------------ |
-| `bota`              | `let` / `var`      | declares (or re-assigns) a variable; also `bota [a, b] = list` / `bota {x, y} = dict` |
-| `crava`             | `const`            | declares a constant: the name can't be reassigned |
-| `mostra`            | `print`            | prints to stdout (statement, not a function) |
-| `se_colar`          | `if`               | opens a conditional |
-| `se_nao_colar`      | `else` / `else if`  | clause of `se_colar`; takes a condition (else-if) or not (final else) |
+| Keyword             | Equivalent           | What it does |
+| ------------------- | -------------------- | ------------ |
+| `bota`              | `let` / `var`        | declares (or re-assigns) a variable; also `bota [a, b] = lista` / `bota {x, y} = dic` |
+| `crava`             | `const`              | declares a constant: the name can no longer be re-assigned |
+| `mostra`            | `print`              | prints to the screen (a statement, not a function) |
+| `se_colar`          | `if`                 | opens a conditional |
+| `se_nao_colar`      | `else` / `else if`   | clause of `se_colar`; takes a condition (becomes else-if) or not (final else) |
 | `se_colar c entao a se_nao_colar b` | `c ? a : b` | ternary (an expression, no `acabou_finalmente`) |
-| `escolhe` / `caso`  | `switch` / `case`  | compares with `==`, no fallthrough; `se_nao_colar` is the default |
-| `enquanto`          | `while`            | loops while the condition is true |
+| `escolhe` / `caso`  | `switch` / `case`    | compares with `==`, no fallthrough; `se_nao_colar` is the default |
+| `enquanto`          | `while`              | loops while the condition is true |
 | `pra_cada i de A ate B` | `for i in range(A, B+1)` | inclusive numeric loop (counts up only) |
-| `pra_cada x em colecao` | `for x in ...` | for-each over a list, dict or set (iterates the **keys** of a dict) |
-| `pra_cada i, v em colecao` | `enumerate` / `.items()` | index + item for lists, key + value for dicts |
-| `gambiarra`         | `func` / `fn` / `def`| declares a function (named) or a lambda (anonymous) |
-| `funciona`          | `return`           | returns a value from a function |
-| `arruma`            | `try`              | opens a try block |
-| `quebrou <nome>`    | `catch <e>`        | catches the error into a variable |
-| `finalmente`        | `finally`          | always runs, error or not |
-| `vaza`              | `break`            | breaks out of a loop |
-| `continua`          | `continue`         | skips to the next iteration |
-| `importa "x.gs" [como nome]` | `import`  | imports a `.gs` module (with `como`, it becomes a dict) |
-| `bora`              | `go` (goroutine)   | launches a function in parallel; returns a future |
+| `pra_cada x em colecao` | `for x in ...`   | for-each over a list, dict or set (for a dict, the **keys**) |
+| `pra_cada i, v em colecao` | `for i, v in enumerate(...)` / `.items()` | index + item for a list, key + value for a dict |
+| `gambiarra`         | `func` / `fn` / `def`| declares a function (named) or a lambda (unnamed) |
+| `funciona`          | `return`             | returns a value from the gambiarra |
+| `arruma`            | `try`                | opens an error-handling block |
+| `quebrou <nome>`    | `catch <e>`          | catches the error into a variable |
+| `finalmente`        | `finally`            | always runs, error or not |
+| `vaza`              | `break`              | leaves the loop |
+| `continua`          | `continue`           | skips to the next iteration |
+| `importa "x.gs" [como nome]` | `import`    | imports a `.gs` module (with `como`, it becomes a dict) |
+| `bora`              | `go` (goroutine)     | fires a function off in parallel; returns a future |
 | `deu_bom` / `deu_ruim` | `true` / `false`  | booleans |
-| `nada`              | `null` / `None`    | the single null value |
+| `nada`              | `null` / `None`      | the one and only null value |
 | `e` / `ou` / `nao`  | `and` / `or` / `not` | logical operators (always return a boolean) |
-| `acabou_finalmente` | `}`                | closes **any** block (`se_colar`, `escolhe`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`) |
+| `acabou_finalmente` | `}`                  | closes **any** block (`se_colar`, `escolhe`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`) |
 
-Keywords are fixed: there is no alias to pick your favorite (and none of them
-can be used as a variable name — not even `e`, `de` or `em`). The only thing
-that exists is the feeling: `acabou_finalmente` closes any open block.
+The keywords are fixed: there's no alias for you to pick the one you like best
+(and none of them can become a variable name — not even `e`, `de` or `em`).
+What does exist is the feeling: `acabou_finalmente` ("finally over") closes any
+open block.
 
 ## Operators
 
-| Category    | Symbols |
-| ----------- | ------- |
-| Arithmetic  | `+ - * / %`, power `**` (right-associative) |
-| Bitwise     | `& \| ^ ~ << >>` (integers only) |
-| Comparison  | `== != < > <= >=` |
-| Logical     | `e` (and), `ou` (or), `nao` (not prefix) |
-| Nil-safety  | `x?.field` (safe navigation), `x ?? default` (coalescing) |
-| Range       | `1..5` → `[1, 2, 3, 4, 5]` |
-| Assignment  | `bota x = ...`, `crava X = ...`; compound `+= -= *= /= %= **= &= \|= ^= <<= >>=` without `bota` |
-| Index/slice | `xs[i]`, `xs[-1]`, `xs[1:3]`, `xs[:2]`, `xs[2:]` |
-| Field       | `dict.field` (shorthand for `dict["field"]`) |
-| Call        | `f(args)`; spreading a list: `f(1, ...xs)`; in a declaration: `f(a, b = 10, ...rest)` |
-| String      | `"hi ${name}"` (interpolation), `"${price:.2f}"` (with a format spec) |
+| Category      | Symbols |
+| ------------- | ------- |
+| Arithmetic    | `+ - * / %`, power `**` (right-associative) |
+| Bitwise       | `& \| ^ ~ << >>` (integers only) |
+| Comparison    | `== != < > <= >=` |
+| Logical       | `e` (and), `ou` (or), `nao` (prefix not) |
+| Nada (null)   | `x?.campo` (safe navigation), `x ?? padrao` (coalescing) |
+| Range         | `1..5` → `[1, 2, 3, 4, 5]` |
+| Assignment    | `bota x = ...`, `crava X = ...`; compound `+= -= *= /= %= **= &= \|= ^= <<= >>=` without `bota` |
+| Index/slice   | `xs[i]`, `xs[-1]`, `xs[1:3]`, `xs[:2]`, `xs[2:]` |
+| Field         | `dic.campo` (shorthand for `dic["campo"]`) |
+| Call          | `f(args)`; spreading a list: `f(1, ...xs)`; in the declaration: `f(a, b = 10, ...resto)` |
+| Text          | `"oi ${nome}"` (interpolation), `"${preco:.2f}"` (with a format) |
 
 ### Precedence (weakest to strongest)
 
@@ -69,17 +70,16 @@ that exists is the feeling: `acabou_finalmente` closes any open block.
 10. `+ -`
 11. `* / %`
 12. prefix (`-`, `nao`, `~`)
-13. `**` (so `-2 ** 2` is `-4`)
+13. `**` (`-2 ** 2` is `-4`)
 14. call `f(args)`
-15. index `x[i]`, field `x.field` / `x?.field`
+15. index `x[i]`, field `x.campo` / `x?.campo`
 
-Like C, `&`, `|` and `^` bind **looser** than `==`: write `(x & 1) == 1`.
+## Booleans and nulls
 
-## Booleans and null
-
-`deu_bom` and `deu_ruim` are `true`/`false`. `nada` is the null value
-(null/None). The logical operators `e` and `ou` **always return a boolean**
-(they normalize the operand), unlike JS/Python. `nao` inverts.
+`deu_bom` ("it went well") and `deu_ruim` ("it went bad") are the booleans
+`true`/`false`. `nada` ("nothing") is the null (null/None). The logical
+operators `e` and `ou` **always return a boolean** (they normalize the
+operand), unlike JS/Python. `nao` inverts.
 
 ```gambiarrascript
 bota maior = 10 > 5          # deu_bom
@@ -93,17 +93,19 @@ mostra nada ?? "padrao"      # padrao
 ## Truthiness
 
 Only `nada` and `deu_ruim` are **falsy**. Everything else is truthy: `0`, `""`,
-`[]`, `{}` all become true in a condition. To check emptiness, do it
-explicitly: `tamanho(x) == 0`, `x == ""`, etc. See [Gotchas](/docs/pegadinhas) (pt).
+`[]`, `{}` — all of them count as true in a condition. If you want to check
+for empty, be explicit: `tamanho(x) == 0`, `x == ""`, etc. See
+[Gotchas](/docs/en/pegadinhas).
 
 ## Builtins at a glance
 
-The [Standard library](/docs/biblioteca) (pt) has the full reference. Quick map:
+The [Standard library](/docs/en/biblioteca) has the full reference. Summary for
+quick reference:
 
 | Category | Functions |
 | -------- | --------- |
-| Conversion / inspection | `texto` `numero` `tamanho` `tipo` (type name as text: `"numero"`, `"lista"`, `"funcao"`...) |
-| String | `maiusculo` `minusculo` `tira_espaco` `substitui` `separa` `junta` `fatia` `contem` `comeca_com` `termina_com` `formata` |
+| Conversion / inspection | `texto` `numero` `tamanho` `tipo` |
+| Text | `maiusculo` `minusculo` `tira_espaco` `substitui` `separa` `junta` `fatia` `contem` `comeca_com` `termina_com` `formata` |
 | Regex | `busca_regex` `acha_regex` `combina_regex` `substitui_regex` `separa_regex` |
 | List | `adiciona` `remove` `ordena` `ordena_com` `inverte` `mapeia` `filtra` `reduz` `acha` `acha_indice` `unicos` `achatada` `ordena_por` `agrupa_por` `zip` `enumera` `soma` `media` |
 | Dict | `chaves` `tem` `remove` (deletes the key) |
@@ -115,11 +117,11 @@ The [Standard library](/docs/biblioteca) (pt) has the full reference. Quick map:
 | Security | `hash_senha` `confere_senha` `encripta` `decripta` `gera_chave` `token_aleatorio` `jwt_assina` `jwt_confere` |
 | Config / log | `opcoes` `carrega_env` `env` `log_debug` `log_info` `log_aviso` `log_erro` |
 | JSON / CSV | `de_json` `pra_json` `le_csv` `escreve_csv` |
-| Filesystem | `le_arquivo` `escreve_arquivo` `anexa_arquivo` `existe` `eh_dir` `cria_dir` `le_dir` `deleta` `copia` `move` `tamanho_arquivo` `modificado_em` `glob` `caminho_*` |
+| File | `le_arquivo` `escreve_arquivo` `anexa_arquivo` `existe` `eh_dir` `cria_dir` `le_dir` `deleta` `copia` `move` `tamanho_arquivo` `modificado_em` `glob` `caminho_*` |
 | Console/process | `escreve` `escreve_erro` `pergunta` `le_tudo` `le_linhas` `argumentos` `env` `roda_comando` `sai` |
 | HTTP | `busca` `rota` `escuta` `responde_json` `antes` `depois` `cors` `serve_pasta` `rota_ws` `conecta_ws` |
 | Network (TCP/UDP) | `conecta_tcp` `escuta_tcp` `endereco` `conecta_udp` `escuta_udp` `envia_udp` (+ `envia` `recebe` `fecha` on the connection) |
 | Database | `conecta` `consulta` `executa` `fecha` |
 | Errors | `quebra` `envolve_erro` `erro_msg` `erro_tipo` `erro_linha` `erro_pilha` `erro_causa` |
 | Concurrency | `espera` `cano` `envia` `recebe` `fecha` `paralelo` (+ the `bora` keyword) |
-| Tests | `espera(got, want)` `afirma(cond, [msg])` |
+| Tests | `espera(recebido, esperado)` `afirma(cond, [msg])` |

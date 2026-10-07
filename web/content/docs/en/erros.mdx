@@ -1,0 +1,151 @@
+---
+title: Arruma / quebrou
+description: Error handling with arruma...quebrou...finalmente, quebra and the erro_* builtins.
+---
+
+Errors are handled the *jeitinho brasileiro* way (the Brazilian knack for
+bending the rules): **arruma** ("fix it") tries, **quebrou** ("it broke")
+catches, **finalmente** ("finally") cleans up the mess.
+
+```gambiarrascript
+arruma
+    bota resultado = 10 / 0
+quebrou erro
+    mostra "deu ruim, parca: " + erro_msg(erro)
+acabou_finalmente
+# deu ruim, parca: deu ruim na linha 2: nao da pra dividir por zero, parca — nem na gambiarra
+```
+
+Any error inside `arruma` gets caught: division by zero, a list index out of
+range, a builtin complaining, a `quebra(...)` from your own code, an error
+inside a gambiarra called from in there (at any depth).
+
+`erro` (the name is up to you — it just can't be a keyword like `e`) receives a
+value of type **erro** (error). Concatenating it with a string or passing it
+to `texto()` gives you the message; the `erro_*` builtins open up the rest.
+
+## Without arruma
+
+An error nobody catches takes the script down: it prints the message and the
+stack trace to the terminal and exits with code `1`.
+
+```
+deu ruim na linha 2: nao da pra dividir por zero, parca — nem na gambiarra
+Traço de pilha:
+  em a (linha 5)
+```
+
+## finalmente
+
+`finalmente` runs **always** — error or not — after the `arruma`/`quebrou`.
+`quebrou` is optional when there's a `finalmente` (but `arruma` alone, with
+neither of the two, is a syntax error).
+
+```gambiarrascript
+gambiarra saca(saldo, valor)
+    se_colar valor > saldo
+        quebra("saldo insuficiente")
+    acabou_finalmente
+    funciona saldo - valor
+acabou_finalmente
+
+arruma
+    mostra saca(100, 30)                   # 70
+    mostra saca(100, 500)
+    mostra "nunca chega aqui"
+quebrou erro
+    mostra "deu ruim: " + erro_msg(erro)   # deu ruim: quebra: saldo insuficiente
+    mostra "tipo: " + erro_tipo(erro)      # tipo: usuario
+finalmente
+    mostra "fecha o caixa"                 # always runs
+acabou_finalmente
+```
+
+Without `quebrou`, the `finalmente` runs and the error **keeps bubbling up** to
+the outer `arruma` (or takes the script down, if nobody catches it):
+
+```gambiarrascript
+arruma
+    arruma
+        quebra("caiu la dentro")
+    finalmente
+        mostra "fecha o arquivo"                # runs first
+    acabou_finalmente
+quebrou erro
+    mostra "pegou aqui fora: " + erro_msg(erro) # pegou aqui fora: quebra: caiu la dentro
+acabou_finalmente
+```
+
+`finalmente` also runs when the block exits early with `funciona`, `vaza` or
+`continua`.
+
+## Throwing: quebra
+
+`quebra(mensagem)` ("break") throws an error of type `"usuario"` (user). The
+message arrives with the prefix `quebra: `. It optionally takes a cause:
+`quebra(msg, erro_original)`.
+
+## Inspecting the error
+
+| Builtin | Returns |
+| --- | --- |
+| `erro_msg(e)` | the message (`texto`) |
+| `erro_tipo(e)` | `"runtime"`, `"builtin"`, `"io"`, `"rede"`, `"parse"`, `"usuario"`, or the type you gave to `envolve_erro` |
+| `erro_linha(e)` | the line where it blew up (`0` when unknown, e.g. `quebra`) |
+| `erro_pilha(e)` | list of `{"funcao", "linha"}`, outermost first |
+| `erro_causa(e)` | the wrapped error, or `nada` |
+
+```gambiarrascript
+gambiarra a()
+    funciona 1 / 0
+acabou_finalmente
+gambiarra b()
+    funciona a()
+acabou_finalmente
+
+arruma
+    b()
+quebrou erro
+    mostra erro_tipo(erro)                       # runtime
+    mostra erro_linha(erro)                      # 2
+    pra_cada f em erro_pilha(erro)
+        mostra "em ${f.funcao} (linha ${f.linha})"
+    acabou_finalmente
+    # em b (linha 9)
+    # em a (linha 5)
+acabou_finalmente
+```
+
+File read/write errors come with type `"io"`; the rest of the builtins usually
+come as `"builtin"`.
+
+## Wrapping: envolve_erro
+
+`envolve_erro(tipo, mensagem, causa)` ("wrap error") throws a new error, with
+the type you choose, keeping the original as its cause — handy for adding
+context without losing the details:
+
+```gambiarrascript
+arruma
+    arruma
+        le_arquivo("config_que_nao_existe.json")
+    quebrou erro
+        envolve_erro("config", "nao rolou carregar a config", erro)
+    acabou_finalmente
+quebrou erro
+    mostra erro_tipo(erro)        # config
+    mostra erro_msg(erro)         # envolve: nao rolou carregar a config :: deu ruim: nao consegui ler ...
+acabou_finalmente
+```
+
+## Control signals
+
+`funciona`, `vaza`, `continua` and `sai(...)` inside an `arruma` are **not**
+errors and don't land in `quebrou` — they go straight through (the
+return/loop keeps working as usual).
+
+## Errors in goroutines
+
+An error inside a `bora fn()` is stored in the future and blows up at
+`espera(futuro)` — you can catch it with an `arruma` around the `espera`. See
+[Concurrency](/docs/en/concorrencia#errors-in-goroutines).

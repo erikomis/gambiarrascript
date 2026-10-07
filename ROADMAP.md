@@ -691,7 +691,7 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       entrada; hoje exemplos com entrada não rodam no navegador.
 - [ ] **Testar Firefox e Safari** — só o Chromium foi exercitado (worker,
       `DecompressionStream`, compartilhar).
-- [ ] **Doc em inglês completa** — hoje são 6 de 20 páginas.
+- [x] **Doc em inglês completa** — todas as 21 páginas em `docs/en/`.
 - [ ] **Wasm menor** — 13,8 MB cru / 3,4 MB gzip; o grosso deve ser
       `net/http` dos builtins de rede, que nem funcionam no navegador. Build
       tag pra tirar rede/banco/processo do `cmd/wasm`.

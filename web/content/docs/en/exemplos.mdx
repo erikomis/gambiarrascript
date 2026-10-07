@@ -1,0 +1,368 @@
+---
+title: Recipes
+description: Ready-made examples and practical ways to do common things in GambiarraScript.
+---
+
+Tried-and-true recipes for you to copy, paste and adapt. Most of them just
+combine a few builtins — the GambiarraScript way is snapping little pieces
+together.
+
+<Callout title="Examples in the repo">
+  Besides the recipes here, the repo has an `examples/` folder with ready-to-go
+  .gs scripts. You can run them directly: `gs roda examples/fizzbuzz.gs`. See
+  the list in [Command line](/docs/en/cli#examples-to-run).
+</Callout>
+
+## FizzBuzz
+
+```gambiarrascript
+pra_cada i de 1 ate 30
+    se_colar i % 15 == 0
+        mostra "FizzBuzz"
+    se_nao_colar se_colar i % 3 == 0
+        mostra "Fizz"
+    se_nao_colar se_colar i % 5 == 0
+        mostra "Buzz"
+    se_nao_colar
+        mostra i
+    acabou_finalmente
+acabou_finalmente
+```
+
+## Multiplication table
+
+```gambiarrascript
+gambiarra tabuada(n)
+    pra_cada i de 1 ate 10
+        mostra n + " x " + i + " = " + (n * i)
+    acabou_finalmente
+acabou_finalmente
+
+tabuada(7)
+```
+
+## Reading keyboard input (`pergunta`)
+
+```gambiarrascript
+mostra "Bem-vindo a GambiarraScript"
+bota nome = pergunta("Qual teu nome? ")
+mostra "Eai " + nome + ", bora tirar uma duvida"
+
+bota chute = numero(pergunta("Quanto e 6 * 7? "))
+se_colar chute == 42
+    mostra "Acertou, " + nome + "!"
+se_nao_colar
+    mostra "Quase! era 42, parca"
+acabou_finalmente
+```
+
+`pergunta()` ("ask") reads a line from stdin (trimming `\r\n`) and returns
+text. Use `numero()` to convert it.
+
+## Command-line arguments
+
+```gambiarrascript
+# run: gs roda args.gs um dois treis
+bota args = argumentos()
+mostra "recebi ${tamanho(args)} argumentos"
+pra_cada a em args
+    mostra "- " + a
+acabou_finalmente
+```
+
+## Parsing and re-serializing JSON
+
+```gambiarrascript
+bota json_texto = `{"nome": "Erik", "idade": 25, "langs": ["go", "gs"]}`
+bota dados = de_json(json_texto)
+
+mostra "nome: " + dados["nome"]
+mostra "primeira lang: " + dados["langs"][0]
+mostra "idade + 1: " + texto(dados["idade"] + 1)
+
+bota resposta = {"ok": deu_bom, "total": 2, "itens": ["a", "b"]}
+mostra pra_json(resposta)  # {"ok":true,"total":2,"itens":["a","b"]}
+```
+
+Note: `pra_json` produces **compact** JSON (no spaces). Keys from `de_json`
+always come out as **text**, even if they were numbers in the original JSON.
+
+## HTTP client
+
+```gambiarrascript
+bota r = busca("https://httpbin.org/get")
+
+mostra "status: " + texto(r["status"])
+se_colar r["ok"]
+    mostra "deu bom! resposta:"
+    mostra r["corpo"]
+se_nao_colar
+    mostra "deu ruim, parca"
+acabou_finalmente
+
+# POST sending a body
+bota envio = busca("https://httpbin.org/post", {
+    "metodo": "POST",
+    "corpo": "salve do gambiarra"
+})
+mostra "post status: " + texto(envio["status"])
+```
+
+More details in [HTTP (client)](/docs/en/http).
+
+## HTTP server (hello world)
+
+```gambiarrascript
+# run: gs roda servidor.gs
+# open: http://localhost:8080
+
+gambiarra inicio(pedido)
+    funciona "Salve! Voce pediu " + pedido["caminho"]
+acabou_finalmente
+
+gambiarra eco(pedido)
+    funciona {"status": 201, "corpo": "voce mandou: " + pedido["corpo"]}
+acabou_finalmente
+
+gambiarra ola(pedido)
+    bota nome = pedido.query.nome ?? "estranho"
+    funciona "e ai, ${nome}!"
+acabou_finalmente
+
+rota("GET", "/", inicio)
+rota("POST", "/eco", eco)
+rota("GET", "/ola", ola)
+
+mostra "servidor de pe na porta 8080 (ctrl+c pra parar)"
+escuta(8080)
+```
+
+Each request runs in parallel. See [HTTP server](/docs/en/servidor) for all the
+fields of `pedido` ("request").
+
+## REST API with JSON
+
+```gambiarrascript
+gambiarra api(pedido)
+    se_colar pedido["metodo"] != "POST"
+        funciona {"status": 405, "corpo": "so POST, parca"}
+    acabou_finalmente
+
+    arruma
+        bota dados = de_json(pedido["corpo"])
+        funciona {
+            "status": 201,
+            "corpo": pra_json({"ok": deu_bom, "recebido": dados}),
+            "cabecalhos": {"Content-Type": "application/json"}
+        }
+    quebrou erro
+        funciona {
+            "status": 400,
+            "corpo": "json zuado: " + erro,
+            "cabecalhos": {"Content-Type": "text/plain"}
+        }
+    acabou_finalmente
+acabou_finalmente
+
+rota("POST", "/api", api)
+escuta(8090)
+```
+
+## Reading and writing a file
+
+```gambiarrascript
+bota caminho = "saida.gs"
+
+escreve_arquivo(caminho, `# arquivo gerado pela GambiarraScript
+mostra "ole"`)
+
+bota conteudo = le_arquivo(caminho)
+mostra "li do disco:"
+mostra conteudo
+```
+
+`escreve_arquivo` always overwrites; to append to the end (a log, say) use
+`anexa_arquivo`. `le_arquivo` returns the content as text. There's also
+`existe`, `le_dir`, `glob`, `copia`, `move`, `deleta`... — see
+[Standard library](/docs/en/biblioteca#files-and-the-filesystem).
+
+## Map and filter (functional)
+
+```gambiarrascript
+bota nums = [1, 2, 3, 4, 5]
+
+gambiarra quadrado(n)
+    funciona n * n
+acabou_finalmente
+mostra mapeia(nums, quadrado)              # [1, 4, 9, 16, 25]
+
+gambiarra par(n)
+    funciona n % 2 == 0
+acabou_finalmente
+mostra filtra(nums, par)                    # [2, 4]
+
+# reduz accumulates; a lambda fits on one line
+mostra reduz(nums, gambiarra(acc, n) funciona acc * n acabou_finalmente)   # 120
+mostra soma(nums)                           # 15
+mostra media(nums)                          # 3
+```
+
+## Sorting by a criterion (sort by field)
+
+```gambiarrascript
+bota pessoas = [
+    {"nome": "Erik", "idade": 25},
+    {"nome": "Ana", "idade": 30},
+    {"nome": "Bia", "idade": 22}
+]
+
+# by one field, ascending (returns a new list)
+pra_cada p em ordena_por(pessoas, "idade")
+    mostra "${p.nome} (${p.idade})"
+acabou_finalmente
+# Bia (22) / Erik (25) / Ana (30)
+
+# free-form criterion: ordena_com mutates the list; here, age descending
+ordena_com(pessoas, gambiarra(a, b) funciona a.idade > b.idade acabou_finalmente)
+mostra mapeia(pessoas, gambiarra(p) funciona p.nome acabou_finalmente)   # [Ana, Erik, Bia]
+```
+
+## Reading a CSV and taking the average
+
+```gambiarrascript
+escreve_arquivo("notas.csv", "nome,nota\nAna,9\nBia,7.5\nCaio,6\n")
+
+bota alunos = le_csv("notas.csv")          # list of dicts (text values)
+bota notas = mapeia(alunos, gambiarra(a) funciona numero(a.nota) acabou_finalmente)
+mostra "media da turma: ${media(notas)}"   # media da turma: 7.5
+
+bota aprovados = filtra(alunos, gambiarra(a) funciona numero(a.nota) >= 7 acabou_finalmente)
+mostra "aprovados: ${junta(mapeia(aprovados, gambiarra(a) funciona a.nome acabou_finalmente), ", ")}"
+# aprovados: Ana, Bia
+```
+
+## Counting words
+
+```gambiarrascript
+bota frase = "o rato roeu a roupa do rei de roma o rato"
+bota contagem = {}
+pra_cada palavra em separa(frase, " ")
+    se_colar nao tem(contagem, palavra)
+        bota contagem[palavra] = 0
+    acabou_finalmente
+    contagem[palavra] += 1
+acabou_finalmente
+mostra contagem["rato"]        # 2
+
+# grouping by first letter
+bota grupos = agrupa_por(separa(frase, " "), gambiarra(p) funciona p[0] acabou_finalmente)
+mostra grupos["r"]             # [rato, roeu, roupa, rei, roma, rato]
+```
+
+## Measuring how long it took
+
+```gambiarrascript
+bota ini = agora_ns()
+bota s = soma(1..100000)
+bota ms = (agora_ns() - ini) / 1000000
+mostra "somou ${s} em ${formata("%.1f", ms)}ms"
+```
+
+To compare versions of a whole script, there's `gs bench`.
+
+## Running a system command
+
+```gambiarrascript
+bota r = roda_comando("git", ["status", "--short"])
+se_colar r.codigo != 0
+    escreve_erro("git reclamou: " + r.erro)
+    sai(r.codigo)
+acabou_finalmente
+bota linhas = filtra(separa(r.saida, "\n"), gambiarra(l) funciona l != "" acabou_finalmente)
+mostra "arquivos mexidos: ${tamanho(linhas)}"
+```
+
+## Guessing game
+
+```gambiarrascript
+bota secreto = chao(aleatorio(100))      # 0 to 99
+bota tentativas = 0
+bota acertou = deu_ruim
+
+mostra "pensei num numero de 0 a 99. chuta."
+
+enquanto nao acertou
+    bota palpite = numero(pergunta("chuta: "))
+    bota tentativas = tentativas + 1
+
+    se_colar palpite == secreto
+        bota acertou = deu_bom
+        mostra "acertou em " + texto(tentativas) + " tentativas!"
+    se_nao_colar se_colar palpite < secreto
+        mostra "e maior"
+    se_nao_colar
+        mostra "e menor"
+    acabou_finalmente
+acabou_finalmente
+```
+
+## Repeating a string N times
+
+```gambiarrascript
+gambiarra repete(s, n)
+    bota out = ""
+    pra_cada i de 1 ate n
+        bota out = out + s
+    acabou_finalmente
+    funciona out
+acabou_finalmente
+
+mostra repete("ba", 3)     # "bababa"
+mostra repete("-", 20)     # "--------------------"
+```
+
+## Reversing text (no builtin)
+
+```gambiarrascript
+gambiarra inverte_texto(s)
+    bota chars = separa(s, "")
+    inverte(chars)
+    funciona junta(chars, "")
+acabou_finalmente
+
+mostra inverte_texto("gambiarra")          # "arraibmag"
+```
+
+## Powers and compound interest
+
+Exponentiation is the `**` operator — an integer raised to an integer stays
+exact:
+
+```gambiarrascript
+mostra 2 ** 10             # 1024
+mostra 5 ** 3              # 125
+mostra 9 ** 0.5            # 3 (fractional exponent = root)
+
+crava TAXA = 0.1           # 10% per year
+bota capital = 1000
+pra_cada ano de 1 ate 3
+    mostra "ano ${ano}: ${formata("%.2f", capital * (1 + TAXA) ** ano)}"
+acabou_finalmente
+# ano 1: 1100.00 / ano 2: 1210.00 / ano 3: 1331.00
+```
+
+## Multiplication table with `adiciona` and `junta`
+
+```gambiarrascript
+bota linhas = []
+pra_cada i de 1 ate 10
+    adiciona(linhas, "7 x " + texto(i) + " = " + texto(7 * i))
+acabou_finalmente
+mostra junta(linhas, "\n")
+```
+
+## Send us your own recipe
+
+Open a PR at
+[github.com/erikomis/gambiarrascript](https://github.com/erikomis/gambiarrascript)
+with another example and we'll publish it here too.

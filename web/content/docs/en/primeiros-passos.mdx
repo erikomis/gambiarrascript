@@ -1,16 +1,18 @@
 ---
-title: Getting started
+title: First steps
 description: Write and run your first GambiarraScript script.
 ---
 
-Don't have `gs` yet? See [Install](/docs/en/instalacao) first.
+Do you already have `gs` on your machine? If not, follow
+[Installation](/docs/en/instalacao) first.
 
-The fastest way to feel the language is opening the
-[playground](/playground) in the browser — no install required.
-`Ctrl/Cmd+Enter` runs, output streams live, **Parar** (stop) interrupts (and
-scripts are stopped after 10s), and the share link carries your code in the
-URL. Anything that needs the machine (databases, files, system commands, the HTTP
-server, stdin) won't work there — install `gs` for that.
+The fastest way to get a feel for the language is opening the
+[playground](/playground) in the browser. Nothing to install: `Ctrl/Cmd+Enter`
+runs, output shows up live, the **Parar** ("stop") button interrupts (and a
+script that goes past 10s is stopped on its own), and the share link carries
+your code along in the URL. Anything that depends on the machine (databases,
+files, system commands, the server, stdin) doesn't work there — for that,
+install `gs`.
 
 ## Hello world
 
@@ -27,8 +29,9 @@ gs roda salve.gs
 # Salve, tropa!
 ```
 
-`mostra` is the print **statement** (not a function — no parentheses). It
-evaluates the expression to its right and writes it to stdout.
+`mostra` ("show") is the print statement (it's not a function, it takes no
+parentheses). It evaluates the expression next to it and writes it to the
+output.
 
 ## Variables and basic math
 
@@ -37,15 +40,16 @@ bota nome = "Erik"
 bota idade = 25
 
 mostra "salve, " + nome + "!"
-mostra "ano que vem faco ${idade + 1} primaveras"   # ${} interpolation
+mostra "ano que vem faco ${idade + 1} primaveras"   # interpolation with ${}
 
 idade += 1                                          # compound assignment
 mostra idade                                        # 26
 ```
 
-`bota` declares (and also re-assigns) a variable. A plain assignment always
-needs `bota` — a bare `x = 5` is a syntax error. Compound operators (`+=`,
-`-=`, `*=`...) don't take `bota`. See [Types & operators](/docs/tipos) (pt).
+`bota` ("put/stick") declares (and also re-assigns) a variable. A plain
+assignment always needs `bota` — a bare `x = 5` doesn't work (syntax error).
+The compound operators (`+=`, `-=`, `*=`...) don't need `bota`. See
+[Types and operators](/docs/en/tipos) for details.
 
 ## Conditionals with `se_colar`
 
@@ -61,8 +65,9 @@ se_nao_colar
 acabou_finalmente
 ```
 
-`acabou_finalmente` closes the block. Always. More in
-[Control flow](/docs/en/estruturas).
+`se_colar` ("if it sticks") is the `if`, `se_nao_colar` ("if it doesn't
+stick") is the `else`. `acabou_finalmente` ("finally over") closes the block.
+Always. More in [Control flow](/docs/en/estruturas).
 
 ## Loops and functions
 
@@ -76,30 +81,31 @@ pra_cada i de 1 ate 3
 acabou_finalmente
 ```
 
-`gambiarra` declares a function, `funciona` returns. `pra_cada i de A ate B`
-iterates inclusively from A to B. See [Functions](/docs/en/funcoes).
+`gambiarra` declares a function, `funciona` ("works") returns (see
+[Gambiarra](/docs/en/funcoes)). `pra_cada i de A ate B` ("for each i from A to
+B") runs from A to B inclusive.
 
-## Comments
+## Commenting code
 
-Two flavors:
+There are two ways:
 
 ```gambiarrascript
-# line comment — from # to end of line
+# this is a line comment (from the hash to the end of the line)
 
 /*
-  block comment
-  spans multiple lines, does not nest
+  this is a block comment
+  it can span several lines and does not nest
 */
 
 bota x = 1 /* inline */ + 2
 mostra x   # quick note on the same line
 ```
 
-`#` is a line comment; `/* ... */` is a block comment (does not nest — it
-closes at the first `*/`). `gs formata` keeps comments in place (see
-[Editor & format](/docs/ferramentas) (pt)).
+`#` makes a line comment; `/* ... */` makes a block comment (it does not nest —
+it closes at the first `*/`). `gs formata` keeps comments in place (read
+[Editor and formatter](/docs/en/ferramentas)).
 
-## REPL
+## A REPL to poke around
 
 ```bash
 gs repl
@@ -114,26 +120,27 @@ gambiarra> dobra(x)
 gambiarra> <ctrl+d>
 ```
 
-A bare expression shows its value (`=> 20`). An open block keeps reading on
-the next lines (prompt `.........`) until its `acabou_finalmente`.
-Declarations (`bota`, `gambiarra`) persist across lines. In a terminal you get
-history (↑/↓) and TAB completion; `:ajuda` lists the commands, `ctrl+d` exits.
+A bare expression shows its value (`=> 20`). An open block keeps going on the
+next line (prompt `.........`) until the `acabou_finalmente`. Declarations
+(`bota`, `gambiarra`) persist between lines. In a terminal you get history
+(↑/↓) and TAB completes names; `:ajuda` lists the commands and `ctrl+d` gets
+you out.
 
 ## Running the examples
 
-The repo ships `examples/` with ready scripts:
+The repo has `examples/` with a bunch of ready-made scripts:
 
 ```bash
-ls examples/                  # fizzbuzz.gs, servidor.gs, banco.gs, ...
+ls examples/                  # fizzbuzz.gs, servidor.gs, json.gs, ...
 gs roda examples/fizzbuzz.gs
 gs roda examples/texto.gs
 ```
 
-Good starting point to explore the [Standard library](/docs/biblioteca) (pt)
-and [Recipes](/docs/exemplos) (pt).
+They're a good starting point to poke around the
+[Standard library](/docs/en/biblioteca) and [Recipes](/docs/en/exemplos).
 
 ## Next steps
 
-- [Vocabulary](/docs/en/vocabulario) — quick reference of all keywords.
-- [Standard library](/docs/biblioteca) (pt) — every builtin.
-- [Command line](/docs/cli) (pt) — `gs roda`, `gs testa`, `gs build`, `gs formata`, ...
+- [Vocabulary](/docs/en/vocabulario) — quick reference of the keywords
+- [Standard library](/docs/en/biblioteca) — every builtin
+- [Command line](/docs/en/cli) — `gs roda`, `gs testa`, `gs build`, `gs formata`...

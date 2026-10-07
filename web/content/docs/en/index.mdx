@@ -5,8 +5,8 @@ description: The Brazilian-jeitinho programming language, written in Go.
 
 <Callout title="GambiarraScript">
   The language where you don't close a block with `}` or `end` — you close it
-  with `acabou_finalmente`, because coding in Brazil is exactly that: it took
-  some work, but thank God it's finally over.
+  with `acabou_finalmente` ("finally over"), because coding in Brazil is exactly
+  that: it took some work, but thank God it's finally over.
 </Callout>
 
 ```gambiarrascript
@@ -30,65 +30,59 @@ pra_cada i de 1 ate 3
 acabou_finalmente
 ```
 
-GambiarraScript is a dynamic, interpreted language written in Go. It ships a
-lexer, parser, a bytecode compiler and a **VM** — the default engine for
-everything (`gs roda`, `gs build`, `gs testa`, the REPL and the playground) —
-plus the original tree-walking interpreter as a fallback (`gs roda --tree`).
-There is also an LSP, a formatter, a VSCode extension and a WebAssembly runtime
-that runs in the browser.
+GambiarraScript is an interpreted language written in Go. It has a lexer, a
+parser, a bytecode compiler and a **VM**, which is the default engine for
+everything (`gs roda`, `gs build`, `gs testa`, the REPL and the playground);
+the original tree-walking interpreter is still there as a fallback
+(`gs roda --tree`). There is also an LSP, a formatter, a VSCode extension and a
+WASM runtime that runs in the browser.
 
-> The keywords are Portuguese memes (gíria BR). They are **fixed** — there is
-> no English alias for them. The code you write looks the same in any docs
-> language; only the prose around it is translated. Only a few pages are
-> translated so far; the others link to the Portuguese version (marked "pt").
+> The keywords are Portuguese slang and memes. They are **fixed** — there is no
+> English alias for them. The code you write looks the same in any docs
+> language; only the prose around it is translated.
 
 ## Features
 
 <TypeTable
   type={{
-    "goal": { type: "string", description: "have fun and learn" },
+    "goal": { type: "string", description: "have fun and teach" },
     "language": { type: "'GambiarraScript'", description: "interpreted, dynamic, weakly typed" },
     "implemented_in": { type: "'Go'", description: "1.23.12+" },
-    "keywords": { type: "string", description: "Portuguese slang, fixed, no alias" },
-    "types": { type: "string", description: "number, string, boolean, nada, list, dict, set — tipo(x) tells which" },
-    "syntax": { type: "string", description: "${} interpolation (with format specs ${x:.2f}), .. ranges, ternary, escolhe/caso, lambdas, call spread f(...xs), destructuring, ?. and ??, +=, slices xs[1:3]" },
-    "integers": { type: "boolean", default: true, description: "exact int64 (no float drift on whole numbers)" },
-    "modules": { type: "boolean", default: true, description: "importa \"arquivo.gs\" [como name]" },
+    "keywords": { type: "string", description: "in Portuguese, fixed, no alias" },
+    "types": { type: "string", description: "number (exact integer or real), text, boolean, nada, list, dict, set — tipo(x) tells which" },
+    "syntax": { type: "string", description: "${} interpolation (with format specs ${x:.2f}), .. ranges, ternary, escolhe/caso, lambdas, spread f(...xs), destructuring, ?. and ??, +=, slices xs[1:3]" },
+    "modules": { type: "boolean", default: true, description: "importa \"arquivo.gs\" [como nome]" },
     "http": { type: "boolean", default: true, description: "client (busca) and parallel server (rota/escuta)" },
-    "json": { type: "boolean", default: true, description: "de_json / pra_json" },
+    "json": { type: "boolean", default: true, description: "de_json / pra_json (keep key order)" },
     "database": { type: "boolean", default: true, description: "conecta/consulta/executa — sqlite, mysql, postgres" },
-    "regex": { type: "boolean", default: true, description: "busca_regex, substitui_regex, separa_regex, ..." },
-    "time": { type: "boolean", default: true, description: "agora, formata_tempo, parse_tempo, duracao, converte_tz" },
-    "crypto": { type: "boolean", default: true, description: "md5, sha256, hmac, base64, hex" },
-    "sets": { type: "boolean", default: true, description: "conjunto, uniao, intersecao, diferenca" },
-    "concurrency": { type: "boolean", default: true, description: "bora (goroutines+future), cano (channels), paralelo" },
-    "errors": { type: "boolean", default: true, description: "arruma/quebrou + erro_tipo/erro_pilha/envolve_erro" },
-    "file": { type: "boolean", default: true, description: "le_arquivo, escreve_arquivo, anexa_arquivo, fs helpers, csv, gzip" },
-    "processes": { type: "boolean", default: true, description: "roda_comando, sai, argumentos, env" },
-    "lsp": { type: "boolean", default: true, description: "diagnostics, autocomplete, hover, go-to-definition, references, rename, outline, signature help, formatting" },
-    "wasm": { type: "boolean", default: true, description: "runs in the browser (playground)" },
-    "formatter": { type: "boolean", default: true, description: "gs formata [-w]" },
+    "stdlib": { type: "string", description: "text, regex, lists, sets, time, crypto, csv, gzip, files, processes" },
+    "concurrency": { type: "boolean", default: true, description: "bora (goroutine + future), cano, paralelo" },
+    "errors": { type: "boolean", default: true, description: "arruma/quebrou/finalmente + erro_tipo/erro_pilha" },
     "vm": { type: "boolean", default: true, description: "default engine; gs roda --tree falls back to the tree-walker" },
-    "tooling": { type: "string", description: "repl, check, formata, testa, doc, build, bench, get, lsp" }
+    "tooling": { type: "string", description: "repl, check, formata, testa, doc, build, bench, get, lsp" },
+    "wasm": { type: "boolean", default: true, description: "runs in the browser (playground)" }
   }}
 />
 
 ## Where to start
 
 <Steps>
-  <Step title="Install">
-    [Install](/docs/en/instalacao) — get the `gs` binary (build, docker, native).
+  <Step title="Install it">
+    [Installation](/docs/en/instalacao) — get `gs` in your hands (build from
+    source, docker, or binary).
   </Step>
 
   <Step title="First steps">
-    [Getting started](/docs/en/primeiros-passos) — hello world, REPL, comments.
+    [First steps](/docs/en/primeiros-passos) — hello world, REPL, commenting
+    code.
   </Step>
 
-  <Step title="Learn the vocab">
-    [Vocabulary](/docs/en/vocabulario) — keywords and operators.
+  <Step title="Learn the vocabulary">
+    [Vocabulary](/docs/en/vocabulario) — the keywords and operators.
   </Step>
-  <Step title="Try the playground">
-    [Playground](/playground) — run in the browser, no install.
+
+  <Step title="Play in the playground">
+    [Playground](/playground) — runs right in the browser, nothing to install.
   </Step>
 </Steps>
 
@@ -98,38 +92,39 @@ that runs in the browser.
   <Accordion title="Basics">
     - [Vocabulary](/docs/en/vocabulario)
     - [Control flow](/docs/en/estruturas)
-    - [Functions](/docs/en/funcoes)
-    - [Types & operators](/docs/tipos) (pt)
-    - [Strings](/docs/strings) (pt)
-    - [Lists & dicts](/docs/colecoes) (pt)
+    - [Gambiarra (functions)](/docs/en/funcoes)
+    - [Types and operators](/docs/en/tipos)
+    - [Text](/docs/en/strings)
+    - [Lists and dicts](/docs/en/colecoes)
   </Accordion>
   <Accordion title="Advanced">
-    - [Standard library](/docs/biblioteca) (pt)
-    - [try / catch](/docs/erros) (pt)
-    - [Concurrency](/docs/concorrencia) (pt)
-    - [Modules](/docs/modulos) (pt)
-    - [Gotchas](/docs/pegadinhas) (pt)
+    - [Standard library](/docs/en/biblioteca)
+    - [Arruma / quebrou](/docs/en/erros)
+    - [Concurrency](/docs/en/concorrencia)
+    - [Modules](/docs/en/modulos)
+    - [Gotchas](/docs/en/pegadinhas)
   </Accordion>
-  <Accordion title="Outside world">
-    - [JSON](/docs/json) (pt)
-    - [HTTP client](/docs/http) (pt)
-    - [HTTP server](/docs/servidor) (pt)
+  <Accordion title="Dealing with the outside world">
+    - [JSON](/docs/en/json)
+    - [HTTP (client)](/docs/en/http)
+    - [HTTP server](/docs/en/servidor)
   </Accordion>
   <Accordion title="Tools">
-    - [Command line](/docs/cli) (pt)
-    - [Editor & format](/docs/ferramentas) (pt)
+    - [Command line](/docs/en/cli)
+    - [Editor and formatter](/docs/en/ferramentas)
   </Accordion>
   <Accordion title="Practical">
-    - [Recipes](/docs/exemplos) (pt)
+    - [Recipes](/docs/en/exemplos)
   </Accordion>
 </Accordions>
 
 ## The Brazilian way
 
-GambiarraScript is not a language for production (good thing) — it's an
-**intentional gambiarra**: every keyword is something you'd hear at a Brazilian
-party — `se_colar`? `acabou_finalmente`? `arruma...quebrou`? The idea is to
+GambiarraScript is not a language for production (thank goodness) — it's an
+**intentional gambiarra** (a duct-tape hack): every keyword is something you'd
+blurt out at a Brazilian June party — `se_colar` ("if it sticks")?
+`acabou_finalmente`? `arruma...quebrou` ("fix it... it broke")? The idea is to
 laugh a little while learning how a language works under the hood.
 
 The interpreter source (in Go) is open and short enough to poke around — start
-at `cmd/gs/main.go` to see how everything fits together.
+at `cmd/gs/main.go` if you want to see how everything fits together.

@@ -1,0 +1,255 @@
+---
+title: Networking (TCP/UDP)
+description: "conecta_tcp, escuta_tcp, escuta_udp: raw sockets (with optional TLS) that you use just like a pipe."
+---
+
+For speaking protocols that aren't HTTP (chat, echo, hand-rolled Redis, games,
+telnet to some ancient box) there are raw sockets. The golden rule: **a
+connection is used just like a [cano](/docs/en/concorrencia#cano-message-channel)**
+("pipe") — `envia(c, texto)` ("send"), `recebe(c)` ("receive") and `fecha(c)`
+("close").
+
+<Callout title="Native gs only">
+  Browsers can't open raw sockets, so in the playground (wasm) these builtins
+  return the error `"rede nao funciona no navegador"`.
+</Callout>
+
+## TCP client
+
+```gambiarrascript
+bota c = conecta_tcp("127.0.0.1:9000", {"timeout": 5})
+envia(c, "salve")          # sends "salve\n"
+mostra recebe(c)           # the next line that arrives, without the \n
+fecha(c)
+```
+
+`conecta_tcp("host:porta", [opcoes])` returns the connection. Options:
+
+| option | default | what it does |
+| --- | --- | --- |
+| `"modo"` | `"linha"` | `"linha"` (line) or `"bruto"` (raw) — see below |
+| `"timeout"` | no limit | seconds (accepts `0.5`). Applies to connecting and to **each** `recebe`/`envia` |
+| `"tls"` | no TLS | `deu_bom` or `{"servidor", "inseguro", "ca"}` — see [TLS](#tls) |
+
+### Line mode (default)
+
+- `recebe(c)` returns the **next line**, without the trailing `\n` (and without
+  the `\r` if it came as `\r\n` — so you can talk to telnet and old internet
+  protocols).
+- `envia(c, texto)` sends `texto + "\n"`. If the text has a `\n` in the middle,
+  several lines arrive on the other side.
+- If the other side hangs up in the middle of a line, that final chunk arrives
+  as the last line; the next `recebe` gives `nada`.
+- A line longer than 1 MB without a `\n` is an error (that's not a line
+  protocol — use raw mode).
+
+### Raw mode: `{"modo": "bruto"}`
+
+- `recebe(c)` returns **whatever chunk arrived** (up to 64 KB), exactly as it
+  came. TCP is a river of bytes: one `envia` on the other side may arrive in
+  two chunks, or two `envia`s in a single chunk. Framing the message is your
+  protocol's job.
+- `envia(c, texto)` sends **exactly** the text, no `\n`.
+- The text carries the raw bytes, even if they're not valid UTF-8 (binary).
+  To look at them use `hex_codifica(x)` / `base64_codifica(x)`; to build bytes
+  use `hex_decodifica("00ff")` / `base64_decodifica(...)`. No automatic
+  base64: what arrives is what was sent.
+
+```gambiarrascript
+bota c = conecta_tcp("127.0.0.1:6379", {"modo": "bruto", "timeout": 2})
+envia(c, "PING" + hex_decodifica("0d0a"))    # \r\n by hand
+mostra tira_espaco(recebe(c))                 # +PONG (arrives with the \r\n)
+fecha(c)
+```
+
+### What `envia` accepts
+
+Text goes as is; numbers and booleans become text (`envia(c, 42)` sends `42`).
+Lists and dicts are an error — serialize them first with `pra_json(x)`.
+
+## TCP server: `escuta_tcp`
+
+```gambiarrascript
+gambiarra eco(c)
+    mostra "chegou " + endereco(c)
+    enquanto deu_bom
+        bota linha = recebe(c)        # nada = the client hung up
+        se_colar linha == nada
+            vaza
+        acabou_finalmente
+        envia(c, "eco: " + linha)
+    acabou_finalmente
+acabou_finalmente   # the handler returned: the connection closes by itself
+
+escuta_tcp(9000, eco)
+```
+
+`escuta_tcp(porta_ou_endereco, handler, [opcoes])` (`escuta` = "listen"):
+
+- The port can be a number (`9000`, listens on all interfaces) or text
+  (`"127.0.0.1:9000"`, `"9000"`). Port `0` = the OS picks a free one.
+- Each accepted connection runs `handler(conexao)` **in its own goroutine**
+  (just like `rota` handlers and `bora`): two clients are served at the same
+  time.
+- When the handler returns, the connection is closed.
+- An error inside the handler **doesn't take the server down**: it goes to
+  stderr (`escuta_tcp: o handler de 127.0.0.1:51814 quebrou: ...`), that
+  connection closes and everything else keeps going.
+- `endereco(c)` returns the `"ip:porta"` of whoever connected.
+- It blocks forever, like `escuta`. On **ctrl+c** (SIGINT) or SIGTERM it stops
+  gracefully: closes the port, closes the open connections (their `recebe`
+  returns `nada`, so the loops end on their own), waits for the handlers (up
+  to 5s) and returns `nada` — the script continues after the `escuta_tcp`. A
+  second ctrl+c kills it on the spot.
+
+Options:
+
+| option | what it does |
+| --- | --- |
+| `"modo"`, `"timeout"` | same as in `conecta_tcp`, apply to every accepted connection |
+| `"tls"` | `{"cert": "cert.pem", "chave": "chave.pem"}` — serves TLS (see [TLS](#tls)) |
+| `"pronto"` | a cano: as soon as the port opens, the server sends the real address on it (`"127.0.0.1:54321"`) — handy with port `0` |
+| `"para"` | a cano: when someone closes it (or sends anything on it), the server stops just like on ctrl+c |
+
+With `pronto` ("ready") and `para` ("stop") you can spin up the server inside
+the script itself (tests, tools):
+
+```gambiarrascript
+gambiarra atende(c)
+    envia(c, "salve, " + recebe(c))
+acabou_finalmente
+
+bota pronto = cano(1)
+bota para = cano()
+bota srv = bora escuta_tcp("127.0.0.1:0", atende, {"pronto": pronto, "para": para})
+bota end = recebe(pronto)
+
+bota c = conecta_tcp(end)
+envia(c, "tropa")
+mostra recebe(c)          # salve, tropa
+
+fecha(para)               # takes the server down
+espera(srv)               # and waits for it to finish
+```
+
+## TLS
+
+Same socket, encrypted. Once connected, `envia`/`recebe`/`fecha`, the
+line/raw modes and the timeout all work exactly the same.
+
+**Client**:
+
+```gambiarrascript
+bota c = conecta_tcp("smtp.exemplo.com:465", {"tls": deu_bom, "timeout": 10})
+mostra recebe(c)
+```
+
+- `{"tls": deu_bom}` validates the server certificate against the system CAs
+  and sends SNI with the host from the address (`smtp.exemplo.com`). TLS 1.2
+  minimum. `deu_ruim` = no TLS.
+- A dict to tweak it:
+
+| key | what it does |
+| --- | --- |
+| `"servidor"` | name for SNI and for validating the certificate, when the address is an IP or some other name (`conecta_tcp("10.0.0.5:6380", {"tls": {"servidor": "redis.interno"}})`) |
+| `"ca"` | path to the PEM (or the PEM itself) of the CA to trust — **only** that one counts, the system ones are dropped. For dev/internal-network servers |
+| `"inseguro"` | `deu_bom` validates nothing — test only: anyone in the middle can read and swap everything |
+
+A certificate that doesn't pass is a `"rede"` error with the hint about `ca`:
+`conecta_tcp(): o certificado de 127.0.0.1:9443 nao passou (...)`.
+
+**Server**:
+
+```gambiarrascript
+escuta_tcp(9443, eco, {"tls": {"cert": "cert.pem", "chave": "chave.pem"}})
+```
+
+- `cert`/`chave` ("key") in PEM (a path or the PEM itself — in dev you can
+  pass the result of
+  [`gera_certificado()`](/docs/en/servidor#gera_certificadohosts--development-only)
+  straight in). A missing or invalid file is an `"io"` error before the port
+  opens.
+- The handshake happens **before** the handler (10s deadline): anyone who
+  connects speaking plain text or not trusting the certificate never even
+  reaches your code — it goes to stderr as
+  `escuta_tcp: handshake tls com 127.0.0.1:51814 falhou: ...` and the
+  connection closes.
+- Test it by hand: `openssl s_client -connect 127.0.0.1:9443 -CAfile cert.pem`.
+
+```gambiarrascript
+bota par = gera_certificado()
+bota pronto = cano(1)
+bota para = cano()
+bota srv = bora escuta_tcp("127.0.0.1:0", eco, {"tls": par, "pronto": pronto, "para": para})
+bota c = conecta_tcp(recebe(pronto), {"tls": {"ca": par.cert}})
+envia(c, "salve")
+mostra recebe(c)          # eco: salve
+fecha(c)
+fecha(para)
+espera(srv)
+```
+
+## Timeout
+
+With `{"timeout": n}`, a `recebe` that goes `n` seconds without anything
+arriving breaks with a `"rede"` ("network") error — you can catch it with
+`arruma` ("fix it"). The connection stays up: you can try again.
+
+```gambiarrascript
+arruma
+    bota resposta = recebe(c)
+quebrou erro
+    se_colar erro_tipo(erro) == "rede"
+        mostra erro_msg(erro)   # deu ruim: recebe(): ninguem falou nada em 5s (timeout)
+    acabou_finalmente
+acabou_finalmente
+```
+
+Without a timeout, `recebe` waits forever (just like a cano).
+
+## Several goroutines on the same connection
+
+You can call `envia` on the same connection from several goroutines (`bora`):
+each `envia` goes out whole, the bytes of one never get mixed with another's.
+Two concurrent `recebe`s don't break anything either, but each message goes to
+only one of them.
+
+## UDP
+
+UDP has no connection and no delivery guarantee, but it does have boundaries:
+**each datagram is a whole message**. There's no line mode — the text goes and
+comes back exactly as is (`nc -u` sends it with a `\n` at the end; use
+`tira_espaco`).
+
+```gambiarrascript
+gambiarra grita(msg, remetente)
+    mostra remetente + " mandou " + msg
+    funciona maiusculo(msg)       # returned text = reply to the sender
+acabou_finalmente
+
+escuta_udp(9001, grita)
+```
+
+| Builtin | What it does |
+| --- | --- |
+| `escuta_udp(porta, handler, [opcoes])` | server: each datagram runs `handler(mensagem, remetente)` in a goroutine. If the handler returns text (or a number), it goes back as the reply; `nada` = no reply. Blocks and stops just like `escuta_tcp` (options `pronto` and `para`) |
+| `envia_udp("host:porta", texto)` | sends a datagram and forgets about it |
+| `conecta_udp("host:porta", [opcoes])` | UDP connection: each `envia` is one datagram, each `recebe` waits for the next one coming from that address. Option `timeout` — without it, if the reply gets lost, `recebe` waits forever |
+
+```gambiarrascript
+bota u = conecta_udp("127.0.0.1:9001", {"timeout": 2})
+envia(u, "salve")
+mostra recebe(u)          # SALVE
+fecha(u)
+```
+
+## Errors
+
+Anything that's a network failure (couldn't connect, port in use, timeout,
+connection reset) is a `"rede"` error. Misuse (an option that doesn't exist, a
+handler that isn't a gambiarra) is `"builtin"`. After `fecha(c)`, `recebe(c)`
+returns `nada` and `envia(c, ...)` errors with `conexao fechada, nao da pra
+mandar mais nada` — just like a cano.
+
+Full examples: `examples/eco_tcp.gs` (echo server),
+`examples/cliente_tcp.gs` (its client) and `examples/udp.gs`.

@@ -1,0 +1,203 @@
+---
+title: Editor and formatter
+description: VSCode extension, LSP, formatter and highlighting.
+---
+
+GambiarraScript ships with three tools: a VSCode extension, an LSP server (that
+any modern editor can use) and a command-line formatter.
+
+## VSCode extension (recommended)
+
+The extension bundles everything: highlighting, snippets, a run command, LSP.
+
+### Installing
+
+You need `gs` on your `PATH` (see [Installation](/docs/en/instalacao)).
+
+The easiest way: every
+[release on GitHub](https://github.com/erikomis/gambiarrascript/releases) comes
+with the extension's `.vsix` ready to go (`gambiarrascript-<versao>.vsix`),
+alongside the binaries. Download it and, inside VSCode: `Extensions` → `...`
+menu → `Install from VSIX...` → pick the file. Or from the terminal:
+
+```bash
+code --install-extension gambiarrascript-<versao>.vsix
+```
+
+#### Building from the repo
+
+Rather build it by hand? To compile the extension:
+
+```bash
+./scripts/build-extension
+# the repo also ships a ready-made package: editors/vscode/gambiarrascript-0.1.0.vsix
+```
+
+Then install it in VSCode:
+
+```bash
+code --install-extension editors/vscode/gambiarrascript-0.1.0.vsix
+```
+
+Or, inside VSCode: `Extensions` → `...` menu → `Install from VSIX...` →
+point it at `gambiarrascript-0.1.0.vsix`.
+
+### What it has
+
+- **Syntax highlighting** based on TextMate (`syntaxes/gambiarrascript.tmLanguage.json`)
+  — the same grammar that colors the examples in this documentation.
+- **Snippets** (`snippets/gambiarrascript.json`) for the most used blocks and
+  builtins: `gambiarra`, `se_colar`, `pra_cada`, `pra_cada_em`, `enquanto`,
+  `arruma`, `importa`, `busca`, `rota`, `bora`, `cano`...
+- **Run file**: `F5` or `cmd/Ctrl+R`, or the command palette entry
+  `GambiarraScript: Rodar arquivo`.
+- **Open REPL**: the `GambiarraScript: Abrir REPL` command.
+- **Built-in LSP**: diagnostics, autocomplete, hover, go to definition
+  (`F12`), find references (`Shift+F12`), rename (`F2`), file outline,
+  signature help while you type the call, and format document
+  (`Shift+Alt+F`) — details in the [LSP](#lsp-gs-lsp) section below.
+- A custom `.gs` icon.
+
+### Config
+
+- `gambiarrascript.caminhoDoGs` (default `"gs"`): path to the `gs` binary.
+  Set it to an absolute path if `gs` isn't on your `PATH`.
+
+## LSP (`gs lsp`)
+
+The LSP server speaks JSON-RPC over stdin/stdout. It supports:
+
+| feature | what it does |
+| --- | --- |
+| Diagnostics | on `didOpen`/`didChange`: syntax errors with line/column + lint warnings |
+| Autocomplete | keywords, builtins, identifiers |
+| Hover | short description of keywords and builtins |
+| Go to definition | jumps to where the name was declared (`bota`, `crava`, `gambiarra`, parameter...), including in **another file** when the name came from an `importa`; with the cursor on the path of `importa "x.gs"`, it opens the file |
+| References | lists every use of the name; top-level names are also searched in the files that import them (`importa "x.gs"` and `importa "x.gs" como m` → `m.nome`) |
+| Rename | renames across all references, across files too. Refuses keywords, builtins, invalid names and names that already exist in the scope (or that would change the meaning of another reference) |
+| Outline (document symbols) | gambiarras (with nested ones inside), top-level variables and constants, and the `importa ... como` imports |
+| Signature help | when you type `(` or `,` in a call, shows the parameters (with defaults and `...resto`) and highlights the current one — for your own gambiarras (the `#` comment above becomes the doc) and for builtins |
+| Format document | the same formatter as [`gs formata`](#formatter-gs-formata); a file with a syntax error is left untouched |
+
+The lint warnings are the same as `gs check`'s: a name that doesn't exist (not
+a builtin, keyword, variable, parameter or `quebrou`), a `bota` variable that's
+declared and never used (outside the top level of the file) and dead code after
+`funciona`/`vaza`/`continua`. Reassigning a nailed-down name (`crava`, "nail it
+down") shows up as an **error**, just like in `gs roda`.
+
+### Setting up the LSP in other editors
+
+#### Neovim (with `nvim-lspconfig`)
+
+```lua
+local configs = require 'lspconfig.configs'
+if not configs.gambiarrascript then
+  configs.gambiarrascript = {
+    default_config = {
+      cmd = { 'gs', 'lsp' },
+      filetypes = { 'gambiarrascript' },
+      root_dir = function(fname) return vim.fn.getcwd() end,
+      settings = {},
+    },
+  }
+end
+require('lspconfig').gambiarrascript.setup {}
+```
+
+Add the `.gs` extension to `filetype`:
+
+```vim
+autocmd BufRead,BufNewFile *.gs set filetype=gambiarrascript
+```
+
+#### Helix
+
+In `~/.config/helix/languages.toml`:
+
+```toml
+[[language]]
+name = "gambiarrascript"
+scope = "source.gambiarrascript"
+file-types = ["gs"]
+roots = []
+comment-token = "#"
+
+[language-server.gambiarrascript]
+command = "gs"
+args = ["lsp"]
+```
+
+#### Zed
+
+```json
+{
+  "languages": {
+    "GambiarraScript": {
+      "language_servers": ["gambiarrascript"],
+      "extensions": ["gs"]
+    }
+  },
+  "lsp": {
+    "gambiarrascript": {
+      "binary": { "path": "gs", "args": ["lsp"] }
+    }
+  }
+}
+```
+
+## Formatter (`gs formata`)
+
+```bash
+gs formata sujo.gs > lindo.gs     # prints the formatted code
+gs formata -w sujo.gs             # overwrites the file (only if it changed)
+gs formata -w .                   # every .gs in the folder, recursively
+```
+
+The formatter re-emits the AST. Rules:
+
+- Indent: **4 spaces** per level.
+- Blocks: open on their own line, close with `acabou_finalmente` ("finally
+  over") at the parent level.
+- `else if` becomes `se_nao_colar se_colar ...` ("if it doesn't stick" / "if
+  it sticks").
+- Infix expressions only get parentheses when precedence requires it.
+- Lists and dicts stay inline, unless you break the line right after the
+  `[`/`{` — then you get one item per line. A lambda written across several
+  lines becomes an indented block; a one-line lambda stays inline.
+- Compound assignment (`x += 1`) and interpolation (`"${x}"`) are preserved.
+- Strings are re-quoted with double quotes — escapes are normalized (`\"`,
+  `\\`, `\n`) and a backtick string becomes the equivalent quoted string.
+- **Comments stay**: a `#` alone on a line is re-indented to the block's level;
+  a `#` after code stays on the same line, with 2 spaces before it; `/* */`
+  comes out exactly as it was. A `#` inside a string isn't a comment and isn't
+  touched.
+- Blank lines stay (several in a row become one; none at the start or end of a
+  block).
+- A comment in the middle of an expression broken across several lines (a call,
+  a condition) moves to the line above, because the expression goes back to a
+  single line.
+
+<Callout title="Safety lock">
+  Before writing, `gs formata -w` (and the editor's "format document") checks
+  that the result has the same code and exactly the same comments. If it
+  doesn't, it doesn't write: it warns `NAO formatado` ("NOT formatted") and the
+  file stays as it was.
+</Callout>
+
+### Indentation
+
+Visual indentation is free-form in the language (it isn't significant like in
+Python); what counts is the `se_colar`/`acabou_finalmente` pair. The formatter
+enforces 4 spaces to keep things consistent.
+
+## Highlighting outside the editor
+
+The extension's TextMate grammar (`editors/vscode/syntaxes/gambiarrascript.tmLanguage.json`)
+works in any tool that speaks TextMate — it's what this documentation uses (via
+shiki) for code blocks tagged `gambiarrascript` (or `gs`). The
+[playground](/playground) has its own highlighting, in the in-browser editor.
+
+## Next step
+
+- [Command line](/docs/en/cli) — the full `gs` reference.
+- [Standard library](/docs/en/biblioteca) — every builtin.

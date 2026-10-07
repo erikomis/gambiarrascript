@@ -1,12 +1,13 @@
 ---
-title: Install
-description: Get the gs binary on your machine — build, Docker, or native install.
+title: Installation
+description: How to install the gs binary, use Docker or build from source.
 ---
 
-Three ways to get `gs`: the installer (downloads a prebuilt binary), building
-from source with Go, or building inside Docker.
+Three ways to get `gs` onto your machine: the installer (downloads a prebuilt
+binary), building with your own Go, or building through Docker (no Go
+installed).
 
-## Option 1 — Installer (recommended)
+## 1. Installer (recommended)
 
 On Linux and macOS:
 
@@ -15,72 +16,74 @@ curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/insta
 gs --version
 ```
 
-It downloads the latest GitHub Release binary, checks its sha256 and installs
-it to `/usr/local/bin` (if writable) or `~/.local/bin`. It **never uses
-`sudo`**. Set `GS_VERSAO=0.2.0` to pin a version or `GS_DIR=~/bin` to pick the
-directory (put the variable before `sh` in the pipe).
+It downloads the binary from the latest GitHub release, checks its sha256 and
+installs it to `/usr/local/bin` (if it can write there) or to `~/.local/bin`.
+**It never uses `sudo`.** You can tweak it with environment variables:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | GS_VERSAO=0.2.0 sh   # pinned version
+curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | GS_DIR=~/bin sh       # another directory
+```
 
 On Windows, download the `.zip` from the
-[releases page](https://github.com/erikomis/gambiarrascript/releases) and put
+[releases](https://github.com/erikomis/gambiarrascript/releases) page and put
 `gs.exe` on your `PATH`.
 
-## Option 2 — Build from source
+## 2. Building with Go
 
-You need Go 1.23.12 or newer:
+If you already have Go 1.23.12+ installed:
 
 ```bash
 git clone https://github.com/erikomis/gambiarrascript
 cd gambiarrascript
-go build -o dist/gs ./cmd/gs
-./dist/gs --version
+
+go build -o dist/gs ./cmd/gs   # produces dist/gs
+./scripts/install              # copies to /usr/local/bin (use --user for ~/.local/bin)
+gs --version
 ```
 
-Put `dist/gs` somewhere in your `PATH` (e.g. `~/bin` or `/usr/local/bin`).
+`scripts/install` just copies `dist/gs` onto your `PATH` (and on macOS it
+re-signs the binary, otherwise the system kills it with "Killed: 9").
 
-## Option 3 — Docker (no Go needed)
+## 3. With Docker (no Go install)
 
-The helper `scripts/dgo` runs everything inside a container:
+`scripts/build` compiles **inside a** `golang:1.23` **container** and leaves
+the native binary for your system in `dist/gs`:
 
 ```bash
-# run a file
+./scripts/build                # dist/gs for your system
+./scripts/install              # puts it on the PATH
+./scripts/build --all          # cross-compiles: linux, darwin (arm64/amd64), windows
+```
+
+And the `scripts/dgo` helper runs any `go` command in the container:
+
+```bash
+# run a file without installing anything
 ./scripts/dgo run ./cmd/gs roda examples/fizzbuzz.gs
 
 # open the interactive REPL
-docker run --rm -it -v "$PWD":/app -w /app golang:1.23 go run ./cmd/gs repl
+docker run --rm -it -v "$PWD":/app -w /app golang:1.23 \
+  go run ./cmd/gs repl
 ```
 
-### Native binary via Docker, then install
+There is also a `Dockerfile` and a `docker-compose.yml` so you can build your
+own image (handy for CI).
 
-Build once through Docker, install into your PATH — afterwards it runs without
-Docker:
+## Requirements
+
+| What | Version |
+| --- | --- |
+| Go | 1.23.12 or newer (if building with Go) |
+| Docker | any recent version (optional) |
+| OS | Linux, macOS, Windows |
+
+## Checking the installation
 
 ```bash
-./scripts/build            # produces dist/gs native for your OS
-./scripts/install          # copies to /usr/local/bin (use --user for ~/.local/bin)
-gs roda examples/fizzbuzz.gs
+gs --version                  # gs (GambiarraScript) 0.1.0 (gs versao works too)
+gs --help                     # lists the subcommands
+gs roda examples/salve.gs     # Salve, tropa!
 ```
 
-To build binaries for every supported platform: `./scripts/build --all`
-(output in `dist/`).
-
-## Verify
-
-```bash
-gs --version          # or: gs versao
-# gs (GambiarraScript) 0.1.0
-
-gs roda examples/salve.gs
-# Salve, tropa!
-```
-
-## Run the tests
-
-```bash
-go test ./...                 # native Go
-./scripts/dgo test ./...      # via Docker
-```
-
-## Next
-
-- [Getting started](/docs/en/primeiros-passos) — write your first script.
-- [Command line](/docs/cli) (pt) — every `gs` subcommand.
+If all of that worked, head over to [First steps](/docs/en/primeiros-passos).

@@ -1,10 +1,11 @@
 ---
-title: Functions
-description: How to declare and call functions in GambiarraScript — defaults, varargs, lambdas and closures.
+title: Gambiarra (functions)
+description: How to declare and call functions in GambiarraScript - default parameters, varargs, lambdas and closures.
 ---
 
-A function is a `gambiarra`. `gambiarra` declares it, `funciona` returns from
-it. The closing is the obvious `acabou_finalmente`.
+A function is a Gambiarra (a duct-tape hack). `gambiarra` declares it,
+`funciona` ("works") returns. The obvious way to close it is
+`acabou_finalmente` ("finally over").
 
 ## Declaring and calling
 
@@ -26,10 +27,13 @@ acabou_finalmente
 mostra dobra(21)        # 42
 ```
 
-`funciona` always takes an expression — write `funciona nada` to return
-nothing. A function that ends without `funciona` returns `nada`.
+`funciona` always takes an expression — to return "nothing", write
+`funciona nada`. A gambiarra that ends without `funciona` returns `nada`.
 
-## Default parameters and varargs
+## Parameters with default values
+
+`nome = valor` makes the parameter optional. The default can use the earlier
+parameters:
 
 ```gambiarrascript
 gambiarra cumprimenta(nome, saudacao = "salve")
@@ -39,6 +43,17 @@ acabou_finalmente
 mostra cumprimenta("Erik")            # salve, Erik
 mostra cumprimenta("Erik", "fala")    # fala, Erik
 
+gambiarra retangulo(largura, altura = largura)
+    funciona largura * altura
+acabou_finalmente
+mostra retangulo(3)                   # 9 (square)
+```
+
+## Varargs
+
+`...resto` in the last parameter gathers the leftover arguments into a list:
+
+```gambiarrascript
 gambiarra soma_tudo(primeiro, ...resto)
     bota total = primeiro
     pra_cada x em resto
@@ -47,17 +62,15 @@ gambiarra soma_tudo(primeiro, ...resto)
     funciona total
 acabou_finalmente
 
-mostra soma_tudo(1, 2, 3, 4)          # 10
+mostra soma_tudo(1)             # 1
+mostra soma_tudo(1, 2, 3, 4)    # 10
 ```
 
-A default may refer to earlier parameters (`gambiarra f(a, b = a * 2)`).
-`...rest` collects the leftover arguments into a list.
+## Spreading a list into a call (`f(...lista)`)
 
-## Spreading a list into a call (`f(...list)`)
-
-The other way around: `...list` **inside a call** spreads the list's items as
-separate arguments. You can mix it with plain arguments, use several spreads
-in one call, and it works with builtins too:
+The reverse of varargs: `...lista` **inside the call** spreads the list's items
+as separate arguments. You can mix it with plain arguments, use more than one
+`...` in the same call, and it works for builtins too:
 
 ```gambiarrascript
 gambiarra soma3(a, b, c)
@@ -74,18 +87,54 @@ bota args = ["%s tem %d anos", "Erik", 25]
 mostra formata(...args)              # Erik tem 25 anos
 ```
 
-It works with anything callable — named functions, lambdas, dot-calls
-(`module.f(...xs)`), `bora` — and plays well with varargs and defaults (arity
-is checked **after** spreading). Only lists can be spread; anything else is a
-runtime error you can catch with `arruma` (`so da pra espalhar lista, veio
-numero`). `...` is only valid in those two places — the last parameter of a
-declaration and inside call parentheses; anywhere else (`[...xs]`) is a syntax
-error.
+It works on anything callable — a named gambiarra, a lambda, a dot call
+(`modulo.f(...xs)`), `bora` — and plays nicely with varargs and default
+parameters (the arity is checked **after** spreading):
+
+```gambiarrascript
+gambiarra soma_tudo(primeiro, ...resto)
+    bota total = primeiro
+    pra_cada x em resto
+        total += x
+    acabou_finalmente
+    funciona total
+acabou_finalmente
+
+gambiarra cumprimenta(nome, saudacao = "salve")
+    funciona saudacao + ", " + nome
+acabou_finalmente
+
+bota dobra = gambiarra(x) funciona x * 2 acabou_finalmente
+bota ops = {"soma": soma_tudo}
+
+mostra soma_tudo(...[1, 2], ...[3, 4])     # 10
+mostra cumprimenta(...["Erik"])            # salve, Erik
+mostra cumprimenta(...["Erik", "fala"])    # fala, Erik
+mostra dobra(...[21])                      # 42
+mostra ops.soma(...[5, 5])                 # 10
+mostra espera(bora soma_tudo(...[1, 2, 3]))   # 6
+```
+
+Only a **list** can be spread. Anything else is a runtime error (which
+`arruma` ("fix it") catches):
+
+```gambiarrascript
+arruma
+    mostra max(...42)
+quebrou erro
+    mostra erro_msg(erro)    # deu ruim na linha 2: so da pra espalhar lista, veio numero
+acabou_finalmente
+```
+
+And `...` only exists in those two places — in the last parameter of the
+declaration (`gambiarra f(...resto)`) and inside the call's parentheses.
+Anywhere else (`[...xs]`, `bota y = ...xs`) it's a syntax error before
+anything runs.
 
 ## Arity
 
-Apart from optional parameters and `...rest`, the argument count must match.
-Too few or too many is a runtime error:
+Apart from the optional ones and `...resto`, the number of arguments has to
+match. Too few or too many is a runtime error:
 
 ```gambiarrascript
 gambiarra soma(a, b)
@@ -93,13 +142,14 @@ gambiarra soma(a, b)
 acabou_finalmente
 
 mostra soma(2, 3)       # 5
-mostra soma(2)          # error: essa gambiarra quer 2 parametro(s), voce mandou 1
+mostra soma(2)          # erro: essa gambiarra quer 2 parametro(s), voce mandou 1
 ```
 
-## Lambdas and functions as values
+## Lambdas (anonymous gambiarra)
 
-Without a name, `gambiarra(params) ... acabou_finalmente` is an **expression**:
-store it in a variable, a list or a dict, or pass it straight to a builtin.
+Without a name, `gambiarra(params) ... acabou_finalmente` is an
+**expression**: you can store it in a variable, a list, a dict, or pass it
+straight to another builtin. It fits on a single line:
 
 ```gambiarrascript
 bota dobra = gambiarra(x) funciona x * 2 acabou_finalmente
@@ -107,15 +157,18 @@ mostra dobra(4)                                  # 8
 
 bota ops = [gambiarra(x) funciona x + 1 acabou_finalmente,
             gambiarra(x) funciona x * 2 acabou_finalmente]
-mostra ops[0](10)                                # 11
+mostra ops[1](10)                                # 20
 
 mostra mapeia([1, 2, 3], gambiarra(n) funciona n * n acabou_finalmente)   # [1, 4, 9]
 ```
 
+Functions are first-class: a named gambiarra is a value too
+(`mapeia(xs, dobra)`, `rota("GET", "/", handler)`).
+
 ## Closures
 
-Inner functions see the variables of the enclosing scope, even after it has
-returned. The capture works the same in the VM and the tree-walker:
+A gambiarra created inside another one sees the outer variables, even after
+the outer one has already finished:
 
 ```gambiarrascript
 gambiarra multiplicador(fator)
@@ -126,18 +179,18 @@ bota triplica = multiplicador(3)
 mostra triplica(5)          # 15
 ```
 
-<Callout type="warn" title="Assigning inside a function creates a local">
-  Reading an outer variable works; **assigning** to it (`bota x = ...` or
-  `x += ...`) inside a function creates a **local** variable — like Python
-  without `nonlocal`. The outer one is untouched. For shared mutable state,
-  keep it in a dict or list (passed by reference) and mutate the contents:
+<Callout type="warn" title="Assigning inside the function creates a local variable">
+  Reading an outer variable works; **assigning** (`bota x = ...` or
+  `x += ...`) inside a gambiarra creates a **local** variable, just like Python
+  without `nonlocal`. The outer one doesn't change. For shared state, keep it
+  in a dict or a list (they're passed by reference) and change the contents:
 </Callout>
 
 ```gambiarrascript
 gambiarra contador()
     bota estado = {"n": 0}
     funciona gambiarra()
-        estado.n += 1
+        estado.n += 1          # changes the dict, not the variable
         funciona estado.n
     acabou_finalmente
 acabou_finalmente
@@ -150,28 +203,37 @@ mostra proximo()            # 3
 
 ## Recursion
 
-Plain recursion goes up to **1024** nested calls, then fails with a clean
-error. A self-call in tail position (`funciona f(...)` calling the same
-function) reuses the frame, so it can go as deep as you like.
-
-<Callout type="warn" title="Scope of pra_cada and quebrou">
-  The loop variable of `pra_cada` and the variable of a `quebrou` clause
-  **leak** into the enclosing function scope — same style as Python. See
-  [Gotchas](/docs/pegadinhas) (pt).
-</Callout>
-
-## Calling in parallel — bora
-
-Prefix a call with `bora` to run it in a goroutine and get a future back:
+Plain recursion works up to **1024** stacked calls; past that, you get a clean
+error ("recursao funda demais"). If the recursive call is the very last thing
+(`funciona f(...)` calling the same gambiarra), it becomes a **tail call** and
+doesn't stack up — it can go as deep as you like:
 
 ```gambiarrascript
+gambiarra fatorial(n, acc = 1)
+    se_colar n <= 1
+        funciona acc
+    acabou_finalmente
+    funciona fatorial(n - 1, acc * n)    # tail call
+acabou_finalmente
+
+mostra fatorial(20)         # 2432902008176640000
+```
+
+## Documenting
+
+`#` comments right above a `gambiarra` (or a top-level `crava`) become
+documentation in `gs doc arquivo.gs` (it generates markdown with the signature
+and the comment). See [Command line](/docs/en/cli#gs-doc).
+
+```gambiarrascript
+# devolve o dobro de n
 gambiarra dobra(n)
     funciona n * 2
 acabou_finalmente
-
-bota f = bora dobra(21)
-mostra espera(f)   # 42 — blocks until the future resolves
 ```
 
-See [Concurrency](/docs/concorrencia) (pt) for the full story (`bora`, `espera`,
-`cano`, `paralelo`).
+<Callout type="warn" title="Scope of pra_cada">
+  The `pra_cada` variable and the one from the `quebrou` ("it broke") clause
+  **leak** into the scope of the function that contains the block — same
+  style as Python. See [Gotchas](/docs/en/pegadinhas).
+</Callout>

@@ -1,0 +1,317 @@
+---
+title: Lists and dictionaries
+description: "GambiarraScript collections: lista (array), dicionario (ordered hash map) and conjunto (set)."
+---
+
+GambiarraScript has three collections: **lista** (an ordered array with integer
+indices), **dicionario** (a hash map that remembers insertion order, with text,
+number or boolean keys) and **conjunto** (a set). Lists and dictionaries support
+indexing `x[i]` and assignment `bota x[i] = v` (`bota` = "put/stick"); all three
+support `pra_cada` ("for each"), `tamanho` ("size") and `remove`.
+
+## Lists
+
+A literal between `[]`, comma-separated. Indices start at 0; **negative counts
+from the end** (`xs[-1]` is the last one).
+
+```gambiarrascript
+bota xs = [10, 20, 30]
+mostra xs[0]               # 10
+mostra xs[-1]              # 30
+mostra tamanho(xs)         # 3
+
+bota xs[1] = 99            # assignment by index
+xs[0] += 1                 # compound assignment doesn't need bota
+mostra xs                  # [11, 99, 30]
+```
+
+An index outside the list is a runtime error (not `nada`):
+
+```gambiarrascript
+bota xs = [10, 20, 30]
+mostra xs[10]              # erro: esse indice (10) ta fora da lista
+```
+
+### Slices
+
+`xs[i:j]` returns the items from `i` up to (but not including) `j`. Either end
+can be left out, and negative works:
+
+```gambiarrascript
+bota xs = [10, 20, 30, 40, 50]
+mostra xs[1:3]             # [20, 30]
+mostra xs[:2]              # [10, 20]
+mostra xs[3:]              # [40, 50]
+mostra xs[-2:]             # [40, 50]
+```
+
+### Range `..`
+
+`a..b` creates an inclusive list — counting up or down:
+
+```gambiarrascript
+mostra 1..5                # [1, 2, 3, 4, 5]
+mostra 5..1                # [5, 4, 3, 2, 1]
+```
+
+### Nesting
+
+Lists can hold lists, dictionaries, functions, anything:
+
+```gambiarrascript
+bota matriz = [[1, 2], [3, 4]]
+mostra matriz[0][1]        # 2
+
+bota misto = [1, "dois", [3, 4], {"cinco": 5}]
+mostra misto[2][1]         # 4
+mostra misto[3]["cinco"]   # 5
+```
+
+A list or dictionary can even hold **itself**. When printing, the part that
+would close the cycle becomes `[...]` (or `{...}`), just like Python; `==`
+between such structures finishes normally; and `pra_json` errors out, because
+JSON has no way to represent a cycle:
+
+```gambiarrascript
+bota xs = [1, 2]
+adiciona(xs, xs)
+mostra xs                  # [1, 2, [...]]
+
+bota no = {"nome": "raiz"}
+bota no["pai"] = no
+mostra no                  # {"nome": "raiz", "pai": {...}}
+
+pra_json(xs)               # erro: pra_json(): estrutura que contem ela mesma nao vira JSON, parca
+```
+
+The same list in two places (`[s, s]`) is not a cycle: it prints in full both
+times.
+
+### List builtins
+
+| Builtin | Returns | Notes |
+| --- | --- | --- |
+| `tamanho(lista)` | `numero` | |
+| `adiciona(lista, item)` | `nada` | **mutates**: appends to the end |
+| `remove(lista, item)` | `nada` | **mutates**: removes the first equal occurrence |
+| `ordena(lista)` | `nada` | **mutates**: ascending; numbers only or texts only |
+| `ordena_com(lista, fn)` | `nada` | **mutates**: `fn(a, b)` says whether `a` comes first (boolean) or returns `<0/0/>0` |
+| `inverte(lista)` | `nada` | **mutates** |
+| `mapeia(lista, fn)` | `lista` | new list with `fn(item)` |
+| `filtra(lista, fn)` | `lista` | new list with the items where `fn(item)` is true |
+| `reduz(lista, fn, [inicial])` | value | accumulates `fn(acc, item)` |
+| `acha(lista, fn)` / `acha_indice(lista, fn)` | item / index | first match (`nada` / `-1` if none) |
+| `unicos(lista)` / `achatada(lista)` | `lista` | without duplicates / flattened one level |
+| `ordena_por(lista, campo)` | `lista` | list of dictionaries sorted by the field |
+| `agrupa_por(lista, fn)` | `dicionario` | `{chave: [itens]}` |
+| `zip(a, b)` / `enumera(lista)` | `lista` | pairs `[a[i], b[i]]` / `[indice, item]` |
+| `soma(lista)` / `media(lista)` | `numero` | |
+| `embaralha(lista)` / `escolhe_um(lista)` | `lista` / item | random (see `semente`) |
+
+`junta(lista, sep)` glues the list into a text (see [Texts](/docs/en/strings)).
+Full reference in [Standard library](/docs/en/biblioteca#list).
+
+### Example
+
+```gambiarrascript
+bota nums = [5, 2, 8, 1, 9]
+
+adiciona(nums, 3)
+ordena(nums)
+mostra "ordenados: " + junta(nums, ", ")   # ordenados: 1, 2, 3, 5, 8, 9
+
+inverte(nums)
+mostra "invertidos: " + junta(nums, ", ")  # invertidos: 9, 8, 5, 3, 2, 1
+
+remove(nums, 9)
+mostra "sem o 9: " + junta(nums, ", ")     # sem o 9: 8, 5, 3, 2, 1
+
+mostra mapeia(nums, gambiarra(n) funciona n * 2 acabou_finalmente)    # [16, 10, 6, 4, 2]
+mostra filtra(nums, gambiarra(n) funciona n % 2 == 0 acabou_finalmente)   # [8, 2]
+mostra reduz(nums, gambiarra(acc, n) funciona acc + n acabou_finalmente)  # 19
+mostra soma(nums)                                                     # 19
+mostra acha(nums, gambiarra(n) funciona n < 4 acabou_finalmente)      # 3
+mostra unicos([1, 2, 1, 3, 2])                                        # [1, 2, 3]
+mostra achatada([[1, 2], [3], 4])                                     # [1, 2, 3, 4]
+```
+
+<Callout type="warn" title="adiciona/remove/ordena/ordena_com/inverte mutate">
+  They return `nada`. If you write `bota y = adiciona(x, 1)`, `y` will be
+  `nada` — the mutation happens in `x`. Compare with `mapeia`/`filtra`/
+  `ordena_por`, which **return** a new list and leave the original alone.
+</Callout>
+
+## Dictionaries
+
+A literal between `{}`, with `key: value` pairs. A key can be a **text**, a
+**number** or a **boolean** (any expression that evaluates to one of those
+types). The dictionary **remembers insertion order** — `chaves`, `pra_cada`,
+`mostra` and `pra_json` always come out in the same order.
+
+```gambiarrascript
+bota pessoa = {"nome": "Erik", "idade": 25, "dev": deu_bom}
+
+mostra pessoa["nome"]                  # Erik
+mostra pessoa["idade"]                 # 25
+
+bota pessoa["cidade"] = "Sao Paulo"    # inserts or updates
+mostra pessoa["sobrenome"]             # nada (missing key -> not an error)
+```
+
+### Dot access
+
+For a text key that is a valid name, `d.campo` is shorthand for `d["campo"]` —
+for reading, writing and compound assignment. You can store a gambiarra in the
+dictionary and call it like a "method" (passing the object itself):
+
+```gambiarrascript
+bota jogador = {"nome": "Erik", "pontos": 0}
+jogador.pontos += 100
+bota jogador.nivel = "chefe"
+mostra "${jogador.nome}: ${jogador.pontos} (${jogador.nivel})"   # Erik: 100 (chefe)
+mostra jogador.vidas                  # nada
+
+bota cachorro = {"nome": "Rex", "late": gambiarra(eu) funciona eu.nome + " faz au au" acabou_finalmente}
+mostra cachorro.late(cachorro)        # Rex faz au au
+```
+
+If the variable might be `nada`, use `d?.campo` (see [Types](/docs/en/tipos#nada-safe-navigation-and-coalescing)).
+
+### Dynamic keys
+
+The key is an expression, so you can compute it:
+
+```gambiarrascript
+bota pessoa = {"nome": "Erik"}
+bota k = "nome"
+mostra pessoa[k]                       # Erik
+bota dic = {"2024": 1, "2025": 2}
+mostra dic["202" + "4"]                # 1
+```
+
+Heads up: `{"1": "x"}` and `{1: "x"}` have **different** keys — one is TEXT and
+the other is a NUMBER. They don't collide; they are two distinct keys.
+
+### Dictionary builtins
+
+| Builtin | Signature | Returns | Notes |
+| --- | --- | --- | --- |
+| `tamanho(dic)` | `(dicionario)` | `numero` | number of pairs |
+| `chaves(dic)` | `(dicionario)` | `lista` | in insertion order |
+| `tem(dic, chave)` | `(dicionario, valor)` | `booleano` | checks whether the key exists |
+| `remove(dic, chave)` | `(dicionario, valor)` | `nada` | **mutates**: deletes the key; if it doesn't exist, does nothing |
+
+```gambiarrascript
+bota d = {"a": 1, "b": 2, "c": 3}
+mostra tamanho(d)               # 3
+mostra chaves(d)                # [a, b, c]
+mostra tem(d, "b")              # deu_bom
+mostra tem(d, "z")              # deu_ruim
+
+remove(d, "b")
+mostra d                        # {"a": 1, "c": 3}
+remove(d, "z")                  # missing key: does nothing
+bota d["b"] = 2                 # a key that comes back goes to the end
+mostra chaves(d)                # [a, c, b]
+```
+
+`bota d["b"] = nada` does **not** delete: the key stays there (with value
+`nada`) and `tem(d, "b")` is still `deu_bom`. To really get rid of it, use
+`remove`. Deleting inside a `pra_cada` over the same dictionary is safe: the
+loop walks the keys as they were when it started, and one that vanished
+midway comes with value `nada`.
+
+### Iterating with `pra_cada`
+
+`pra_cada k em dicionario` iterates over the **keys**; with two names,
+`pra_cada k, v em dicionario` gives you the key **and** the value:
+
+```gambiarrascript
+bota d = {"a": 1, "b": 2, "c": 3}
+pra_cada chave, valor em d
+    mostra "${chave} = ${valor}"
+acabou_finalmente
+# a = 1
+# b = 2
+# c = 3
+```
+
+On a list, `pra_cada i, v em lista` gives you the index and the item.
+
+### Nested assignment
+
+```gambiarrascript
+bota config = {
+    "banco": {"host": "localhost", "porta": 5432},
+    "cache": {"host": "redis", "porta": 6379}
+}
+
+bota config["banco"]["porta"] = 5433        # works: config["banco"] already exists
+config.cache.porta += 1                     # with dots too
+mostra config["banco"]["porta"]             # 5433
+mostra config.cache.porta                   # 6380
+
+bota config["novos"]["x"] = 1              # ERROR: config["novos"] is nada
+```
+
+<Callout type="warn" title="No auto-vivification">
+  Assigning to `dic["a"]["b"]` only works if `dic["a"]` is already a
+  dictionary/list. If the intermediate key doesn't exist, you get a runtime
+  error ("nao da pra atribuir indice em NADA") — the interpreter doesn't create
+  dictionaries along the way. Create the nested one first:
+  `bota dic["a"] = {}` and then `bota dic["a"]["b"] = 1`.
+</Callout>
+
+### Dictionary equality
+
+Two dictionaries are equal if they have the same number of pairs and, for each
+key in one, the other has the same key with the same value (recursively). Key
+order does **not** matter for equality:
+
+```gambiarrascript
+mostra {"a": 1, "b": 2} == {"b": 2, "a": 1}     # deu_bom
+mostra {"a": 1} == {"a": 1, "b": 2}              # deu_ruim
+```
+
+More on equality in [Types and operators](/docs/en/tipos#equality).
+
+## Destructuring
+
+`bota [a, b] = lista` takes by position; `bota {x, y} = dic` takes by the key
+with the same name. Anything missing becomes `nada` (and anything left over is
+ignored):
+
+```gambiarrascript
+bota [primeiro, segundo] = [1, 2, 3]
+mostra "${primeiro} e ${segundo}"     # 1 e 2
+
+bota {nome, idade, cpf} = {"nome": "Erik", "idade": 25}
+mostra [nome, idade, cpf]             # [Erik, 25, nada]
+```
+
+## Sets
+
+`conjunto(lista)` creates a set (no duplicates). Operations: `contem_conjunto`,
+`adiciona_conjunto`, `remove_conjunto`, `uniao`, `intersecao`, `diferenca` —
+see [Standard library](/docs/en/biblioteca#set). `tamanho(c)` counts the items
+and `remove(c, item)` takes one out (returns `nada`, same as on a list;
+`remove_conjunto` returns the set itself). Like the dictionary, the set
+**remembers insertion order**: `mostra` and `pra_cada` always come out in the
+same order.
+
+```gambiarrascript
+bota vistos = conjunto(["ana", "bia", "ana"])
+adiciona_conjunto(vistos, "caio")
+mostra vistos                            # {"ana", "bia", "caio"}
+mostra tamanho(vistos)                   # 3
+mostra contem_conjunto(vistos, "ana")    # deu_bom
+mostra contem_conjunto(vistos, "duda")   # deu_ruim
+
+remove(vistos, "bia")
+pra_cada nome em vistos
+    mostra nome                          # ana, then caio
+acabou_finalmente
+```
+
+With two names (`pra_cada i, nome em vistos`) you get the position and the
+item, same as on a list.

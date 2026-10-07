@@ -1,0 +1,369 @@
+---
+title: Concurrency
+description: "bora, espera, cano, paralelo: goroutines, futures and channels, Brazilian style."
+---
+
+GambiarraScript has real concurrency: `bora` ("let's go") fires off a gambiarra
+in a goroutine, `espera` ("wait") waits for its result, `cano` ("pipe") creates
+a channel to sync producers and consumers, and `paralelo` ("parallel") maps a
+list in parallel. It works the same in the VM and in the tree-walker.
+
+<Callout title="Under the hood">
+  Everything becomes a Go goroutine/channel. Each call gets its own scope; the
+  concurrent `mostra` uses an internal lock so half a line never gets
+  interleaved with another half line.
+</Callout>
+
+## bora: fire it off in parallel
+
+`bora fn(args)` is a **prefix expression**: it runs `fn(args)` in a goroutine
+and immediately hands back a **future**, without blocking.
+
+```gambiarrascript
+gambiarra demora(n)
+    bota out = 0
+    pra_cada i de 1 ate n
+        out += i
+    acabou_finalmente
+    funciona out
+acabou_finalmente
+
+bota f1 = bora demora(100)
+bota f2 = bora demora(1000)
+
+mostra "as duas ja tao rodando em paralelo..."
+mostra espera(f1)   # 5050
+mostra espera(f2)   # 500500
+```
+
+Ways to use it:
+
+```gambiarrascript
+gambiarra avisa(msg)
+    mostra msg
+acabou_finalmente
+
+bora avisa("salve")              # fire-and-forget (nobody waits)
+bota f = bora avisa("oi")        # keep the future to wait on later
+espera(f)
+```
+
+Careful with fire-and-forget: when the main script ends, the process ends — a
+loose goroutine that hasn't run yet **dies with it** (in the example above
+`"salve"` may not even show up). If the result matters, keep the future and
+`espera` it.
+
+Rules of `bora`:
+
+- It only takes **a single call** on its right: `bora fn(args)`. No `bora x`,
+  `bora 1 + 1` or `bora gambiarra() ... acabou_finalmente` directly — store the
+  lambda in a variable and call it: `bota tarefa = gambiarra() ... acabou_finalmente`
+  and then `bora tarefa()`.
+- The **arguments** are evaluated first, in the caller's goroutine; only the
+  call itself goes parallel. So `bora f(espera(outro))` waits for `outro`
+  before firing.
+- Works for builtins too: `bora espera_ms(100)`.
+
+## espera: wait for the future
+
+`espera(future)` blocks until the future resolves and returns the value. It
+also accepts **a list of futures** and returns the list of values, in the
+original order:
+
+```gambiarrascript
+gambiarra demora(n)
+    bota out = 0
+    pra_cada i de 1 ate n
+        out += i
+    acabou_finalmente
+    funciona out
+acabou_finalmente
+
+bota fs = [bora demora(100), bora demora(1000), bora demora(10000)]
+mostra espera(fs)           # [5050, 500500, 50005000]
+```
+
+`espera` is a builtin, not a keyword: `bora` + `espera` are the language's
+async/await.
+
+### Disambiguation with the test assert
+
+`espera` has **two roles**, told apart by the number of arguments:
+
+| Arity | What it does |
+| --- | --- |
+| 1 arg (future or list of futures) | waits — **concurrency wait** |
+| 2 args (actual, expected) | test assert (see [gs testa](/docs/en/cli#gs-testa)) |
+
+## cano: message channel
+
+`cano([capacity])` creates a channel (a Go channel). With no argument =
+**synchronous** (`envia` blocks until someone receives). With a capacity =
+**buffered** (`envia` only blocks when the buffer is full).
+
+| Builtin | Returns |
+| --- | --- |
+| `cano([cap])` | a new pipe |
+| `envia(cano, valor)` | `nada` (blocks until there's room/a receiver; a closed pipe errors) |
+| `recebe(cano)` | the value (or `nada` if the pipe was closed and drained) |
+| `fecha(cano)` | `nada` (calling it again doesn't error) |
+
+The same three work for **network connections** (`conecta_tcp`, `escuta_tcp`,
+`conecta_udp`): the `enquanto` loop that drains a pipe drains a socket. See
+[Network (TCP/UDP)](/docs/en/rede).
+
+### Producer / consumer
+
+```gambiarrascript
+gambiarra produtor(c)
+    pra_cada i de 1 ate 3
+        envia(c, i)
+    acabou_finalmente
+    fecha(c)
+acabou_finalmente
+
+bota c = cano(2)        # buffer of 2
+bora produtor(c)
+
+# consumer on the main goroutine
+enquanto deu_bom
+    bota v = recebe(c)
+    se_colar v == nada
+        vaza
+    acabou_finalmente
+    mostra "consumi " + v
+acabou_finalmente
+# consumi 1 / consumi 2 / consumi 3
+```
+
+### Synchronous pipe (handshake)
+
+```gambiarrascript
+bota pronto = cano()      # synchronous
+
+bota prepara = gambiarra(c)
+    # ... prepare something ...
+    envia(c, "pronto")    # only moves on once main is at the recebe
+acabou_finalmente
+
+bora prepara(pronto)
+mostra recebe(pronto)     # pronto
+```
+
+### Fan-out / fan-in
+
+```gambiarrascript
+gambiarra trabalhador(id, saida)
+    pra_cada i de 1 ate 2
+        envia(saida, "${id}:${i}")
+    acabou_finalmente
+acabou_finalmente
+
+bota saida = cano(10)
+bora trabalhador("A", saida)
+bora trabalhador("B", saida)
+
+bota recebidos = []
+pra_cada i de 1 ate 4
+    adiciona(recebidos, recebe(saida))
+acabou_finalmente
+ordena(recebidos)          # arrival order varies; sort it to check
+mostra recebidos           # [A:1, A:2, B:1, B:2]
+```
+
+## paralelo: map in parallel
+
+`paralelo(list, fn)` calls `fn(item)` for each item, each in its own
+goroutine (at most 256 at a time), and returns the results **in the original
+order**. If any call errors, `paralelo` blows up with the first one.
+
+```gambiarrascript
+mostra paralelo([1, 2, 3], gambiarra(x) funciona x * 10 acabou_finalmente)   # [10, 20, 30]
+```
+
+## Shared state
+
+Each call (with `bora` or not) has its own scope, and **assigning** inside the
+gambiarra creates a local variable (see [Functions](/docs/en/funcoes#closures)).
+So a goroutine can't change an outer variable:
+
+```gambiarrascript
+bota contador = 0
+gambiarra tenta()
+    contador += 1          # creates a local "contador"
+    funciona contador
+acabou_finalmente
+
+mostra espera(bora tenta())   # 1
+mostra contador               # 0 — the outer one didn't change
+```
+
+**Lists**, **dicts** and **sets** are passed by reference, so mutating their
+contents is visible to everyone. And you can mutate them from several
+goroutines at once (`bora`, `paralelo`, server handlers): like Python's GIL,
+**each operation is atomic** — read, write, `adiciona`, `remove`, `tamanho`,
+`pra_cada` — and it never crashes the process or loses a write. `pra_cada` over
+a collection another goroutine is messing with walks a snapshot taken at the
+start of the loop.
+
+```gambiarrascript
+bota visitas = []
+gambiarra visita(id)
+    pra_cada i de 1 ate 1000
+        adiciona(visitas, id)
+    acabou_finalmente
+acabou_finalmente
+
+espera([bora visita("a"), bora visita("b"), bora visita("c")])
+mostra tamanho(visitas)    # 3000, always
+```
+
+What is **not** atomic is a **compound** operation: `bota d["n"] = d["n"] + 1`
+is two operations (read, then write), and two goroutines can read the same
+value and one write vanishes. That's what `trava` is for.
+
+## trava and com_trava
+
+`trava()` ("lock") creates a lock; `com_trava(t, gambiarra)` ("with lock") runs
+the gambiarra (no arguments) while holding the lock and returns whatever it
+returns:
+
+```gambiarrascript
+bota t = trava()
+bota placar = {"n": 0}
+
+gambiarra soma_muito()
+    pra_cada i de 1 ate 1000
+        com_trava(t, gambiarra()
+            bota placar["n"] = placar["n"] + 1
+        acabou_finalmente)
+    acabou_finalmente
+acabou_finalmente
+
+bota fs = []
+pra_cada i de 1 ate 10
+    adiciona(fs, bora soma_muito())
+acabou_finalmente
+espera(fs)
+mostra placar["n"]         # 10000, always
+```
+
+- The lock is **always** released: if the gambiarra errors, the error bubbles
+  up normally to whoever called `com_trava` (you can catch it with `arruma`)
+  and the lock is already free.
+- **Not reentrant**: calling `com_trava` on the same lock from inside its own
+  gambiarra errors (`essa trava ja ta com voce`) instead of locking forever.
+  Another goroutine asking for the same lock just waits its turn.
+- Hold the lock as briefly as possible: no `busca`, `espera_ms` or network
+  `envia` in there — everyone who wants the lock sits there waiting.
+- `tipo(trava())` is `"trava"`.
+
+Other ways out, when they fit:
+
+1. Each goroutine computes its own piece and returns it with `funciona`; gather
+   everything with `espera(list_of_futures)` or use `paralelo`.
+2. Or use a `cano`: the workers send results down the pipe and a single
+   goroutine consumes and accumulates them.
+
+## Limits
+
+There's no limit on `bora` (watch out for giant fan-outs). `paralelo` caps it
+at 256 simultaneous goroutines. If you need a massive fan-out, prefer
+`paralelo` or build a pool with `cano`.
+
+## Errors in goroutines
+
+A runtime error inside `bora fn` is stored in the future and blows up at
+`espera(f)`. You can catch it with `arruma` ("fix it"):
+
+```gambiarrascript
+gambiarra divide(a, b)
+    funciona a / b
+acabou_finalmente
+
+arruma
+    mostra espera(bora divide(10, 0))
+quebrou erro
+    mostra "deu ruim: " + erro_msg(erro)
+acabou_finalmente
+```
+
+## Quick recipes
+
+### N goroutines, wait for all of them
+
+```gambiarrascript
+gambiarra tarefa(id)
+    funciona "resultado-" + id
+acabou_finalmente
+
+bota fs = []
+pra_cada i de 1 ate 5
+    adiciona(fs, bora tarefa(i))
+acabou_finalmente
+mostra espera(fs)  # [resultado-1, resultado-2, resultado-3, resultado-4, resultado-5]
+```
+
+### Race: first one back wins
+
+```gambiarrascript
+gambiarra lento(ms, nome)
+    espera_ms(ms)
+    funciona nome
+acabou_finalmente
+
+gambiarra corre(ms, nome, chegada)
+    envia(chegada, lento(ms, nome))
+acabou_finalmente
+
+bota chegada = cano(2)
+bora corre(200, "devagar", chegada)
+bora corre(20, "ligeiro", chegada)
+mostra recebe(chegada)     # ligeiro
+```
+
+Swap `lento` for a `busca(url)` and you've got "whichever API answers first".
+
+### Pipeline
+
+```gambiarrascript
+gambiarra gerador(saida)
+    pra_cada i de 1 ate 5
+        envia(saida, i)
+    acabou_finalmente
+    fecha(saida)
+acabou_finalmente
+
+gambiarra quadrado(entrada, saida)
+    enquanto deu_bom
+        bota v = recebe(entrada)
+        se_colar v == nada
+            vaza
+        acabou_finalmente
+        envia(saida, v * v)
+    acabou_finalmente
+    fecha(saida)
+acabou_finalmente
+
+bota c1 = cano(5)
+bota c2 = cano(5)
+bora gerador(c1)
+bora quadrado(c1, c2)
+
+enquanto deu_bom
+    bota v = recebe(c2)
+    se_colar v == nada
+        vaza
+    acabou_finalmente
+    mostra v
+acabou_finalmente
+# 1, 4, 9, 16, 25
+```
+
+## What does **not** exist yet
+
+- `select` to wait on several pipes at once.
+- Atomics / compare-and-swap.
+- Cancelling a future that has already been fired.
+
+If you want a `select` over multiple `cano`s, PRs welcome.

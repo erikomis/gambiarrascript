@@ -1,0 +1,125 @@
+---
+title: HTTP (client)
+description: busca() makes HTTP requests in GambiarraScript.
+---
+
+## Simple GET
+
+```gambiarrascript
+bota r = busca("https://httpbin.org/get")
+se_colar r.ok
+    mostra r.corpo
+acabou_finalmente
+```
+
+`busca(url)` ("fetch") makes a GET. The response is a dictionary:
+
+| key          | type    | contents                              |
+| ------------ | ------- | ------------------------------------- |
+| `status`     | number  | HTTP code (200, 404, etc.)            |
+| `ok`         | boolean | `deu_bom` if 2xx                      |
+| `corpo`      | text    | response body                         |
+| `cabecalhos` | dict    | canonicalized headers (e.g. `Content-Type`); multiple values come joined with `", "` |
+| `corpo_base64` | text  | **only** when the body isn't valid UTF-8 text (image, zip, pdf): the bytes in base64 |
+
+A 4xx/5xx status is **not** an error: it comes in `status`/`ok` for you to
+decide. A real error (DNS, connection refused, timeout, connection dropping
+mid-response) blows up with `erro_tipo(e) == "rede"` ("network") — catch it
+with `arruma` ("fix it"). A URL that isn't even `http://`/`https://` is the
+caller's fault (`"builtin"`).
+
+```gambiarrascript
+arruma
+    busca("http://127.0.0.1:1/")
+quebrou erro
+    mostra erro_tipo(erro)     # rede
+acabou_finalmente
+```
+
+## Options (method, body, headers, timeout)
+
+```gambiarrascript
+bota r = busca("https://httpbin.org/post", {
+    "metodo": "POST",
+    "corpo": pra_json({"msg": "salve"}),
+    "cabecalhos": {"Content-Type": "application/json"},
+    "timeout": 10
+})
+mostra r.status
+mostra de_json(r.corpo).json.msg      # salve
+```
+
+- `metodo`: `"GET"` (default), `"POST"`, `"PUT"`, `"DELETE"`, `"PATCH"`,
+  `"HEAD"` or `"OPTIONS"` (upper or lower case). Any other method is an error.
+- `corpo`: the request body text.
+- `json`: any value — serialized just like `pra_json`, and it already sends
+  `Content-Type: application/json; charset=utf-8` (unless you send a different
+  one in `cabecalhos`).
+- `corpo_base64`: a **binary** body in base64 (file upload).
+  `corpo`, `json` and `corpo_base64` are mutually exclusive: sending two is an
+  error.
+- `cabecalhos`: a text → text dictionary.
+- `timeout`: in seconds (fractions allowed); default 30.
+- `ca` and `inseguro`: trust settings for `https://` (see below).
+
+## HTTPS with your own certificate: ca and inseguro
+
+`https://` works out of the box and validates the certificate against the
+system CAs — real sites need nothing. To talk to a dev server (or one on the
+internal network) with its own certificate:
+
+```gambiarrascript
+bota r = busca("https://localhost:8443/", {"ca": "cert.pem"})
+```
+
+- `ca`: path to a PEM with the CA certificate(s) to trust — or the PEM itself
+  (text starting with `-----BEGIN`, e.g. the `cert` from
+  [`gera_certificado`](/docs/en/servidor#gera_certificadohosts--development-only)).
+  With `ca`, **only** that CA counts (the system ones are dropped), just like
+  `curl --cacert`. A file that doesn't exist or has no valid certificate
+  raises an `"io"` error.
+- `inseguro` ("insecure"): with `deu_bom` it **doesn't validate the certificate**.
+
+<Callout title="inseguro is for testing only" type="warn">
+  `{"inseguro": deu_bom}` accepts any certificate — including that of whoever
+  is sitting in the middle of the connection reading and swapping everything
+  (password, token, cookie). Only use it for testing on your own machine; the
+  right way is to pass `ca`.
+</Callout>
+
+A certificate that doesn't pass (unknown CA, wrong name, expired) blows up
+with the hint: `deu ruim na conexao com "https://...": o certificado nao passou (...)`.
+`ca` and `inseguro` don't work in the playground (in the browser, the browser
+does the validating).
+
+## JSON and binary
+
+```gambiarrascript
+bota r = busca("https://httpbin.org/post", {"metodo": "POST", "json": {"msg": "salve"}})
+mostra de_json(r.corpo).json.msg # salve
+
+# downloading an image: the body isn't text, so corpo_base64 comes along
+bota img = busca("https://httpbin.org/image/png")
+se_colar tem(img, "corpo_base64")
+    mostra "veio binario: " + tamanho(img.corpo_base64) + " letras de base64"
+acabou_finalmente
+```
+
+The `corpo_base64` rule is simple: a body that isn't valid UTF-8 gets the key
+(`corpo` still holds the raw bytes). Text, JSON and HTML never have it.
+
+## Blocking, but you can parallelize
+
+The call is **blocking**: the result comes back ready. For several requests
+at once, fire them off with `bora` ("let's go") or use `paralelo`:
+
+```gambiarrascript
+bota urls = ["https://httpbin.org/get", "https://httpbin.org/uuid"]
+bota respostas = paralelo(urls, gambiarra(u) funciona busca(u) acabou_finalmente)
+pra_cada r em respostas
+    mostra r.status
+acabou_finalmente
+```
+
+See [Concurrency](/docs/en/concorrencia). WebSocket client:
+[`conecta_ws`](/docs/en/servidor#conecta_wsurl-opcoes--client).

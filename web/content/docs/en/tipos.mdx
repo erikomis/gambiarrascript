@@ -1,0 +1,280 @@
+---
+title: Types and operators
+description: Numbers, texts, booleans, collections and friends - and how to operate on them.
+---
+
+GambiarraScript is dynamic: the type is whatever you store at runtime, there
+are no type declarations at all.
+
+| Type        | Literal / how it's born                    | `mostra` prints  | `tipo(x)` |
+| ----------- | ------------------------------------------ | ---------------- | --------- |
+| Number      | `25`, `3.14`, `-1`, `0xFF`, `0o17`, `0b1010` | `25`, `3.14`, `255` | `"numero"` |
+| Text        | `"ola"`, `"oi ${nome}"` or `` `ola` ``     | `ola` | `"texto"` |
+| Boolean     | `deu_bom` / `deu_ruim`                     | `deu_bom` / `deu_ruim` | `"booleano"` |
+| Nada        | `nada`                                     | `nada` | `"nada"` |
+| List        | `[1, 2, 3]`, `1..3`                        | `[1, 2, 3]` | `"lista"` |
+| Dictionary  | `{"nome": "Erik", "idade": 25}`            | `{"nome": "Erik", "idade": 25}` | `"dicionario"` |
+| Set         | `conjunto([1, 2, 2])`                      | `{1, 2}` | `"conjunto"` |
+| Gambiarra   | `gambiarra f(x) ...` or lambda `gambiarra(x) ...` | `gambiarra(x)` | `"funcao"` |
+| Future      | `bora f()`                                 | `<futuro em andamento>` | `"futuro"` |
+| Pipe        | `cano()`                                   | `<cano sincrono>` | `"cano"` |
+| Error       | whatever `quebrou` catches                 | the message | `"erro"` |
+| Native      | `conecta(...)` (database connection)       | `<nativo: conexao sqlite>` | `"nativo"` |
+
+`nada` ("nothing") is the only null value — there are no separate
+`null`/`undefined`. `deu_bom` / `deu_ruim` are "it worked" / "it went wrong",
+i.e. true / false.
+
+Note that, **inside a list**, text shows up without quotes (`[a, b]`), but
+inside a dictionary it shows up with them (`{"a": "x"}`). If you need a stable
+format for a machine to read, use `pra_json`.
+
+## What type is this? `tipo(x)`
+
+`tipo(valor)` returns the type's name as **text** (the last column of the table
+above). Every callable — named gambiarra, lambda or builtin — is `"funcao"`;
+integers and floats are both `"numero"`.
+
+```gambiarrascript
+mostra tipo(42)                  # numero
+mostra tipo(3.14)                # numero
+mostra tipo("oi")                # texto
+mostra tipo(nada)                # nada
+mostra tipo({"a": 1})            # dicionario
+mostra tipo(tamanho)             # funcao (builtins count too)
+mostra tipo(gambiarra(x) funciona x acabou_finalmente)   # funcao
+mostra mapeia([1, "a", [2], deu_ruim], tipo)             # [numero, texto, lista, booleano]
+```
+
+It's handy for validating stuff that comes from outside (JSON, a gambiarra's
+argument) before using it — there's an example in
+[JSON](/docs/en/json#validating-what-came-in). `tipo` is a builtin, not a
+keyword: if you declare a `gambiarra tipo(...)` or `bota tipo = ...`, your name
+shadows the builtin from then on.
+
+## Numbers
+
+Under the hood there are two flavors, and the language picks on its own:
+
+- **exact integer** (64 bits) — `25`, `0xFF`, the result of `2 + 3`, `6 / 3`;
+- **float** (`float64`) — `3.14`, `7 / 2`, any math that involves a float.
+
+Integers don't turn into `25.0` nor lose precision on big numbers; floats
+behave like in any other language (`0.1 + 0.2 == 0.3` is `deu_ruim`).
+
+```gambiarrascript
+mostra 7 / 2          # 3.5
+mostra 6 / 3          # 2
+mostra 2 * 3.0        # 6
+mostra 10 % 3         # 1
+mostra -7 % 3         # -1 (sign of the dividend)
+mostra 1 == 1.0       # deu_bom
+mostra 0xFF + 0b11    # 258
+```
+
+- `/` and `%` by zero are a **runtime error** (not `Inf`/`NaN`).
+- Literals in other bases: `0x` (hex), `0o` (octal), `0b` (binary).
+- Math builtins: `raiz`, `abs`, `arredonda`, `teto`, `chao`, `min`,
+  `max`, `seno`, `cosseno`, `tangente`, `log`, `log10`, `exp`, `aleatorio`, and
+  the value `pi` — see [Standard library](/docs/en/biblioteca#numbers-and-math).
+
+### Power
+
+`a ** b` raises `a` to `b`. An integer raised to a non-negative integer stays an
+**exact integer**; a negative or fractional exponent gives a float (and if the
+integer overflows 64 bits, it becomes a float too).
+
+```gambiarrascript
+mostra 2 ** 10        # 1024
+mostra 2 ** -1        # 0.5
+mostra 2 ** 0.5       # 1.4142135623730951
+mostra 2 ** 3 ** 2    # 512 (right-associative: 2 ** 9)
+mostra -2 ** 2        # -4 (** binds tighter than unary minus)
+mostra (-2) ** 2      # 4
+mostra 2 * 3 ** 2     # 18
+
+bota lado = 4
+lado **= 2            # compound works too
+mostra lado           # 16
+```
+
+`0 ** -1` is an error ("zero elevado a negativo e divisao por zero
+disfarcada"), and so is `**` with something that isn't a number (`"a" ** 2`).
+
+### Bitwise
+
+Integers only: `&` (and), `|` (or), `^` (xor), `~` (not, prefix), `<<` and `>>`.
+
+```gambiarrascript
+mostra 12 & 10        # 8
+mostra 12 | 2         # 14
+mostra 12 ^ 15        # 3
+mostra ~0             # -1
+mostra 1 << 4         # 16
+mostra 256 >> 4       # 16
+```
+
+## Constants: crava
+
+`crava NOME = valor` (`crava` = "nail it down") declares a name that **never
+changes again**. The check happens before running (in `gs roda`, in `--tree`,
+in `gs check` and in the editor): after the `crava`, any `bota NOME`,
+`NOME += ...`, destructuring, use as a `pra_cada`/`quebrou` variable,
+`gambiarra NOME` or `importa ... como NOME` is an error — and so is a second
+`crava NOME` in the same scope.
+
+```gambiarrascript
+crava TAXA = 0.1
+crava DIAS = ["seg", "ter", "qua"]
+
+mostra "taxa: ${TAXA}"     # taxa: 0.1
+adiciona(DIAS, "qui")      # the contents can still change (like JS const)
+mostra DIAS                # [seg, ter, qua, qui]
+
+# bota TAXA = 0.2          -> erro: `TAXA` foi cravada, nao da pra mudar
+```
+
+The scope is the same as `bota`'s (the function's). A `crava` inside a
+gambiarra only applies in there; and a gambiarra can create its own local
+`bota TAXA`, which shadows the outer one. More in
+[Gotchas](/docs/en/pegadinhas#crava-is-not-block-scoped).
+
+## Texts
+
+Three ways to write them:
+- `"..."` with escapes `\n`, `\t`, `\"`, `\\` (any other `\x` stays literal);
+- `"... ${expr} ..."` — **interpolation**, evaluates the expression and pastes it
+  into the text (with an optional format: `"${preco:.2f}"`);
+- `` `...` `` backticks: raw string, multiline, no escapes.
+
+`+` concatenates if either side is text. You can index and slice text like a
+list (`t[0]`, `t[-1]`, `t[1:3]`). All of it in [Texts](/docs/en/strings).
+
+## Booleans
+
+`deu_bom` / `deu_ruim`. `e` ("and") and `ou` ("or") short-circuit and **always
+return a boolean** (they normalize the operand), unlike JS/Python:
+
+```gambiarrascript
+mostra deu_bom e "texto"   # deu_bom (doesn't return "texto")
+mostra 5 ou 0              # deu_bom
+mostra nada ou "ok"        # deu_bom
+mostra nada e "ok"         # deu_ruim
+```
+
+`nao` ("not") is a prefix and returns a boolean: `nao deu_bom` → `deu_ruim`.
+
+## Truthiness
+
+Only `nada` and `deu_ruim` are **falsy**. Everything else is truthy: `0`, `""`,
+`[]`, `{}` included. If you want to check for empty, do it explicitly
+(`tamanho(x) == 0`, `x == ""`). See [Gotchas](/docs/en/pegadinhas#truthiness).
+
+## Nada, safe navigation and coalescing
+
+`nada` is "no value". Doing math with it (`nada + 1`) is a runtime error;
+concatenating it with text gives the text `"nada"`. `nada == 0` is `deu_ruim`,
+`nada == nada` is `deu_bom`.
+
+To deal with `nada` without piling up `se_colar` ("if it sticks"):
+
+- `obj?.campo` — if `obj` is `nada`, gives `nada` instead of an error;
+- `x ?? padrao` — returns `x`, or `padrao` if `x` is `nada` (only `nada`: `0`
+  and `deu_ruim` pass straight through).
+
+```gambiarrascript
+bota usuario = {"nome": "Ze", "endereco": nada}
+mostra usuario?.endereco?.rua        # nada
+mostra usuario.endereco ?? "sem endereco"   # sem endereco
+```
+
+## Lists, dictionaries and sets
+
+The compound types. Lists are indexed by integer (negative works: `xs[-1]`),
+dictionaries by text/number/boolean (with the `d.campo` shorthand). Both are
+mutable and passed by reference. Details in
+[Lists and dictionaries](/docs/en/colecoes).
+
+## Operators
+
+| Category    | Symbols |
+| ----------- | -------- |
+| Arithmetic  | `+ - * / % **` |
+| Bitwise     | `& \| ^ ~ << >>` |
+| Comparison  | `== != < > <= >=` |
+| Logical     | `e`, `ou`, `nao` |
+| Nada        | `?.` and `??` |
+| Range       | `a..b` (inclusive list) |
+| Access      | `x[i]`, `x[i:j]`, `x.campo`, `f(args)` |
+| Assignment  | `bota x = ...`, `crava X = ...` (constant), and `+= -= *= /= %= **= &= \|= ^= <<= >>=` (without `bota`) |
+
+### Precedence (weakest to strongest)
+
+1. `ou`, `??`
+2. `e`
+3. `..`
+4. `|`
+5. `^`
+6. `&`
+7. `== !=`
+8. `< > <= >=`
+9. `<< >>`
+10. `+ -`
+11. `* / %`
+12. prefix (`-x`, `nao x`, `~x`)
+13. `**` (**right**-associative)
+14. call `f(args)`
+15. index `x[i]`, `x.campo`, `x?.campo`
+
+`**` sits above unary minus: `-2 ** 2` is `-(2 ** 2)`, same as Python.
+Same as C: `&`, `|` and `^` sit **below** `==`. So `x & 1 == 1` becomes
+`x & (1 == 1)` and errors out — use parentheses: `(x & 1) == 1`. And `..` sits
+below arithmetic: `0..n - 1` is `0..(n - 1)`.
+
+## Equality
+
+`==` and `!=` do **structural comparison**:
+
+- Numbers: by value (`1 == 1.0` is `deu_bom`).
+- Texts: character by character.
+- Booleans: by value.
+- `nada` is only equal to `nada`.
+- Lists: same elements, same order, recursively.
+- Dictionaries: same keys (key type + value), same values, recursively. Order
+  doesn't matter.
+
+```gambiarrascript
+mostra [1, 2, 3] == [1, 2, 3]                # deu_bom
+mostra [[1, 2], [3]] == [[1, 2], [3]]        # deu_bom
+mostra {"a": 1} == {"a": 1}                  # deu_bom
+mostra {"a": 1, "b": 2} == {"b": 2, "a": 1}  # deu_bom (order doesn't matter)
+mostra {"1": 1} == {1: 1}                    # deu_ruim (text key vs number key)
+```
+
+Different instances with the same contents are **equal**. There is no
+"identity" (`is`) nor `===`.
+
+## Invalid operations
+
+These are runtime errors:
+
+- `"a" < "b"` — `< > <= >=` are for numbers only.
+- `[1] + [2]` — `+` only adds numbers and concatenates text (not lists).
+- `nada + 1`.
+- `3 > 2 > 1` — becomes `deu_bom > 1`, and a boolean doesn't compare with a
+  number.
+- `1.5 & 1` — bitwise is integers only.
+
+`1 == "1"` is **not** an error: it returns `deu_ruim` (different types).
+
+## Converting between types
+
+| From -> To | How |
+| --- | --- |
+| anything -> text | `texto(v)`, interpolation `"${v}"` (with a format: `"${v:.2f}"`) or concatenating with text |
+| anything -> type name | `tipo(v)` — `"numero"`, `"texto"`, `"lista"`... |
+| text -> number | `numero(t)` — text that isn't a number **is an error** (use `arruma` ("fix it") if it comes from outside) |
+| text -> list | `separa(t, sep)` |
+| list -> text | `junta(lista, sep)` |
+| list -> set | `conjunto(lista)` |
+| anything -> JSON | `pra_json(v)`; back with `de_json(t)` |

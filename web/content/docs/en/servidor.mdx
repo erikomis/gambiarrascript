@@ -1,0 +1,360 @@
+---
+title: HTTP server
+description: rota(), escuta(), HTTPS, middleware, CORS, static files and WebSocket — REST APIs and real-time stuff in GambiarraScript.
+---
+
+```gambiarrascript
+gambiarra ola(pedido)
+    funciona "salve, " + pedido["caminho"]
+acabou_finalmente
+
+rota("GET", "/", ola)
+escuta(8080)
+```
+
+`rota` is a "route", `escuta` means "listen" and `pedido` is the incoming
+"request". Full examples: `examples/api_rest.gs` (CRUD with auth and CORS) and
+`examples/chat_ws.gs` (chat with WebSocket broadcast).
+
+## rota(metodo, caminho, handler)
+
+Registers a route. The path can have **parameters** and a **wildcard** at the end:
+
+| pattern             | matches                     | `pedido["params"]`              |
+| ------------------- | --------------------------- | ------------------------------- |
+| `/usuarios`         | only `/usuarios`            | `{}`                            |
+| `/usuarios/:id`     | `/usuarios/42`              | `{"id": "42"}`                  |
+| `/u/:id/posts/:p`   | `/u/7/posts/9`              | `{"id": "7", "p": "9"}`         |
+| `/arquivos/*resto`  | `/arquivos/css/site.css`    | `{"resto": "css/site.css"}` (may be `""`) |
+
+- A parameter matches **one** non-empty segment, already unescaped (`%2F`
+  becomes `/` inside the value without splitting the route). The value is
+  always text.
+- When more than one route matches, the most specific one wins: a fixed
+  segment beats a parameter, which beats a wildcard (`/usuarios/eu` beats
+  `/usuarios/:id`).
+- Nothing matched → `404 rota nao encontrada, parca`. The path exists with a
+  different method → `405` with the `Allow` header (e.g.
+  `Allow: DELETE, GET, HEAD`).
+- `HEAD` without a route of its own uses the `GET` one (without a body).
+- Registering the same method + path again swaps the handler.
+
+The `handler` is a `gambiarra` (named or a lambda). It may declare fewer
+parameters than it receives: `gambiarra() funciona "ok" acabou_finalmente` is
+fine. It gets the `pedido` dictionary:
+
+| key          | type  | contents                                          |
+| ------------ | ----- | ------------------------------------------------- |
+| `metodo`     | text  | HTTP method (`"GET"`, `"POST"`...)                |
+| `caminho`    | text  | URL path (`"/usuarios/42"`)                       |
+| `corpo`      | text  | raw request body                                  |
+| `cabecalhos` | dict  | headers, with Go's canonical name (`Content-Type`, `X-Teste`) |
+| `query`      | dict  | query string (`?nome=ze` → `pedido.query.nome`)   |
+| `params`     | dict  | path parameters (`:id`, `*resto`)                 |
+| `json`       | value | body already parsed when the `Content-Type` is `application/json` (or `...+json`); `nada` if it isn't JSON or is empty |
+| `ip`         | text  | the caller's IP (from the connection; behind a proxy, read `X-Forwarded-For` in the headers) |
+| `cookies`    | dict  | request cookies (`name → value`)                  |
+
+A repeated header or query parameter arrives joined with `", "`.
+
+**Broken JSON** with `Content-Type: application/json` never even reaches the
+handler: the server answers `400` with `esse json do corpo ta quebrado, parca: <onde>`.
+Want to handle it yourself? Send a different `Content-Type` and use
+`de_json(pedido.corpo)` inside `arruma` ("fix it").
+
+## Response
+
+The handler returns:
+
+| returned | response |
+| -------- | -------- |
+| text | `200` with the text |
+| `nada` | `200` with an empty body |
+| list | `200` with the list as JSON (`Content-Type: application/json; charset=utf-8`) |
+| **response** dictionary | `{"status": numero, "corpo": ..., "cabecalhos": dic}` — all optional |
+| any other dictionary | `200` with the dictionary as JSON |
+
+A **response** dictionary is one that only has the keys `status`, `corpo`
+and/or `cabecalhos` (with `status` a number and `cabecalhos` a dictionary).
+Anything else is data: `{"status": "ok"}` (text status) and
+`{"corpo": 1, "id": 2}` become JSON. When in doubt, be explicit with
+`responde_json`.
+
+- A `status` outside 100–599 becomes `500`.
+- A list/dictionary `corpo` becomes JSON (and gets the JSON `Content-Type` if
+  you didn't send another one).
+- A header value can be text, a number, a boolean or a **list** of texts
+  (several lines of the same header — that's how you send two cookies).
+
+```gambiarrascript
+rota("POST", "/login", gambiarra(pedido)
+    funciona {
+        "status": 204,
+        "cabecalhos": {"Set-Cookie": ["sessao=abc; Path=/; HttpOnly", "tema=escuro; Path=/"]}
+    }
+acabou_finalmente)
+```
+
+### responde_json(valor, [status])
+
+Builds a ready-made JSON response: `{"status": status, "corpo": pra_json(valor),
+"cabecalhos": {"Content-Type": "application/json; charset=utf-8"}}`. Status
+defaults to `200`; it must be an integer from 100 to 599.
+
+```gambiarrascript
+rota("GET", "/usuarios/:id", gambiarra(pedido)
+    se_colar pedido.params.id != "1"
+        funciona responde_json({"erro": "nao achei"}, 404)
+    acabou_finalmente
+    funciona {"id": 1, "nome": "Ze"} # data dictionary: JSON 200
+acabou_finalmente)
+```
+
+### Error in the handler
+
+If the handler (or a middleware) blows up with an error, the client gets a
+**`500`** with the generic body `deu ruim no servidor (erro interno), parca` —
+no leaking internal messages. The full error (message with line number and
+stack trace) goes to **stderr**, and the server keeps serving:
+
+```
+servidor: GET /usuarios/abc estourou em <rota GET /usuarios/:id>
+  deu ruim na linha 12: nao da pra dividir por zero, parca — nem na gambiarra
+```
+
+## Middleware: antes() and depois()
+
+`antes(gambiarra(pedido) ...)` ("before") runs before **every route**
+(including `rota_ws`), in registration order:
+
+- returned `nada` → moves on to the next middleware and then to the route;
+- returned anything else → **that's the response**, the route doesn't even run;
+- it can modify `pedido` (`bota pedido["usuario"] = ...`) and the handler sees it.
+
+`depois(gambiarra(pedido, resposta) ...)` ("after") runs afterwards, with the
+response already normalized to `{"status", "corpo", "cabecalhos"}`. Returned
+`nada` → the response stands (including any in-place changes you made);
+returned something else → it replaces it. Good for logging and default headers.
+
+Middleware only runs on requests that matched a route (404/405 and static
+files go straight through).
+
+```gambiarrascript
+antes(gambiarra(pedido)
+    se_colar pedido.cabecalhos["Authorization"] != "Bearer segredo"
+        funciona responde_json({"erro": "sem token"}, 401)
+    acabou_finalmente
+    bota pedido["usuario"] = "admin"
+acabou_finalmente)
+
+depois(gambiarra(pedido, resposta)
+    mostra "${pedido.metodo} ${pedido.caminho} -> ${resposta.status}"
+    bota resposta["cabecalhos"]["X-Servidor"] = "gambiarra"
+acabou_finalmente)
+```
+
+## cors([opcoes])
+
+Turns on CORS for the whole server: answers the preflight (`OPTIONS` with
+`Access-Control-Request-Method`) with `204` and puts
+`Access-Control-Allow-Origin` on responses for allowed origins.
+
+```gambiarrascript
+cors() # any origin
+
+cors({
+    "origens": ["https://meusite.com"],
+    "metodos": ["GET", "POST"],
+    "cabecalhos": ["Authorization", "Content-Type"],
+    "credenciais": deu_bom,
+    "max_idade": 600
+})
+```
+
+| option | default | |
+| ------ | ------- | - |
+| `origens` | `["*"]` | list of exact origins (`"https://x.com"`); `"*"` allows everyone |
+| `metodos` | `GET, POST, PUT, PATCH, DELETE, OPTIONS` | |
+| `cabecalhos` | whatever the browser asked for | `Access-Control-Allow-Headers` |
+| `credenciais` | `deu_ruim` | with `deu_bom`, sends `Allow-Credentials` and echoes the origin — **requires a list of `origens`** |
+| `max_idade` | `600` | seconds to cache the preflight |
+
+A preflight from a non-allowed origin gets `403`. Calling `cors()` again
+replaces the configuration. A misspelled option is an error.
+
+`credenciais` with any origin (`cors({"credenciais": deu_bom})`) is an error
+on purpose: the browser sends the cookie along, so allowing everyone with
+credentials lets **any site** make logged-in requests on behalf of your user.
+List the origins that are allowed.
+
+## serve_pasta(prefixo, pasta)
+
+Serves static files under the prefix (`GET`/`HEAD` only; `pasta` is "folder"):
+
+```gambiarrascript
+serve_pasta("/publico", "./public") # /publico/css/site.css → ./public/css/site.css
+serve_pasta("/", "./site")          # whole static site
+```
+
+- A folder → its `index.html` (no `index.html` gives `404`: no directory
+  listings). `/publico` without a trailing slash redirects to `/publico/`.
+- `Content-Type` by extension; `Range` and `If-Modified-Since` work.
+- Security: `..` can't escape the folder, symlinks pointing outside don't
+  count, and dotfiles/dot-folders (`.env`, `.git`) are never served.
+- A `rota()` registered on the same path beats the folder. The folder path is
+  relative to where `gs` was run.
+
+## escuta(porta, [opcoes])
+
+Starts the server and **blocks**. Takes a number (`8080`) or text with the
+address (`":8080"`, `"127.0.0.1:3000"`, `"0"`/`"127.0.0.1:0"` = any free
+port). Prints the real address to **stderr**:
+
+```
+servidor de pe em http://localhost:8080 (ctrl+c pra parar)
+```
+
+- **ctrl+c / SIGTERM** shuts down gracefully: stops accepting connections,
+  waits up to 5s for in-flight requests, notifies WebSockets ("going away")
+  and `escuta` **returns** — the code after it runs (close the database, save
+  state). A second ctrl+c kills it on the spot.
+- Timeouts: 10s for the request headers to arrive, 60s to read the body, 120s
+  for an idle connection (keep-alive).
+
+Each request runs **in parallel** (one goroutine per request). So be careful
+when touching a list/dictionary shared between handlers (see
+[Concurrency](/docs/en/concorrencia#shared-state)): each operation on a
+collection is atomic, but a compound one (`bota d["n"] = d["n"] + 1`) needs
+`com_trava(trava, gambiarra() ... acabou_finalmente)` (`trava` = "lock").
+
+## HTTPS: `escuta(porta, {"tls": ...})`
+
+```gambiarrascript
+rota("GET", "/", gambiarra() funciona "salve, seguro" acabou_finalmente)
+escuta(8443, {"tls": {"cert": "cert.pem", "chave": "chave.pem"}})
+```
+
+```
+servidor de pe em https://localhost:8443 (ctrl+c pra parar)
+```
+
+- `cert` and `chave` ("key") are the **PEM** files for the certificate (with
+  the chain, if there's an intermediate — Let's Encrypt's `fullchain.pem`) and
+  the private key. Text starting with `-----BEGIN` is treated as the PEM
+  itself (see `gera_certificado` below).
+- The certificate is read **before** the port opens: a file that doesn't
+  exist or isn't valid PEM (or a key from another certificate) raises an
+  `"io"` error right away, with the path in the message — no server that's up
+  but kills every handshake.
+- TLS **1.2 minimum**; cipher suites and curves stay on Go's defaults (only
+  the safe ones). HTTP/2 comes as a freebie for whoever asks for it.
+- **`rota_ws` becomes `wss://`** on its own: same port, same certificate.
+- Everything else (routes, middleware, graceful shutdown, timeouts) is the
+  same. A client speaking `http://` on the https port, or one that doesn't
+  trust the certificate, doesn't pollute stderr: the error shows up on its side.
+
+<Callout title="In production">
+  Often TLS terminates **before** your server: a reverse proxy (nginx, Caddy,
+  Traefik) or the cloud load balancer holds the certificate (and renews it on
+  its own) and forwards plain HTTP to `escuta(8080)` on the internal network.
+  In that case you don't need `{"tls": ...}` — and the client IP comes in the
+  `X-Forwarded-For` header. The `tls` here is for when `gs` is exposed
+  directly, or for testing `https://`/`wss://` at home.
+</Callout>
+
+### gera_certificado([hosts]) — development only
+
+```gambiarrascript
+bota par = gera_certificado()      # {"cert": "-----BEGIN CERTIFICATE-----...", "chave": "-----BEGIN PRIVATE KEY-----..."}
+escreve_arquivo("cert.pem", par.cert) # so curl --cacert / another client can trust it
+escuta(8443, {"tls": par})         # the PEM itself works in place of the path
+```
+
+Generates a **self-signed** certificate (ECDSA P-256, valid for 1 year) and
+returns `{"cert", "chave"}` in PEM. Default hosts: `localhost`, `127.0.0.1`
+and `::1`; pass others with `gera_certificado(["meu.dev", "192.168.0.10"])`
+(an IP becomes an IP, everything else becomes a name). It is its own CA, so a
+client trusts it by passing the `cert` as `ca`: `busca(url, {"ca": par.cert})`
+or `curl --cacert cert.pem`.
+
+<Callout title="Don't use it in production">
+  No browser trusts this certificate (it will show a warning). In production
+  use a real certificate (Let's Encrypt, your provider's) or let the reverse
+  proxy handle TLS. The key comes out as plain text: don't commit `chave.pem`.
+</Callout>
+
+## WebSocket: rota_ws(caminho, handler, [opcoes])
+
+With `escuta(porta, {"tls": ...})` the same endpoint serves `wss://`.
+
+```gambiarrascript
+bota conexoes = []
+
+rota_ws("/chat", gambiarra(ws, pedido)
+    adiciona(conexoes, ws)
+    enquanto deu_bom
+        bota msg = recebe(ws) # blocks; nada = the client left
+        se_colar msg == nada
+            vaza
+        acabou_finalmente
+        pra_cada c em conexoes
+            envia(c, {"de": pedido.query.nome, "texto": msg})
+        acabou_finalmente
+    acabou_finalmente
+    remove(conexoes, ws)
+acabou_finalmente)
+
+escuta(8080)
+```
+
+- The handler runs **once per connection**, in that connection's goroutine,
+  and receives the `ws` connection and the same `pedido` as HTTP routes
+  (`params`, `query`, `cabecalhos`, `cookies`...). The path accepts
+  `:param`/`*curinga`.
+- `antes()` runs before the handshake: returning a response (e.g. `401`)
+  rejects the connection.
+- `recebe(ws)` ("receive") blocks until the next message and returns **text**.
+  It returns `nada` when the client closed, dropped, or the server is shutting
+  down — that's the signal to leave the loop.
+- `envia(ws, x)` ("send"): text goes as is; **lists/dictionaries go as JSON**
+  (`pra_json`); numbers/booleans become text. You can call it on the same
+  connection from several goroutines at once (sending is serialized per
+  connection). Sending to a connection that **already dropped doesn't blow
+  up** (the message is lost) — the broadcast doesn't break because one client
+  left. Sending after you yourself called `fecha(ws)` is an error. A client
+  that doesn't read for 10s gets dropped.
+- `fecha(ws)` ("close") closes it (idempotent). When the handler finishes, the
+  connection closes on its own; if it blows up with an error, it closes with
+  code 1011 and the error goes to stderr.
+- Keepalive: the server sends a ping every 30s while someone is in `recebe`;
+  no pong within 15s and the connection is dropped and `recebe` returns `nada`.
+- Origin: by default only browsers from the **same origin** are accepted. The
+  handshake carries cookies from any site, so allowing an origin on the
+  websocket means handing it the user's login — that's why an open `cors()`
+  does **not** apply here. To allow, list them on the route itself:
+  `rota_ws("/chat", h, {"origens": ["https://app.com"]})`; `["*"]` allows any
+  (only do that if the socket doesn't depend on login). A `cors()` with a list
+  of origins also counts. Clients outside the browser (no `Origin`) always get in.
+- Messages up to 1 MiB.
+
+A plain `GET` (no upgrade) on a `rota_ws` gets `426`.
+
+### conecta_ws(url, [opcoes]) — client
+
+```gambiarrascript
+bota ws = conecta_ws("ws://localhost:8080/chat?nome=ze", {"cabecalhos": {"Authorization": "Bearer x"}, "timeout": 5})
+envia(ws, "salve")
+mostra recebe(ws)
+fecha(ws)
+```
+
+Same connection as the server's: `envia`/`recebe`/`fecha` work the same way.
+`timeout` (seconds, default 30) only applies to connecting. `wss://` validates
+the certificate against the system CAs; to talk to a dev server with its own
+certificate, use `{"ca": "cert.pem"}` (a path or the PEM itself — with it,
+only that CA counts) or, as a last resort, `{"inseguro": deu_bom}` ("insecure")
+— the same options as
+[`busca`](/docs/en/http#https-with-your-own-certificate-ca-and-inseguro).
+Failed → network error
+(`conecta_ws(): nao consegui conectar em "ws://..." (o servidor respondeu 401): ...`).
+WebSocket doesn't run in the playground (browser).

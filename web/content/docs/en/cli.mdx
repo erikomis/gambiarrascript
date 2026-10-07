@@ -1,0 +1,345 @@
+---
+title: Command line
+description: The gs binary — subcommands, flags and how it runs your script.
+---
+
+`gs` is the one binary that does it all: it runs, tests, formats, packages and
+chats with your editor.
+
+## Usage
+
+```
+gs roda [--tree] [--cache] <arquivo.gs> [args]   executa (VM e o padrao)
+gs repl                                          modo interativo (multiline)
+gs check <arquivo.gs>...                         parse + lint (erros e avisos)
+gs formata [-w] <arquivo.gs | diretorio>...      formata (imprime ou sobrescreve)
+gs testa [--tree] [-so nome] [<dir>]             roda os *_test.gs e soma os asserts
+gs doc [<arquivo.gs | diretorio>...]             gera markdown das gambiarras documentadas
+gs init [nome]                                   cria gambiarra.json + principal.gs
+gs get <url | github.com/u/repo/mod.gs@tag>      baixa um modulo pra gs_modulos/ (+ lock)
+gs instala [--atualiza]                          instala as dependencias, conferindo o lock
+gs build <arquivo.gs> [-o saida]                 gera binario standalone com o script
+gs build <arquivo.gs> --alvo linux/amd64         standalone pra outra plataforma
+gs bench [--tree] <arquivo.gs> [n]               mede o tempo de execucao (n rodadas)
+gs disasm <arquivo.gs>                           mostra o bytecode da VM
+gs lsp                                           language server (usado pelo editor)
+gs --version  (ou gs versao)                     mostra a versao
+gs --help                                        mostra a ajuda
+```
+
+## `gs roda`
+
+```bash
+gs roda [--tree] [--cache] <arquivo.gs> [args...]
+```
+
+- `roda` ("run") runs the file on the **bytecode VM** — the default engine
+  (the same one used by `build`, `testa`, `bench`, the REPL and the
+  playground).
+- `--tree` falls back to the tree-walking interpreter (a fallback; both engines
+  run every example the same way). `--vm` is still accepted for compatibility,
+  but it doesn't change anything.
+- `--cache` saves the compiled bytecode to `arquivo.gsc` next to the `.gs` and
+  reuses it on later runs (it invalidates itself when the source, any imported
+  module, the `gs` version or the list of builtins changes). It doesn't apply
+  with `--tree`.
+- Everything after the file becomes an argument, available via `argumentos()`.
+- `importa` resolves paths relative to the file that contains the `importa`
+  (and falls back to `gs_modulos/` if it can't find it). See
+  [Modules](/docs/en/modulos).
+
+```bash
+gs roda exemplo.gs              # runs on the VM
+gs roda --tree exemplo.gs       # runs on the tree-walker
+gs roda --cache exemplo.gs      # writes/uses exemplo.gsc
+gs roda script.gs prim seg      # argumentos() == [prim, seg]
+```
+
+Exit code: a syntax error (or a name that doesn't exist, `vaza` outside a loop)
+is caught **before** running → `exit 1`. An unhandled runtime error prints the
+message + stack trace → `exit 1`. `sai(n)` exits with `n`.
+
+## `gs repl`
+
+```bash
+gs repl
+```
+
+Opens interactive mode (runs on the VM). Details:
+
+- **Multiline**: open a block (`se_colar`, `gambiarra`, `pra_cada`,
+  `escolhe`...) and the prompt turns into `.........` until you close it with
+  `acabou_finalmente` ("finally over").
+- A bare expression shows its value as `=> valor` (unless it's `nada`).
+- Declarations (`bota`, `gambiarra`) persist between lines.
+- In a terminal: history with ↑/↓, line editing, and **TAB** completes
+  builtins, keywords and variables.
+- Commands: `:ajuda` and `:limpa`. `ctrl+d` bails out (`vaza`).
+
+```bash
+gambiarra> bota x = 10
+gambiarra> x * 2
+=> 20
+gambiarra> gambiarra dobra(n)
+.........     funciona n * 2
+......... acabou_finalmente
+gambiarra> dobra(x)
+=> 20
+gambiarra> <ctrl+d>
+```
+
+## `gs check`
+
+```bash
+gs check arquivo.gs outro.gs
+```
+
+Parses and lints (the same typechecker the LSP uses) without running anything.
+It prints `arquivo:linha:coluna: erro: ...` / `aviso: ...`. Touching a nailed-down
+name (`crava`, "nail it down") is an error. Warnings: a name that doesn't exist,
+a `bota` variable that's declared and never used, dead code after
+`funciona`/`vaza`/`continua`. It exits with `1` only when there's a syntax
+error.
+
+```bash
+$ gs check exemplo.gs
+exemplo.gs:15:14: aviso: `nome` foi declarada mas nunca usada
+$ gs check ok.gs
+ok.gs: suave, zero perrengue
+```
+
+## `gs formata`
+
+```bash
+gs formata <arquivo.gs | dir>...        # prints the formatted code to stdout
+gs formata -w <arquivo.gs | dir>...     # overwrites (only if something changed)
+gs formata -w .                         # every .gs in the folder, recursively
+```
+
+Indents with 4 spaces and normalizes spacing, keeping comments and blank lines.
+With `-w`, it only writes if the result has the same code and the same
+comments — otherwise it warns `NAO formatado` ("NOT formatted") and leaves the
+file as it was. More in [Editor and formatter](/docs/en/ferramentas#formatter-gs-formata).
+
+## `gs testa`
+
+```bash
+gs testa [--tree] [-so nome] [<dir>]
+```
+
+Runs every `*_test.gs` in the directory (default: the current one; it doesn't
+descend into subfolders). Inside tests, the asserts are
+`espera(recebido, esperado)` and `afirma(condicao, [mensagem])`. `-so nome` (or
+`--somente`) filters to the files whose name contains `nome`. Exits with `1` if
+any assert fails.
+
+```gambiarrascript
+# soma_test.gs
+gambiarra soma(a, b)
+    funciona a + b
+acabou_finalmente
+
+espera(soma(2, 2), 4)
+afirma(soma(1, 1) == 2, "um mais um")
+```
+
+```bash
+$ gs testa
+rodando 1 arquivo(s) no VM:
+  OK  soma_test.gs  (2/2 asserts)
+
+Resumo (VM): 1 arquivos, 2/2 asserts passaram, 0 com perrengue
+```
+
+## `gs doc`
+
+```bash
+gs doc [<arquivo.gs | dir>...]
+```
+
+Generates markdown on stdout: for each top-level `gambiarra` and `crava`, the
+signature and the block of `#` comments right above it.
+
+## `gs init`
+
+```bash
+gs init meu_app
+```
+
+Creates `gambiarra.json` (name, version, main file, dependencies) and a
+hello-world `principal.gs`. It never overwrites an existing file.
+
+## `gs get`
+
+```bash
+gs get github.com/usuario/repo/caminho/datas.gs@v1.2.0   # GitHub at a tag/commit
+gs get https://exemplo.com/util.gs [nome.gs]             # plain https URL
+gs get --inseguro http://intranet/util.gs                # http only if you ask for it
+```
+
+Downloads the module, checks that it parses, saves it in `gs_modulos/` and, if
+there's a `gambiarra.json`, records the source under `dependencias` and pins
+the resolved URL + sha256 in `gambiarra.lock`.
+
+- `github.com/usuario/repo/caminho.gs@ref` becomes
+  `https://raw.githubusercontent.com/usuario/repo/<ref>/caminho.gs` — the ref
+  can be a tag, commit or branch. Without `@ref` it uses `HEAD` (the lock still
+  pins the content by hash). `https://github.com/...` works too.
+- A plain URL is downloaded as is; `@ref` only exists for GitHub.
+- Only `https://`. `http://` (including redirects to http) is refused unless
+  you pass `--inseguro` ("insecure").
+
+See [Modules](/docs/en/modulos#third-party-modules-gs-get-and-gs-instala).
+
+## `gs instala`
+
+```bash
+gs instala              # downloads everything in gambiarra.json into gs_modulos/
+gs instala --atualiza   # re-resolves the sources and rewrites gambiarra.lock
+```
+
+`instala` ("install") reads `dependencias` from `gambiarra.json` and installs
+each one into `gs_modulos/`.
+
+- **No lock** (or a new dependency, or a source changed in the manifest): it
+  downloads and writes the URL + sha256 to `gambiarra.lock`.
+- **With a lock**: every file has to match its pinned sha256. If even one
+  doesn't match, `gs instala` **refuses** (exits with `1`, writes nothing, not
+  even the lock) and shows the expected hash and what actually came — it could
+  be someone swapping the file on the server (a supply-chain attack) or the
+  author rewriting the tag. If the file in `gs_modulos/` already matches the
+  lock, it doesn't even touch the network.
+- `--atualiza` ("update"): you've reviewed the change and you trust it — it
+  downloads again and rewrites the lock.
+- `--inseguro`: allows `http://` (same rule as `gs get`).
+
+`gambiarra.lock` is JSON with sorted keys (same dependencies = same file, byte
+for byte) — commit it alongside `gambiarra.json`:
+
+```json
+{
+  "versao": 1,
+  "dependencias": {
+    "datas": {
+      "fonte": "github.com/usuario/repo/datas.gs@v1.2.0",
+      "url": "https://raw.githubusercontent.com/usuario/repo/v1.2.0/datas.gs",
+      "sha256": "5d85286fd6a1301f44c68fadd85e992d216e41938f91c7286ce420ffa2f132c5"
+    }
+  }
+}
+```
+
+## `gs build`
+
+```bash
+gs build app.gs -o app
+./app arg1 arg2
+```
+
+Generates a standalone binary: `gs` itself with your script **and the modules
+it imports** embedded (it runs on the VM) — the executable runs from any
+folder, without the `.gs` files next to it. Whoever receives it doesn't need
+`gs` installed. On macOS it tries to re-sign the binary (ad-hoc); if it can't,
+it tells you the `codesign` command to run.
+
+### For another platform: `--alvo`
+
+```bash
+gs build app.gs --alvo linux/amd64 -o app-linux
+gs build app.gs --alvo windows/amd64            # outputs app.exe
+gs build app.gs --alvo linux/arm64 --gs-base ./gs-linux-arm64
+```
+
+Targets (`alvo` = "target"): `linux/amd64`, `linux/arm64`, `darwin/amd64`,
+`darwin/arm64`, `windows/amd64` (the ones the release publishes). `gs`
+downloads the binary for its **own version** (`gs --version`) from the GitHub
+release, checks it against `checksums.txt` (no match = refused), keeps it in
+the user cache (`~/Library/Caches/gambiarrascript/<versao>/` on mac,
+`~/.cache/gambiarrascript/<versao>/` on linux) and embeds the script in it.
+From the second time on it comes from the cache, no network needed.
+
+- **Development build** (a version with no release, like `dev`): errors out,
+  suggesting a release `gs` or `--gs-base`.
+- `--gs-base <caminho>`: uses that target `gs` binary instead of downloading
+  one (offline, dev builds, platforms without a release). It checks that the
+  file really is an executable for that os/arch.
+- `GS_RELEASES_URL` changes where it downloads from (a mirror); the path is
+  still `<base>/v<versao>/gs_<versao>_<os>_<arch>.tar.gz`.
+
+Imported modules (including the ones in `gs_modulos/`) go inside the binary,
+native or `--alvo`: no need to ship the `.gs` files with it. Only an `importa`
+whose path isn't a literal string (tree-walker) still reads from disk.
+
+## `gs bench`
+
+```bash
+gs bench [--tree] arquivo.gs [n]
+```
+
+Runs the script `n` times (default 10), discarding the output, and shows
+min/median/mean/max.
+
+## `gs disasm`
+
+```bash
+gs disasm arquivo.gs
+```
+
+Shows the bytecode the VM is going to execute. Good for the curious.
+
+## `gs lsp`
+
+Runs the LSP server over stdin/stdout (JSON-RPC): diagnostics, autocomplete,
+hover, go to definition, references, rename, outline, signature help and
+format document. It's not meant for you to run directly — you configure it in
+your editor. See [Editor and formatter](/docs/en/ferramentas).
+
+## `gs --version` / `gs --help`
+
+```bash
+gs --version
+# gs (GambiarraScript) 0.1.0
+```
+
+`versao`, `version`, `-v`, `ajuda` and `-h` work too.
+
+## Arguments in the script
+
+Anything after the file becomes `argumentos()` at runtime:
+
+```gambiarrascript
+# args.gs
+mostra "recebi ${tamanho(argumentos())} argumentos:"
+pra_cada arg em argumentos()
+    mostra "  - " + arg
+acabou_finalmente
+```
+
+```bash
+$ gs roda args.gs a b c
+recebi 3 argumentos:
+  - a
+  - b
+  - c
+```
+
+`argumentos()` is a list of strings. Use `numero(arg)` to convert numbers.
+
+## Examples to run
+
+The repo ships with ready-made `examples/`:
+
+```bash
+gs roda examples/salve.gs
+gs roda examples/fizzbuzz.gs
+gs roda examples/tier3.gs         # bitwise, range, interpolation, finalmente
+gs roda examples/maturidade.gs    # escolhe, lambdas, destructuring, formata
+gs roda examples/libs.gs          # regex, time, crypto, conjunto
+gs roda examples/stats.gs         # soma, media, zip, ordena_por, agrupa_por
+gs roda examples/banco.gs         # in-memory sqlite
+gs roda examples/servidor.gs      # starts an HTTP server on 8080
+gs roda examples/http.gs          # calls a public API
+```
+
+Take a look at `examples/` in the repo — they're short scripts and good sources
+of ideas.

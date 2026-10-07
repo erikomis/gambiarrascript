@@ -1,0 +1,201 @@
+---
+title: Gotchas
+description: Semantics that stray from the usual and tend to bite you.
+---
+
+## Assigning inside a function creates a local variable
+
+Reading an outer variable works; **assigning** (`bota x = ...`, `x += ...`)
+inside a gambiarra creates a **local** variable with the same name — the outer
+one stays the same (Python style without `global`/`nonlocal`). Same goes for
+closures and `bora`.
+
+```gambiarrascript
+bota total = 0
+gambiarra soma_no_total(x)
+    total += x           # creates a local "total"
+    funciona total
+acabou_finalmente
+
+mostra soma_no_total(5)  # 5
+mostra total             # 0
+```
+
+For shared state, use a dict/list (passed by reference) and mutate its
+contents: `estado.total += x`. Or return the value with `funciona`.
+
+## Scope of `pra_cada` and `quebrou` (Python style)
+
+The `pra_cada` variable and the `quebrou` clause variable **keep existing**
+after the block closes — they leak into the scope of the function that
+contains them.
+
+```gambiarrascript
+pra_cada fruta em ["caju", "goiaba"]
+acabou_finalmente
+mostra fruta          # goiaba (the last item)
+
+arruma
+    bota x = 1 / 0
+quebrou erro
+    mostra "pegou"
+acabou_finalmente
+mostra erro_msg(erro) # still visible
+```
+
+In `pra_cada i de A ate B`, `i` keeps the last value it ran with (`B`).
+
+## Keywords can't be names
+
+`e`, `ou`, `nao`, `de`, `ate`, `em`, `como`, `entao`, `caso`, `escolhe`,
+`finalmente`, `nada`... are keywords. `quebrou e` or `bota de = 1` is a syntax
+error. Use `quebrou erro`, `bota inicio = 1`.
+
+## `bota` to assign, but `+=` doesn't need it
+
+A bare `x = 5` is a syntax error: plain assignment always takes `bota` ("put")
+(`bota x = 5`, `bota xs[0] = 5`, `bota obj.campo = 5`). Compound assignment, on
+the other hand (`x += 1`, `xs[0] *= 2`, `obj.n -= 1`, `x **= 2`), comes
+**without** `bota`. And a name declared with `crava` ("nail it down") accepts
+neither.
+
+## `crava` is not block-scoped
+
+`crava` applies to the function scope (like `bota`), not to the block. So
+nailing down the same name on both sides of a `se_colar` ("if it sticks")
+counts as nailing it twice — and errors before running:
+
+```gambiarrascript
+bota modo = "producao"
+# se_colar modo == "producao"
+#     crava URL = "https://api.exemplo.com"
+# se_nao_colar
+#     crava URL = "http://localhost:8080"     -> erro: `URL` ja foi cravada
+# acabou_finalmente
+
+# use the ternary: a single crava
+crava URL = se_colar modo == "producao" entao "https://api.exemplo.com" se_nao_colar "http://localhost:8080"
+mostra URL                 # https://api.exemplo.com
+```
+
+`crava` inside a loop body, however, is fine: it's the same `crava` on every
+iteration.
+
+## `-2 ** 2` is `-4`
+
+`**` binds tighter than the leading minus (like Python): `-2 ** 2` is
+`-(2 ** 2)`. Want to raise the negative number? `(-2) ** 2` gives `4`. And
+`2 ** 3 ** 2` is `2 ** 9` (right-associative).
+
+## `pi` can be shadowed
+
+`pi` is a ready-made value, not a keyword: `bota pi = 3` creates a variable
+that hides the real `pi` from then on (same as with any builtin). Want to be
+safe? `crava PI = pi` and use `PI`.
+
+## `e` / `ou` always return a boolean
+
+Unlike JS and Python, `e`/`ou` ("and"/"or") in GambiarraScript **normalize**
+the operand to `deu_bom`/`deu_ruim`:
+
+```gambiarrascript
+mostra "x" e "y"      # deu_bom  (doesn't return "y")
+mostra nada ou "ok"   # deu_bom  (doesn't return "ok")
+```
+
+For "value or default", use `??`: `nome ?? "anonimo"`.
+
+## Truthiness
+
+Only `nada` and `deu_ruim` are falsy. **Everything else** is truthy: `0`, `""`,
+`[]`, `{}` included. If you want to check for empty, do it explicitly
+(`tamanho(x) == 0`, `x == ""`, etc). And `??` only replaces `nada` —
+`0 ?? 5` stays `0`.
+
+## Bitwise below `==`
+
+Like in C, `&`, `|` and `^` have **lower** precedence than `==`: `x & 1 == 1`
+becomes `x & (1 == 1)` and errors. Write `(x & 1) == 1`.
+
+## Integer division can give a float
+
+`7 / 2` is `3.5` (not `3`). Want integer division? `chao(7 / 2)`.
+And `/ 0` or `% 0` is a runtime error (not `Inf`/`NaN`) — wrap it in an
+`arruma...quebrou` if the divisor comes from outside.
+
+## `pra_cada de ... ate` only counts up
+
+`pra_cada i de 10 ate 1` doesn't run even once. To count down, use a range:
+`pra_cada i em 10..1`.
+
+## `mostra` on a list doesn't add quotes
+
+```gambiarrascript
+mostra ["1", 1]       # [1, 1] — string and number look the same on screen
+mostra pra_json(["1", 1])   # ["1",1]
+```
+
+When in doubt about what's inside, use `pra_json`.
+
+## Escapes and backticks
+
+Only `\"`, `\\`, `\n` and `\t` escape inside `"..."`. Any other `\x` is kept
+literally (backslash and all). For raw text (JSON, regex, Windows paths), use
+backticks `` `...` `` — nothing gets escaped there... except `${...}`, which
+**interpolates even inside backticks**. Got a literal `${` in the text? Use
+double quotes with `\${`.
+
+## A loose goroutine dies with the script
+
+`bora f()` without `espera` is fire-and-forget: if the main script finishes
+first, the goroutine dies with it (no warning). See [Concurrency](/docs/en/concorrencia).
+
+## Nada vs 0 vs ""
+
+They're different things:
+
+```gambiarrascript
+mostra nada == 0      # deu_ruim
+mostra nada == nada   # deu_bom
+mostra "" == nada     # deu_ruim
+```
+
+## Setting `nada` doesn't delete the key
+
+`bota d["k"] = nada` leaves the key **there**, with value `nada` — `tem(d, "k")`
+stays `deu_bom` and it still shows up in `chaves(d)` and in `pra_cada`. To
+really delete it, `remove(d, "k")`.
+
+```gambiarrascript
+bota d = {"k": 1}
+bota d["k"] = nada
+mostra tem(d, "k")    # deu_bom
+remove(d, "k")
+mostra tem(d, "k")    # deu_ruim
+```
+
+## Evaluation order in a call differs between engines
+
+In a call `f(args)`, the tree-walker (`gs roda --tree`) evaluates **first**
+the thing being called and **then** the arguments; the VM (the default) does
+the opposite. It only shows up when both parts have side effects (printing,
+touching state...):
+
+```gambiarrascript
+gambiarra pega_f()
+    mostra "pegou a funcao"
+    funciona gambiarra(x) funciona x acabou_finalmente
+acabou_finalmente
+
+gambiarra arg()
+    mostra "calculou o argumento"
+    funciona 1
+acabou_finalmente
+
+pega_f()(arg())
+# gs roda:        calculou o argumento / pegou a funcao
+# gs roda --tree: pegou a funcao / calculou o argumento
+```
+
+Don't rely on this order: if it matters, split it into two `bota`s before
+calling.

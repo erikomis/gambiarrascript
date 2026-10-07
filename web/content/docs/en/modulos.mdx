@@ -1,0 +1,152 @@
+---
+title: Modules
+description: importa "path.gs" (with or without `como`) to reuse code across files.
+---
+
+Two ways to import (`importa` = "import", `como` = "as"):
+
+```gambiarrascript
+# util.gs
+bota versao = "1.0"
+gambiarra dobra(n)
+    funciona n * 2
+acabou_finalmente
+```
+
+```gambiarrascript
+# principal.gs
+importa "util.gs" como util     # everything from the module lives inside `util`
+mostra util.dobra(5)            # 10
+mostra util.versao              # 1.0
+```
+
+```gambiarrascript
+# outro.gs
+importa "util.gs"               # without `como`: dumps everything into the importer's scope
+mostra dobra(5)                 # 10
+mostra versao                   # 1.0
+```
+
+- **With `como name`**, only `name` shows up in your scope: the module becomes
+  a dict (each top-level variable/gambiarra becomes a key, in alphabetical
+  order) and you access it with a dot (`util.dobra(5)`). Nothing from the
+  module leaks into your scope. This is the recommended way — no silent name
+  collisions.
+- **Without `como`**, the module's top-level names are copied into the
+  importer's scope, as if they were in the same file. If two modules define
+  the same name, the last one imported wins, with no warning. A name you
+  `crava`ed ("nailed down") earlier can't come from a module (it errors).
+
+See `examples/modulos/` in the repo for a complete example (`principal.gs`
+imports `util.gs`).
+
+## The module runs only once
+
+Just like Python/Node: each module **runs once per process**, cached by the
+file's absolute path. Importing it again — from the same file or another one,
+with or without `como` — reuses the result: a loose `mostra` in the module
+shows up only once, and everybody sees the same state.
+
+```gambiarrascript
+# contador.gs
+mostra "carregando contador"
+bota estado = {"n": 0}
+gambiarra inc()
+    estado["n"] += 1
+    funciona estado["n"]
+acabou_finalmente
+```
+
+```gambiarrascript
+importa "contador.gs" como c     # carregando contador
+importa "contador.gs" como c2    # (doesn't run again)
+c.inc()
+mostra c2.inc()                  # 2 — it's the same module
+```
+
+- The module has its **own scope**: it doesn't see the importer's variables
+  (only builtins), and its gambiarras touch its own state.
+- The `como` dict is a snapshot of the names at the end of the module.
+  Reassigning a module variable later (`bota`) doesn't change the snapshot;
+  mutating one of its lists/dicts does show up, because it's the same object.
+- Several goroutines (`bora`, server handlers) importing the same module at
+  the same time: one runs it, the others wait and get the same result.
+- A module that errored halfway is **not** cached: the next `importa` tries
+  again.
+
+## Circular imports
+
+`a.gs` importing `b.gs` which imports `a.gs` back is an error, with the chain:
+
+```
+deu ruim na linha 1: importa circular: a.gs -> b.gs -> a.gs
+```
+
+The error type is `"parse"` (you can catch it with `arruma`). Importing the
+main file itself from inside a module lands here too. An `importa` **inside a
+gambiarra**, though, called after the other module has finished loading, is
+not a cycle: it comes from the cache.
+
+## Errors
+
+- Module that doesn't exist: `nao achei o modulo "x.gs" (procurei do lado de quem
+  importa e em gs_modulos/)` — type `"io"`.
+- Module that doesn't parse: `o modulo "x.gs" ta com perrengue: linha 3: ...` —
+  the line is the one inside the module.
+- Error running the module's top level: the original message gets
+  `(no modulo "x.gs")` appended.
+- In the VM (the default engine), a missing/unparseable module is caught
+  **before** running (at compile time); in the tree-walker (`--tree`), at the
+  moment of the `importa`.
+
+## Path resolution
+
+- Relative → relative to the **directory of the file containing the
+  `importa`** (a module in `lib/` that imports `"b.gs"` finds `lib/b.gs`). If
+  it isn't there, it looks in `gs_modulos/` in the same directory and then up
+  through the parents — so `importa "datas.gs"` finds what `gs get`
+  downloaded.
+- Absolute → used as is.
+
+## Third-party modules: gs get and gs instala
+
+`gs get` downloads a `.gs` (and checks that it parses) into `gs_modulos/`,
+records the dependency in `gambiarra.json` and pins the URL + sha256 in
+`gambiarra.lock`. From GitHub you can pin a tag or commit with `@ref`:
+
+```bash
+gs init
+gs get github.com/usuario/repo/libs/datas.gs@v1.2.0
+# usa com: importa "datas.gs"  (ou "gs_modulos/datas.gs")
+gs get https://exemplo.com/libs/util.gs     # URL https comum tambem vale
+```
+
+```json
+{
+  "dependencias": {
+    "datas": "github.com/usuario/repo/libs/datas.gs@v1.2.0",
+    "util": "https://exemplo.com/libs/util.gs"
+  }
+}
+```
+
+Whoever clones the project runs `gs instala` ("install"): it downloads
+everything in `gambiarra.json` into `gs_modulos/` and checks each file against
+the hash in `gambiarra.lock`. If the content changed on the server since the
+lock, it **refuses** and installs nothing (protection against someone swapping
+the module out from under you); if the change is legit,
+`gs instala --atualiza` accepts it and rewrites the lock. Commit
+`gambiarra.lock`; `gs_modulos/` can go in `.gitignore`.
+
+Only `https://` — `http://` only with `--inseguro`. Details in
+[Command line](/docs/en/cli#gs-get).
+
+## Notes
+
+- Importing **executes** the module (once): its top-level code runs.
+- There's no `export`/private: everything the module defines is accessible.
+- `gs build` embeds the modules the script imports into the binary — the
+  executable runs from any folder, without the `.gs` files next to it.
+- `gs roda --cache` invalidates the `.gsc` when any imported module changes.
+- In the VM the `importa` path must be a string literal
+  (`importa "x.gs"`, not a variable).
