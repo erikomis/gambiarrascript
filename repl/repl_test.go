@@ -28,6 +28,19 @@ func TestStartMultiline(t *testing.T) {
 	}
 }
 
+func TestStartMultilineTreta(t *testing.T) {
+	// treta/combinado abrem bloco; metodo e instancia sobrevivem entre entradas
+	entrada := strings.NewReader("treta P\nx = 20\nacabou_finalmente\n" +
+		"combinado C\nm()\nacabou_finalmente\n" +
+		"gambiarra (p P) m()\nfunciona p.x + 1\nacabou_finalmente\n" +
+		"bota p = P{}\np.m() * 2\nsatisfaz(p, C)\n")
+	var out bytes.Buffer
+	Start(entrada, &out)
+	if !strings.Contains(out.String(), "=> 42") || !strings.Contains(out.String(), "=> deu_bom") {
+		t.Fatalf("treta no REPL nao funcionou; saida: %q", out.String())
+	}
+}
+
 func TestStartMultilineElif(t *testing.T) {
 	// `se_nao_colar se_colar` (elif) compartilha o MESMO acabou_finalmente —
 	// o contador de blocos nao pode contar o se_colar do elif como abertura.

@@ -268,6 +268,8 @@ var nomesBuiltins = []string{
 	"trava", "com_trava",
 	// tls: certificado autoassinado pra dev
 	"gera_certificado",
+	// POO (Tier 8): satisfacao de combinado e type assertion
+	"satisfaz", "como_tipo",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que
@@ -676,6 +678,15 @@ func (c *Compiler) compile(node ast.Node) error {
 		return c.compileImporta(node)
 	case *ast.BoraExpression:
 		return c.compileBora(node)
+	// POO (poo.go)
+	case *ast.TretaDecl:
+		return c.compileTretaDecl(node)
+	case *ast.CombinadoDecl:
+		return c.compileCombinadoDecl(node)
+	case *ast.MetodoDecl:
+		return c.compileMetodoDecl(node)
+	case *ast.TretaLiteral:
+		return c.compileTretaLiteral(node)
 	default:
 		return fmt.Errorf("a VM ainda nao sabe compilar %T", node)
 	}
@@ -1901,6 +1912,10 @@ func nomesDeTopo(prog *ast.Program) []string {
 			add(n.Name)
 		case *ast.ImportaStatement:
 			add(n.Alias)
+		case *ast.TretaDecl:
+			add(n.Nome)
+		case *ast.CombinadoDecl:
+			add(n.Nome)
 		}
 	}
 	sort.Strings(nomes)

@@ -114,6 +114,19 @@ const (
 	OpGetFreeChk   // idx (1) + nomeIdx (2)
 	OpGetCelulaChk // idx (1) + nomeIdx (2)
 	OpHalt         // para execucao
+	// --- POO (Tier 8) ---
+	// OpTreta: descritor object.DescTreta na constante; tira da pilha um valor
+	// por campo com puxadinho (a treta embutida) ou com padrao (constante ou
+	// thunk), na ordem dos campos, e empilha a *object.Treta.
+	OpTreta // descIdx (2)
+	// OpCombinado: descritor object.DescCombinado; tira os combinados
+	// embutidos e empilha o *object.Combinado.
+	OpCombinado // descIdx (2)
+	// OpMetodo: pop closure, pop treta; pendura o metodo (nome na constante).
+	OpMetodo // nomeIdx (2)
+	// OpInstancia: descritor object.DescLiteral; pop N valores, pop treta;
+	// empilha a instancia (`Ponto{x: 1}`).
+	OpInstancia // descIdx (2)
 )
 
 type Definition struct {
@@ -204,6 +217,11 @@ var definitions = map[Opcode]*Definition{
 	OpGetFreeChk:    {"OpGetFreeChk", []int{1, 2}},
 	OpGetCelulaChk:  {"OpGetCelulaChk", []int{1, 2}},
 	OpHalt:          {"OpHalt", []int{}},
+	// POO
+	OpTreta:     {"OpTreta", []int{2}},
+	OpCombinado: {"OpCombinado", []int{2}},
+	OpMetodo:    {"OpMetodo", []int{2}},
+	OpInstancia: {"OpInstancia", []int{2}},
 }
 
 func Lookup(op byte) (*Definition, error) {

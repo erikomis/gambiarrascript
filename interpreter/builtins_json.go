@@ -125,6 +125,27 @@ func escreveJsonRec(buf *bytes.Buffer, o object.Object, emCurso map[object.Objec
 		}
 		delete(emCurso, val)
 		buf.WriteByte('}')
+	case *object.Instancia:
+		// treta vira objeto com os campos (puxadinho achatado, igual Go)
+		if emCurso[val] {
+			return erroBuiltin("%s", msgCicloJson)
+		}
+		buf.WriteByte('{')
+		for k, par := range val.CamposJson() {
+			if k > 0 {
+				buf.WriteByte(',')
+			}
+			escreveTextoJson(buf, par.Nome)
+			buf.WriteByte(':')
+			if ehColecaoJson(par.Valor) {
+				emCurso = marcaEmCurso(emCurso, val)
+			}
+			if erro := escreveJsonRec(buf, par.Valor, emCurso); erro != nil {
+				return erro
+			}
+		}
+		delete(emCurso, val)
+		buf.WriteByte('}')
 	default:
 		return erroBuiltin("nao da pra virar json: %s", o.Type())
 	}
@@ -157,7 +178,7 @@ func chaveJson(o object.Object) string {
 
 func ehColecaoJson(o object.Object) bool {
 	switch o.(type) {
-	case *object.Lista, *object.Dicionario:
+	case *object.Lista, *object.Dicionario, *object.Instancia:
 		return true
 	}
 	return false

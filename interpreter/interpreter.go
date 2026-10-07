@@ -327,6 +327,15 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		return i.applyFunction(fn, args, node.Token.Line, nomeDaChamada(node))
 	case *ast.BoraExpression:
 		return i.evalBora(node, env)
+	// POO (poo.go)
+	case *ast.TretaDecl:
+		return i.evalTretaDecl(node, env)
+	case *ast.CombinadoDecl:
+		return i.evalCombinadoDecl(node, env)
+	case *ast.MetodoDecl:
+		return i.evalMetodoDecl(node, env)
+	case *ast.TretaLiteral:
+		return i.evalTretaLiteral(node, env)
 	}
 	return NADA
 }
@@ -474,6 +483,17 @@ func (i *Interpreter) evalDesestrutura(node *ast.DesestruturaStatement, env *obj
 	val := i.Eval(node.Value, env)
 	if isError(val) {
 		return val
+	}
+	if inst, ok := val.(*object.Instancia); ok && node.DeDict {
+		// `bota {x, y} = ponto`: pelos campos (o que nao tem vira nada)
+		for _, n := range node.Names {
+			v, msg := inst.Membro(n.Value)
+			if msg != "" {
+				v = NADA
+			}
+			env.Set(n.Value, v)
+		}
+		return NADA
 	}
 	if node.DeDict {
 		d, ok := val.(*object.Dicionario)
@@ -750,6 +770,8 @@ func (i *Interpreter) evalAtribuiIndice(alvo *ast.IndexExpression, val object.Ob
 		}
 		c.Bota(chave.ChaveHash(), object.ParDic{Chave: idx, Valor: val})
 		return NADA
+	case *object.Instancia:
+		return poeMembroDaInstancia(c, idx, val, linha)
 	default:
 		return newError(linha, "so da pra atribuir indice em lista ou dicionario, e isso ai e %s", cont.Type())
 	}
@@ -808,6 +830,8 @@ func (i *Interpreter) evalIndex(left, index object.Object, linha int) object.Obj
 			return NADA
 		}
 		return par.Valor
+	case *object.Instancia:
+		return membroDaInstancia(c, index, linha)
 	default:
 		return newError(linha, "so da pra indexar lista, texto ou dicionario, e isso ai e %s", left.Type())
 	}
@@ -849,7 +873,7 @@ func iguaisRec(a, b object.Object, prof int, vistos map[[2]object.Object]bool) b
 		return false
 	}
 	switch a.(type) {
-	case *object.Lista, *object.Dicionario:
+	case *object.Lista, *object.Dicionario, *object.Instancia:
 		if a == b {
 			return true
 		}
@@ -904,6 +928,19 @@ func iguaisRec(a, b object.Object, prof int, vistos map[[2]object.Object]bool) b
 		for _, pa := range pares {
 			pb, ok := bd.Pega(pa.Chave.(object.Chaveavel).ChaveHash())
 			if !ok || !iguaisRec(pa.Valor, pb.Valor, prof, vistos) {
+				return false
+			}
+		}
+		return true
+	case *object.Instancia:
+		// == de treta compara campo a campo (igual struct do Go)
+		bi := b.(*object.Instancia)
+		if av.Tipo != bi.Tipo {
+			return false
+		}
+		ac, bc := av.Campos(), bi.Campos()
+		for j := range ac {
+			if !iguaisRec(ac[j], bc[j], prof, vistos) {
 				return false
 			}
 		}
@@ -1273,6 +1310,14 @@ func ehDesvio(o object.Object) bool {
 }
 
 func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linha int, nome string) object.Object {
+	if m, ok := fn.(*object.MetodoLigado); ok {
+		// `obj.metodo(args)`: o receiver vira o primeiro argumento
+		f, comRecv, erro := desembrulhaMetodo(m, args, linha)
+		if erro != nil {
+			return erro
+		}
+		fn, args, nome = f, comRecv, m.Nome
+	}
 	if b, ok := fn.(*object.Builtin); ok {
 		res := b.Fn(args)
 		// Builtins nao tem call-site no AST; registra so o nome da builtin

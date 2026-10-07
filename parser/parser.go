@@ -99,6 +99,12 @@ type Parser struct {
 
 	prefixParseFns map[token.TokenType]prefixParseFn
 	infixParseFns  map[token.TokenType]infixParseFn
+
+	// adiante guarda tokens ja lidos do lexer depois do peek (lookahead
+	// extra, so pra separar `gambiarra (p Ponto) metodo()` da lambda).
+	adiante []token.Token
+	// prof e quantos blocos estao abertos: treta/combinado/metodo so no topo.
+	prof int
 }
 
 func New(l *lexer.Lexer) *Parser {
@@ -192,7 +198,20 @@ func (p *Parser) nextToken() {
 		p.anterior = p.curToken
 	}
 	p.curToken = p.peekToken
+	if len(p.adiante) > 0 {
+		p.peekToken = p.adiante[0]
+		p.adiante = p.adiante[1:]
+		return
+	}
 	p.peekToken = p.l.NextToken()
+}
+
+// espia devolve o n-esimo token DEPOIS do peek (1 = o seguinte), sem consumir.
+func (p *Parser) espia(n int) token.Token {
+	for len(p.adiante) < n {
+		p.adiante = append(p.adiante, p.l.NextToken())
+	}
+	return p.adiante[n-1]
 }
 
 func (p *Parser) curTokenIs(t token.TokenType) bool  { return p.curToken.Type == t }
@@ -231,7 +250,17 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	}
 	left := prefix()
 
-	for precedence < p.peekPrecedence() {
+	for {
+		// `Ponto{...}`: literal de treta (so com nome em maiuscula e o `{`
+		// na mesma linha — ver ehTipoDeLiteral)
+		if p.peekTokenIs(token.LBRACE) && precedence < INDEX && p.ehTipoDeLiteral(left) {
+			p.nextToken()
+			left = p.parseTretaLiteral(left)
+			continue
+		}
+		if precedence >= p.peekPrecedence() {
+			break
+		}
 		infix := p.infixParseFns[p.peekToken.Type]
 		if infix == nil {
 			return left
@@ -744,11 +773,19 @@ func (p *Parser) parseStatementCru() ast.Statement {
 		return p.parsePraCada()
 	case token.GAMBIARRA:
 		// `gambiarra nome(...)` e declaracao; `gambiarra(...)` e lambda
-		// anonima em posicao de expressao.
+		// anonima em posicao de expressao; `gambiarra (p Ponto) nome(...)` e
+		// metodo (receiver: dois nomes sem virgula, coisa que lambda nao tem).
 		if p.peekTokenIs(token.IDENT) {
 			return p.parseGambiarra()
 		}
+		if p.ehMetodo() {
+			return p.parseMetodo()
+		}
 		return p.parseExpressionStatement()
+	case token.TRETA:
+		return p.parseTreta()
+	case token.COMBINADO:
+		return p.parseCombinado()
 	case token.ARRUMA:
 		return p.parseArruma()
 	case token.ESCOLHE:
@@ -939,6 +976,8 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	if p.pos != nil {
 		p.pos.Cabeca[block] = p.anterior
 	}
+	p.prof++
+	defer func() { p.prof-- }()
 	for !p.curTokenIs(token.ACABOU) &&
 		!p.curTokenIs(token.SE_NAO_COLAR) &&
 		!p.curTokenIs(token.QUEBROU) &&

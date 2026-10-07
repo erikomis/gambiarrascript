@@ -610,7 +610,7 @@ func (c *Conjunto) Inspect() string {
 // numero, booleano), entao nunca fecha.
 func ehColecaoAninhavel(o Object) bool {
 	switch o.(type) {
-	case *Lista, *Dicionario:
+	case *Lista, *Dicionario, *Instancia:
 		return true
 	}
 	return false
@@ -622,6 +622,8 @@ func inspectDentro(o Object, emCurso map[Object]bool) string {
 	case *Lista:
 		return c.inspect(emCurso)
 	case *Dicionario:
+		return c.inspect(emCurso)
+	case *Instancia:
 		return c.inspect(emCurso)
 	}
 	return inspectComAspas(o)

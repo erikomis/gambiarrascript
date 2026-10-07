@@ -327,11 +327,34 @@ func (f *formatter) dictEmLinhas(n *ast.DicionarioLiteral) (string, bool) {
 	return f.emLinhas(n, "{", "}", itens)
 }
 
+// tretaEmLinhas e o dictEmLinhas do literal `Tipo{...}`.
+func (f *formatter) tretaEmLinhas(n *ast.TretaLiteral, tipo string) (string, bool) {
+	if f.pos == nil || len(n.Valores) == 0 {
+		return "", false
+	}
+	itens := make([]itemEmLinha, len(n.Valores))
+	for i, v := range n.Valores {
+		v := v
+		ini := primeiroTok(v)
+		txt := func() string { return f.emitExpr(v) }
+		if n.Nomes != nil {
+			nome := n.Nomes[i]
+			ini = pontoDe(nome.Token)
+			txt = func() string { return nome.Value + ": " + f.emitExpr(v) }
+		}
+		itens[i] = itemEmLinha{ini, txt}
+	}
+	return f.emLinhas(n, tipo+"{", "}", itens)
+}
+
 // emLinhas monta `[`/`{` + um item por linha + `]`/`}` quando o autor quebrou
 // a linha logo depois de abrir (senao fica tudo numa linha).
 func (f *formatter) emLinhas(n ast.Expression, abre, fecha string, itens []itemEmLinha) (string, bool) {
 	fechaTok, ok := f.pos.Fecha[n]
 	tokAbre := primeiroTok(n)
+	if tl, ehTreta := n.(*ast.TretaLiteral); ehTreta {
+		tokAbre = pontoDe(tl.Token) // o `{` (o comeco da expressao e o tipo)
+	}
 	if !ok || itens[0].ini.l <= tokAbre.l {
 		return "", false
 	}
@@ -397,6 +420,8 @@ func primeiroTok(e ast.Expression) ponto {
 		return pontoDe(n.Token)
 	case *ast.BoraExpression:
 		return pontoDe(n.Token)
+	case *ast.TretaLiteral:
+		return primeiroTok(n.Tipo)
 	}
 	return ponto{}
 }

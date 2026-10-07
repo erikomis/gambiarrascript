@@ -47,6 +47,7 @@ var keywords = []string{
 	"e", "ou", "nao", "importa",
 	"bora", // bora fn(args) -> Futuro (concorrencia)
 	"entao", "como",
+	"treta", "combinado", // POO (Tier 8)
 }
 
 // builtinsCompletion são as funções nativas da linguagem expostas no autocomplete.
@@ -233,7 +234,9 @@ var docsBuiltin = map[string]string{
 	"escreve_csv":   "escreve_csv(caminho, lista, [cabecalhos]): escreve uma lista de dicts num CSV. 3o arg opcional reordena/seleciona colunas.",
 	"gzip_comprime":    "gzip_comprime(texto) -> texto (base64): comprime o texto com gzip e devolve em base64.",
 	"gzip_descomprime": "gzip_descomprime(texto) -> texto: recebe um base64 de gzip_comprime e devolve o texto original.",
-	"tipo": "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"trava\", \"nativo\"). Gambiarra, lambda e builtin sao todas \"funcao\".",
+	"tipo": "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"trava\", \"nativo\", \"treta\", \"combinado\"). Gambiarra, lambda, builtin e metodo sao todas \"funcao\". Instancia de treta da o nome dela (\"Ponto\") — e o type switch: `escolhe tipo(v)` / `caso \"Ponto\"`.",
+	"satisfaz":  "satisfaz(valor, Tipo) -> booleano: Tipo combinado = o valor tem todos os metodos (satisfacao implicita, igual Go; confere quantos parametros cada metodo aceita); Tipo treta = o valor e instancia dela. Combinado vazio aceita qualquer coisa.",
+	"como_tipo": "como_tipo(valor, Tipo) -> valor: o type assertion do Go (`v.(Ponto)`). Devolve o proprio valor se ele satisfaz o Tipo (treta ou combinado); senao quebra com o motivo (\"esperava Ponto, veio Circulo\" / \"falta o metodo area\").",
 	// rede baixo nivel
 	"conecta_tcp": "conecta_tcp(host_porta, [opcoes]) -> conexao: abre um socket TCP (host_porta = \"127.0.0.1:9000\"). opcoes: {\"modo\": \"linha\"|\"bruto\", \"timeout\": segundos, \"tls\": deu_bom | {\"servidor\", \"inseguro\", \"ca\"}}. Usa com envia/recebe/fecha.",
 	"escuta_tcp":  "escuta_tcp(porta, handler, [opcoes]): servidor TCP; cada conexao roda handler(conexao) na propria goroutine. Bloqueia ate ctrl+c ou o cano opcoes.para. opcoes: modo, timeout, pronto, para, tls ({\"cert\": \"cert.pem\", \"chave\": \"chave.pem\"}).",
@@ -297,6 +300,8 @@ var docsKeyword = map[string]string{
 	"bora":              "bora fn(args) -> Futuro: dispara a gambiarra numa goroutine e devolve um Futuro imediatamente. Use espera(futuro) pra aguardar o valor.",
 	"entao":             "entao: separador do ternario `se_colar cond entao a se_nao_colar b`.",
 	"como":              "como: alias pra importa — `importa \"x.gs\" como alias` cria um namespace.",
+	"treta":             "treta Nome / campos (um por linha: `x`, `x = padrao`, ou `Outra` pra puxadinho) / acabou_finalmente: declara uma struct (POO estilo Go, sem heranca). Instancia: `Nome{x: 1}` ou `Nome{1, 2}` (campo faltando = padrao ou nada). Metodo: `gambiarra (p Nome) metodo() ... acabou_finalmente`, chamado com `p.metodo()` — tudo por referencia, o metodo muda a treta.",
+	"combinado":         "combinado Nome / assinaturas (`escreve(texto)`, ou `Outro` pra embutir) / acabou_finalmente: interface estilo Go, satisfeita de forma implicita — qualquer treta com esses metodos serve. Confere com `satisfaz(v, Nome)`; assertion com `como_tipo(v, Nome)`.",
 }
 
 // ---- servidor ----
@@ -684,6 +689,10 @@ func (tc *typechecker) walkProgram(prog *ast.Program) {
 			for _, nome := range n.Names {
 				tc.globaisDoTopo[nome.Value] = true
 			}
+		case *ast.TretaDecl:
+			tc.globaisDoTopo[n.Nome.Value] = true
+		case *ast.CombinadoDecl:
+			tc.globaisDoTopo[n.Nome.Value] = true
 		}
 	}
 	for _, s := range prog.Statements {
@@ -772,6 +781,33 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 		tc.walkExpr(n.Expression)
 	case *ast.ImportaStatement:
 		// sem checagem — caminho dinâmico
+	// POO: treta/combinado definem o nome; o metodo e uma gambiarra com o
+	// receiver de primeiro parametro (nome de campo/metodo nao e variavel)
+	case *ast.TretaDecl:
+		tc.define(n.Nome.Value)
+		for _, c := range n.Campos {
+			if c.Embutida != nil {
+				tc.walkExpr(c.Embutida)
+			}
+			if c.Padrao != nil {
+				tc.walkExpr(c.Padrao)
+			}
+		}
+	case *ast.CombinadoDecl:
+		tc.define(n.Nome.Value)
+		for _, m := range n.Metodos {
+			if m.Embutido != nil {
+				tc.walkExpr(m.Embutido)
+			}
+		}
+	case *ast.MetodoDecl:
+		tc.walkExpr(n.Tipo)
+		tc.pushScope()
+		for _, p := range n.ParametrosComReceptor() {
+			tc.define(p.Nome.Value)
+		}
+		tc.walkBlock(n.Body)
+		tc.popScope()
 	}
 }
 
@@ -840,6 +876,12 @@ func posDoStmt(s ast.Statement) (int, int) {
 		return n.Token.Line, n.Token.Coluna
 	case *ast.ImportaStatement:
 		return n.Token.Line, n.Token.Coluna
+	case *ast.TretaDecl:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.CombinadoDecl:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.MetodoDecl:
+		return n.Token.Line, n.Token.Coluna
 	}
 	return 0, 0
 }
@@ -896,6 +938,11 @@ func (tc *typechecker) walkExpr(e ast.Expression) {
 	case *ast.TextoInterpolado:
 		for _, parte := range n.Parts {
 			tc.walkExpr(parte)
+		}
+	case *ast.TretaLiteral:
+		tc.walkExpr(n.Tipo)
+		for _, v := range n.Valores {
+			tc.walkExpr(v)
 		}
 	case *ast.NumeroLiteral, *ast.TextoLiteral, *ast.BooleanoLiteral, *ast.NadaLiteral:
 		// literais: nada

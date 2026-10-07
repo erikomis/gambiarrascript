@@ -33,6 +33,8 @@ const keywords = new Set([
   "bora",
   "entao",
   "como",
+  "treta",
+  "combinado",
 ]);
 const booleanos = new Set(["deu_bom", "deu_ruim"]);
 

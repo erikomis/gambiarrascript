@@ -84,3 +84,36 @@ acabou_finalmente`
 		t.Fatalf("crava local nao devia virar doc:\n%s", md)
 	}
 }
+
+func TestGeraDocPOO(t *testing.T) {
+	fonte := `# um ponto no plano
+treta Ponto
+    x
+    y = 0
+    geo.Base
+acabou_finalmente
+
+# quem tem area
+combinado Forma
+    area()
+    escala(fator)
+acabou_finalmente
+
+# distancia ate a origem
+gambiarra (p Ponto) distancia()
+    funciona 0
+acabou_finalmente`
+	md, err := geraDoc(fonte)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, esperado := range []string{
+		"### `treta Ponto`", "um ponto no plano", "    y = 0\n", "    geo.Base  # puxadinho\n",
+		"### `combinado Forma`", "quem tem area", "    escala(fator)\n",
+		"### `(p Ponto) distancia()`", "distancia ate a origem",
+	} {
+		if !strings.Contains(md, esperado) {
+			t.Fatalf("markdown nao contem %q:\n%s", esperado, md)
+		}
+	}
+}

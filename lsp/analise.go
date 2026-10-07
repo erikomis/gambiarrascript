@@ -43,6 +43,7 @@ const (
 	ligDesestruturaChave // bota {x, y} = dict: o nome E a chave
 	ligImporta           // alias do `importa "x.gs" como m`
 	ligComposta          // x += 1: le e escreve
+	ligTipo              // treta/combinado (POO)
 )
 
 type escopo struct {
@@ -393,6 +394,29 @@ func (a *analise) andaStmt(s ast.Statement, esc *escopo, m mapaPos) {
 		}
 		a.importacoes = append(a.importacoes, imp)
 	case *ast.VazaStatement, *ast.ContinuaStatement:
+	// POO: treta/combinado ligam o nome no escopo; o metodo e uma gambiarra
+	// com o receiver de primeiro parametro (usa o tipo, nao liga nome)
+	case *ast.TretaDecl:
+		a.anota(n.Nome, esc, ligTipo, m)
+		for _, c := range n.Campos {
+			if c == nil {
+				continue
+			}
+			a.andaExpr(c.Embutida, esc, m)
+			a.andaExpr(c.Padrao, esc, m)
+		}
+	case *ast.CombinadoDecl:
+		a.anota(n.Nome, esc, ligTipo, m)
+		for _, ass := range n.Metodos {
+			if ass != nil {
+				a.andaExpr(ass.Embutido, esc, m)
+			}
+		}
+	case *ast.MetodoDecl:
+		a.andaExpr(n.Tipo, esc, m)
+		dentro := novoEscopo(a, esc)
+		a.andaParams(n.ParametrosComReceptor(), dentro, m)
+		a.andaBloco(n.Body, dentro, m)
 	default:
 		a.andaGenerico(s, esc, m)
 	}
@@ -468,6 +492,12 @@ func (a *analise) andaExpr(e ast.Expression, esc *escopo, m mapaPos) *ocorrencia
 		a.andaExpr(n.Right, esc, m)
 	case *ast.TextoInterpolado:
 		a.andaInterpolado(n, esc, m)
+	case *ast.TretaLiteral:
+		// o nome do campo (`x:` em Ponto{x: 1}) nao e variavel: so o tipo e os valores
+		a.andaExpr(n.Tipo, esc, m)
+		for _, v := range n.Valores {
+			a.andaExpr(v, esc, m)
+		}
 	case *ast.NumeroLiteral, *ast.TextoLiteral, *ast.BooleanoLiteral, *ast.NadaLiteral:
 	default:
 		a.andaGenerico(e, esc, m)

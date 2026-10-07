@@ -18,9 +18,13 @@ import (
 
 const (
 	kindModulo    = 2
+	kindMetodo    = 6
+	kindCampo     = 8
+	kindInterface = 11
 	kindFuncao    = 12
 	kindVariavel  = 13
 	kindConstante = 14
+	kindStruct    = 23
 )
 
 type SimboloDoc struct {
@@ -146,6 +150,74 @@ func (m *montaSimbolos) doEscopo(st ast.Statement, out *[]SimboloDoc, vistos map
 			m.doBloco(c.Body, out, vistos, topo)
 		}
 		m.doBloco(n.Default, out, vistos, topo)
+	// POO: treta (campos como filhos), combinado (assinaturas) e metodo
+	case *ast.TretaDecl:
+		filhos := make([]SimboloDoc, 0, len(n.Campos))
+		for _, c := range n.Campos {
+			detalhe := ""
+			if c.Embutida != nil {
+				detalhe = "puxadinho"
+			}
+			filhos = append(filhos, m.linhaFilha(c.Nome, c.Token, kindCampo, detalhe))
+		}
+		m.tipo(n.Nome, n.Token, kindStruct, "treta", filhos, out, vistos)
+	case *ast.CombinadoDecl:
+		filhos := make([]SimboloDoc, 0, len(n.Metodos))
+		for _, a := range n.Metodos {
+			kind, detalhe := kindMetodo, ""
+			if a.Embutido != nil {
+				kind, detalhe = kindInterface, "embutido"
+			} else {
+				ps := make([]string, len(a.Parametros))
+				for i, p := range a.Parametros {
+					ps[i] = textoParametro(p)
+				}
+				detalhe = "(" + strings.Join(ps, ", ") + ")"
+			}
+			filhos = append(filhos, m.linhaFilha(a.Nome, a.Token, kind, detalhe))
+		}
+		m.tipo(n.Nome, n.Token, kindInterface, "combinado", filhos, out, vistos)
+	case *ast.MetodoDecl:
+		chave := n.Tipo.Value + "." + n.Nome.Value
+		if vistos[chave] {
+			return
+		}
+		vistos[chave] = true
+		s := m.funcao(n.Nome, n.Token, n.Parameters, n.Body)
+		s.Name, s.Kind = chave, kindMetodo
+		*out = append(*out, s)
+	}
+}
+
+// tipo monta o simbolo de uma treta/combinado (do token ate o acabou_finalmente).
+func (m *montaSimbolos) tipo(nome *ast.Identifier, tok token.Token, kind int, detalhe string, filhos []SimboloDoc, out *[]SimboloDoc, vistos map[string]bool) {
+	if nome == nil || vistos[nome.Value] {
+		return
+	}
+	vistos[nome.Value] = true
+	sel := m.a.linhas.faixa(nome.Token.Line, nome.Token.Coluna, len([]rune(nome.Value)))
+	s := SimboloDoc{
+		Name:           nome.Value,
+		Detail:         detalhe,
+		Kind:           kind,
+		Range:          Faixa{Start: m.a.linhas.posLSP(tok.Line, tok.Coluna), End: m.fimDoBloco(tok)},
+		SelectionRange: sel,
+	}
+	if len(filhos) > 0 {
+		s.Children = filhos
+	}
+	*out = append(*out, s)
+}
+
+// linhaFilha e um campo/assinatura: a linha dele.
+func (m *montaSimbolos) linhaFilha(nome *ast.Identifier, tok token.Token, kind int, detalhe string) SimboloDoc {
+	sel := m.a.linhas.faixa(nome.Token.Line, nome.Token.Coluna, len([]rune(nome.Value)))
+	return SimboloDoc{
+		Name:           nome.Value,
+		Detail:         detalhe,
+		Kind:           kind,
+		Range:          Faixa{Start: m.a.linhas.posLSP(tok.Line, tok.Coluna), End: m.a.linhas.fimDaLinha(tok.Line)},
+		SelectionRange: sel,
 	}
 }
 
@@ -201,7 +273,7 @@ func (m *montaSimbolos) fimDoBloco(tok token.Token) Posicao {
 	for j := i; j < len(m.tokens); j++ {
 		t := m.tokens[j]
 		switch t.Type {
-		case token.GAMBIARRA, token.ENQUANTO, token.PRA_CADA, token.ARRUMA, token.ESCOLHE:
+		case token.GAMBIARRA, token.ENQUANTO, token.PRA_CADA, token.ARRUMA, token.ESCOLHE, token.TRETA, token.COMBINADO:
 			pilha = append(pilha, t.Type)
 		case token.SE_COLAR:
 			if m.a.ternarios[[2]int{t.Line, t.Coluna}] {

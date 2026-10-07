@@ -20,6 +20,9 @@ declaracao de tipo nenhuma.
 | Cano        | `cano()`                                   | `<cano sincrono>` | `"cano"` |
 | Erro        | o que o `quebrou` captura                  | a mensagem | `"erro"` |
 | Nativo      | `conecta(...)` (conexao de banco)          | `<nativo: conexao sqlite>` | `"nativo"` |
+| Treta (o tipo) | `treta Ponto ... acabou_finalmente`     | `<treta Ponto>` | `"treta"` |
+| Instancia   | `Ponto{x: 1, y: 2}` ou `Ponto{1, 2}`       | `Ponto{x: 1, y: 2}` | `"Ponto"` (o nome da treta) |
+| Combinado   | `combinado Forma ... acabou_finalmente`    | `<combinado Forma>` | `"combinado"` |
 
 `nada` e o unico valor nulo — nao tem `null`/`undefined` separados.
 
@@ -240,6 +243,8 @@ abaixo da aritmetica: `0..n - 1` e `0..(n - 1)`.
 - Listas: mesmos elementos, mesma ordem, recursivo.
 - Dicionarios: mesmas chaves (tipo + valor da chave), mesmos valores,
   recursivo. Ordem nao importa.
+- Instancias de treta: mesma treta e campos iguais, um a um (igual struct do
+  Go) — veja [POO](/docs/poo).
 
 ```gambiarrascript
 mostra [1, 2, 3] == [1, 2, 3]                # deu_bom

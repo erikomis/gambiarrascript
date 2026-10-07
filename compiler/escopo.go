@@ -185,6 +185,24 @@ func (v *varredura) stmt(s ast.Statement) {
 		v.amarra(n.Alias)
 	case *ast.BlockStatement:
 		v.bloco(n)
+	// POO (so no topo): treta/combinado amarram o nome; o padrao de campo vira
+	// thunk e o metodo e uma gambiarra com o receiver de primeiro parametro
+	case *ast.TretaDecl:
+		v.amarra(n.Nome)
+		for _, c := range n.Campos {
+			v.expr(c.Embutida)
+			if c.Padrao != nil {
+				v.aninhada(nil, &ast.BlockStatement{Statements: []ast.Statement{&ast.FuncionaStatement{Value: c.Padrao}}})
+			}
+		}
+	case *ast.CombinadoDecl:
+		v.amarra(n.Nome)
+		for _, m := range n.Metodos {
+			v.expr(m.Embutido)
+		}
+	case *ast.MetodoDecl:
+		v.expr(n.Tipo)
+		v.aninhada(n.ParametrosComReceptor(), n.Body)
 	}
 }
 
@@ -240,6 +258,11 @@ func (v *varredura) expr(e ast.Expression) {
 	case *ast.TextoInterpolado:
 		for _, p := range n.Parts {
 			v.expr(p)
+		}
+	case *ast.TretaLiteral:
+		v.expr(n.Tipo)
+		for _, val := range n.Valores {
+			v.expr(val)
 		}
 	}
 }

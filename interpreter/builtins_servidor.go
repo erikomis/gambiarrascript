@@ -76,7 +76,7 @@ func novoServidorEstado(i *Interpreter) *servidorEstado {
 // tree-walker, `*object.CompiledFunction` na VM, `*object.Builtin` pros nativos.
 func ehChamavel(o object.Object) bool {
 	switch o.(type) {
-	case *object.Funcao, *object.CompiledFunction, *object.Builtin:
+	case *object.Funcao, *object.CompiledFunction, *object.Builtin, *object.MetodoLigado:
 		return true
 	}
 	return false
@@ -98,6 +98,11 @@ func (s *servidorEstado) chamaAdaptado(fn object.Object, args []object.Object, n
 	case *object.CompiledFunction:
 		if !f.Variadic && len(args) > f.NumArgs {
 			args = args[:f.NumArgs]
+		}
+	case *object.MetodoLigado:
+		// metodo como handler (`rota("GET", "/", api.saude)`): o receiver nao conta
+		if _, max, variadica, ok := object.Aridade(f.Fn); ok && !variadica && len(args) > max-1 {
+			args = args[:max-1]
 		}
 	}
 	return s.i.applyFunction(fn, args, 0, nome)

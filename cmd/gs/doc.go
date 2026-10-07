@@ -22,8 +22,23 @@ func geraDoc(fonte string) (string, error) {
 	linhas := strings.Split(fonte, "\n")
 	var b strings.Builder
 	for _, stmt := range prog.Statements {
-		if c, ok := stmt.(*ast.CravaStatement); ok {
-			escreveDocCrava(&b, c, linhas)
+		switch n := stmt.(type) {
+		case *ast.CravaStatement:
+			escreveDocCrava(&b, n, linhas)
+			continue
+		case *ast.TretaDecl, *ast.CombinadoDecl:
+			escreveDocTipo(&b, n, linhas)
+			continue
+		case *ast.MetodoDecl:
+			params := make([]string, len(n.Parameters))
+			for i, pr := range n.Parameters {
+				params[i] = pr.String()
+			}
+			sig := "(" + n.Receptor.Value + " " + n.Tipo.Value + ") " + n.Nome.Value + "(" + strings.Join(params, ", ") + ")"
+			fmt.Fprintf(&b, "### `%s`\n\n", sig)
+			if doc := comentariosAcima(linhas, n.Token.Line); doc != "" {
+				b.WriteString(doc + "\n\n")
+			}
 			continue
 		}
 		g, ok := stmt.(*ast.GambiarraStatement)
@@ -60,6 +75,59 @@ func escreveDocCrava(b *strings.Builder, c *ast.CravaStatement, linhas []string)
 		b.WriteString(doc)
 		b.WriteString("\n\n")
 	}
+}
+
+// escreveDocTipo documenta uma treta (campos) ou combinado (assinaturas):
+// titulo, comentario de cima e a declaracao num bloco de codigo.
+func escreveDocTipo(b *strings.Builder, s ast.Statement, linhas []string) {
+	var kw, nome string
+	var corpo []string
+	var linha int
+	switch n := s.(type) {
+	case *ast.TretaDecl:
+		kw, nome, linha = "treta", n.Nome.Value, n.Token.Line
+		for _, c := range n.Campos {
+			corpo = append(corpo, campoDoc(c))
+		}
+	case *ast.CombinadoDecl:
+		kw, nome, linha = "combinado", n.Nome.Value, n.Token.Line
+		for _, m := range n.Metodos {
+			if m.Embutido != nil {
+				corpo = append(corpo, textoEmbutido(m.Embutido))
+			} else {
+				corpo = append(corpo, m.String())
+			}
+		}
+	}
+	fmt.Fprintf(b, "### `%s %s`\n\n", kw, nome)
+	if doc := comentariosAcima(linhas, linha); doc != "" {
+		b.WriteString(doc + "\n\n")
+	}
+	b.WriteString("```\n" + kw + " " + nome + "\n")
+	for _, l := range corpo {
+		b.WriteString("    " + l + "\n")
+	}
+	b.WriteString("acabou_finalmente\n```\n\n")
+}
+
+func campoDoc(c *ast.CampoTreta) string {
+	switch {
+	case c.Embutida != nil:
+		return textoEmbutido(c.Embutida) + "  # puxadinho"
+	case c.Padrao != nil:
+		return c.Nome.Value + " = " + c.Padrao.String()
+	}
+	return c.Nome.Value
+}
+
+// textoEmbutido: `Animal` ou `geo.Animal` (sem os parenteses do String()).
+func textoEmbutido(e ast.Expression) string {
+	if ix, ok := e.(*ast.IndexExpression); ok {
+		if t, ok := ix.Index.(*ast.TextoLiteral); ok {
+			return ix.Left.String() + "." + t.Value
+		}
+	}
+	return e.String()
 }
 
 // comentariosAcima coleta os comentarios `#` contiguos imediatamente acima da

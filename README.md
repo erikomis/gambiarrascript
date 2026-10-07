@@ -38,7 +38,45 @@ acabou_finalmente
 | `vaza` / `continua` | break / continue    |
 | `deu_bom` / `deu_ruim` | true / false     |
 | `nada`              | null                |
+| `treta` / `combinado` | struct / interface (POO estilo Go) |
 | `acabou_finalmente` | fecha o bloco       |
+
+## POO no estilo Go (treta e combinado)
+
+Sem `class`, `this`, `new` nem herança: struct + método com receiver +
+interface implícita + composição, copiado do Go.
+
+```
+treta Animal
+    nome = "anonimo"          # campo com valor padrao
+acabou_finalmente
+gambiarra (a Animal) fala()   # metodo: o receiver vem antes do nome
+    funciona a.nome + " faz barulho"
+acabou_finalmente
+
+treta Cachorro
+    Animal                    # puxadinho (embedding): nome e fala() sobem
+    raca
+acabou_finalmente
+
+combinado Falante             # interface: quem tem fala(), satisfaz
+    fala()
+acabou_finalmente
+
+bota rex = Cachorro{Animal: Animal{nome: "rex"}, raca: "vira-lata"}
+mostra rex.fala()             # rex faz barulho
+mostra satisfaz(rex, Falante) # deu_bom
+mostra tipo(rex)              # Cachorro (type switch: escolhe tipo(v) / caso "Cachorro")
+```
+
+- Instancia: `Ponto{x: 1, y: 2}` (por nome) ou `Ponto{1, 2}` (na ordem); campo
+  que faltou fica com o padrão ou `nada`. Nome de treta começa com maiúscula.
+- Tudo por referência: o método muda a treta. `==` compara campo a campo.
+- "Construtor" é convenção: `gambiarra nova_ponto(x, y) funciona Ponto{x, y} acabou_finalmente`.
+- `satisfaz(v, Tipo)` e `como_tipo(v, Tipo)` (o `v.(T)` do Go); `pra_json`
+  achata o puxadinho igual o `encoding/json`.
+
+Guia completo em `web/content/docs/poo.mdx`; exemplo rodando em `examples/poo.gs`.
 
 ## Falando com o mundo (HTTP)
 

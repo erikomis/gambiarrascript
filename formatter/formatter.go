@@ -185,6 +185,47 @@ func (f *formatter) emitStmt(s ast.Statement, nivel int, primeiro *bool) {
 			f.emitBlock(n.Finally, nivel+1)
 		}
 		f.linha(nivel, "acabou_finalmente", f.fim(s))
+	// POO (Tier 8): treta/combinado sao um campo/assinatura por linha
+	case *ast.TretaDecl:
+		f.abre(s, nivel, primeiro, "treta "+n.Nome.Value, f.cabeca(n))
+		linhas := make([]ast.Statement, len(n.Campos))
+		for i, c := range n.Campos {
+			linhas[i] = c
+		}
+		f.emitStmts(linhas, nivel+1, f.fim(s))
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
+	case *ast.CampoTreta:
+		switch {
+		case n.Embutida != nil:
+			simples(f.emitExpr(n.Embutida))
+		case n.Padrao != nil:
+			simples(n.Nome.Value + " = " + f.emitExpr(n.Padrao))
+		default:
+			simples(n.Nome.Value)
+		}
+	case *ast.CombinadoDecl:
+		f.abre(s, nivel, primeiro, "combinado "+n.Nome.Value, f.cabeca(n))
+		linhas := make([]ast.Statement, len(n.Metodos))
+		for i, m := range n.Metodos {
+			linhas[i] = m
+		}
+		f.emitStmts(linhas, nivel+1, f.fim(s))
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
+	case *ast.AssinaturaMetodo:
+		if n.Embutido != nil {
+			simples(f.emitExpr(n.Embutido))
+			return
+		}
+		simples(n.String())
+	case *ast.MetodoDecl:
+		params := make([]string, len(n.Parameters))
+		for i, p := range n.Parameters {
+			params[i] = p.String()
+		}
+		cab := "gambiarra (" + n.Receptor.Value + " " + n.Tipo.Value + ") " + n.Nome.Value + "(" + strings.Join(params, ", ") + ")"
+		f.abre(s, nivel, primeiro, cab, f.cabeca(n.Body))
+		f.emitBlock(n.Body, nivel+1)
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
 	default:
 		if s != nil {
 			simples(s.String())
@@ -385,6 +426,20 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 			return "bora " + f.emitExpr(n.Call)
 		}
 		return "bora"
+	case *ast.TretaLiteral:
+		// o `{` cola no tipo (sem espaco): e assim que o parser reconhece
+		tipo := f.emitExprPrec(n.Tipo, precIndex)
+		if txt, ok := f.tretaEmLinhas(n, tipo); ok {
+			return txt
+		}
+		parts := make([]string, len(n.Valores))
+		for i, v := range n.Valores {
+			parts[i] = f.emitExpr(v)
+			if n.Nomes != nil {
+				parts[i] = n.Nomes[i].Value + ": " + parts[i]
+			}
+		}
+		return tipo + "{" + strings.Join(parts, ", ") + "}"
 	}
 	return ""
 }

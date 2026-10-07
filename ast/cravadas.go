@@ -148,6 +148,18 @@ func (ch *checaCrava) stmt(s Statement) {
 		ch.atribui(n.Alias)
 	case *BlockStatement:
 		ch.bloco(n)
+	// POO: treta/combinado ligam o nome (igual gambiarra); metodo abre escopo
+	// de funcao (receiver + params) e nao liga nome nenhum
+	case *TretaDecl:
+		for _, c := range n.Campos {
+			ch.expr(c.Padrao)
+			ch.expr(c.Embutida)
+		}
+		ch.atribui(n.Nome)
+	case *CombinadoDecl:
+		ch.atribui(n.Nome)
+	case *MetodoDecl:
+		ch.funcao(n.ParametrosComReceptor(), n.Body)
 	}
 }
 
@@ -199,6 +211,11 @@ func (ch *checaCrava) expr(e Expression) {
 	case *TextoInterpolado:
 		for _, p := range n.Parts {
 			ch.expr(p)
+		}
+	case *TretaLiteral:
+		ch.expr(n.Tipo)
+		for _, v := range n.Valores {
+			ch.expr(v)
 		}
 	}
 }

@@ -54,6 +54,11 @@ func NomeTipo(o Object) string {
 	if o.Type() == BUILTIN_OBJ {
 		return "funcao"
 	}
+	// instancia de treta: o nome da treta (`tipo(p)` == "Ponto"), que e o
+	// que o escolhe/caso usa como type switch
+	if inst, ok := o.(*Instancia); ok {
+		return inst.Tipo.Nome
+	}
 	return strings.ToLower(string(o.Type()))
 }
 

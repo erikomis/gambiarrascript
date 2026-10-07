@@ -24,6 +24,10 @@ func init() {
 	gob.Register(&object.Nada{})
 	gob.Register(&object.CompiledFunction{})
 	gob.Register(&object.Modulo{})
+	// POO: descritores de treta/combinado/literal
+	gob.Register(&object.DescTreta{})
+	gob.Register(&object.DescCombinado{})
+	gob.Register(&object.DescLiteral{})
 }
 
 // formatoGSC e a versao do formato do bytecode. Sobe toda vez que mudar
@@ -41,7 +45,9 @@ func init() {
 // vez so; o .gsc guarda o hash de cada modulo importado.
 // 11 = escopo de funcao (OpGet*Ou/OpGet*Chk, celulas), estouro de inteiro
 // vira real no folding, traco com frame de builtin.
-const formatoGSC = 11
+// 12 = POO: OpTreta/OpCombinado/OpMetodo/OpInstancia (descritores no pool) e
+// builtins satisfaz/como_tipo no fim da lista.
+const formatoGSC = 12
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

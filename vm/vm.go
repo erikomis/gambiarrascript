@@ -357,6 +357,23 @@ func (vm *VM) execBoraCall(argc int) {
 	object.AtivaConcorrencia()
 
 	fut := object.NovoFuturo()
+	if m, ok := callee.(*object.MetodoLigado); ok {
+		// `bora obj.metodo(args)`: receiver na frente; aridade errada vai pro
+		// futuro (igual o tree-walker)
+		if msg := object.ChecaAridadeMetodo(m, len(args)); msg != "" {
+			e := &object.Erro{Message: msg, Kind: "runtime"}
+			fr := vm.currentFrame()
+			if l := fr.fn.LinhaDoPC(fr.ip); l > 0 {
+				e.Line = l
+				e.Message = fmt.Sprintf("deu ruim na linha %d: %s", l, e.Message)
+			}
+			fut.Resolve(e)
+			vm.push(fut)
+			return
+		}
+		args = append([]object.Object{m.Receptor}, args...)
+		callee = m.Fn
+	}
 	switch fn := callee.(type) {
 	case *object.CompiledFunction:
 		clone := vm.clone()
@@ -783,6 +800,16 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				} else {
 					vm.push(NADA)
 				}
+			case *object.Instancia:
+				// `bota {x, y} = ponto`: pelos campos (o que nao tem vira nada)
+				if _, ehNome := idx.(*object.Texto); !ehNome {
+					panic(VMError{err: &object.Erro{Message: fmt.Sprintf("pra desestruturar com [] eu quero uma lista, veio %s", cont.Type()), Kind: "runtime"}})
+				}
+				v, perr := membroVM(cc, idx)
+				if perr != nil {
+					v = NADA
+				}
+				vm.push(v)
 			default:
 				panic(VMError{err: &object.Erro{Message: fmt.Sprintf("so da pra desestruturar lista ou dicionario, veio %s", cont.Type()), Kind: "runtime"}})
 			}
@@ -1014,6 +1041,21 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				vm.push(res)
 				continue
 			}
+			if m, ok := callee.(*object.MetodoLigado); ok {
+				// `obj.metodo(args)`: o receiver entra como 1o argumento
+				cf, argcM := vm.abreMetodo(m, argc)
+				bp := vm.sp - 1 - argcM
+				if e := vm.ajustaArgs(cf, bp, argcM); e != nil {
+					panic(VMError{err: e})
+				}
+				vm.limpaLocais(bp, cf)
+				vm.sp = bp + cf.NumLocals
+				frame.ip = ip
+				frame = vm.empurraFrame(cf, bp, opPos)
+				fn = cf
+				ip = 0
+				continue
+			}
 			panic(VMError{err: &object.Erro{Message: fmt.Sprintf("isso ai (%s) nao e gambiarra pra voce sair chamando", callee.Type()), Kind: "runtime"}})
 		case code.OpTailCall:
 			argc := int(fn.Bytecode[ip+1])
@@ -1082,6 +1124,24 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				if e, ok := res.(*object.Erro); ok && e != nil && !e.Handled {
 					panic(VMError{err: e, quadro: quadroBuiltin(b.Nome, fn, ip-2)})
 				}
+				returnedFn := vm.popFrame()
+				vm.sp = returnedFn.basePointer
+				vm.push(res)
+				vm.limpaTriesOrfaos()
+				if vm.framesIdx < baseIdx {
+					return nil
+				}
+				frame = vm.currentFrame()
+				fn = frame.fn
+				ip = frame.ip
+				continue
+			}
+			if m, ok := callee.(*object.MetodoLigado); ok {
+				// raro (`funciona g()` com g = metodo ligado): roda sincrono e
+				// retorna, igual o tail call de builtin — fora do caminho quente
+				args := make([]object.Object, argc)
+				copy(args, vm.stack[vm.sp-1-argc:vm.sp-1])
+				res := vm.chamaMetodoSincrono(m, args)
 				returnedFn := vm.popFrame()
 				vm.sp = returnedFn.basePointer
 				vm.push(res)
@@ -1213,6 +1273,9 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			ip += 3
 			argc := vm.espalhaArgs(mascara)
 			callee := vm.stack[vm.sp-1]
+			if m, ok := callee.(*object.MetodoLigado); ok {
+				callee, argc = vm.abreMetodo(m, argc)
+			}
 			if cf, ok := callee.(*object.CompiledFunction); ok {
 				bp := vm.sp - 1 - argc
 				if e := vm.ajustaArgs(cf, bp, argc); e != nil {
@@ -1290,6 +1353,10 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				vm.errStack = vm.errStack[:len(vm.errStack)-1]
 			}
 			ip++
+		// POO (poo.go): treta, combinado, metodo e literal
+		case code.OpTreta, code.OpCombinado, code.OpMetodo, code.OpInstancia:
+			vm.execPOO(op, int(code.ReadUint16(fn.Bytecode[ip+1:])))
+			ip += 3
 		default:
 			return fmt.Errorf("opcode desconhecido: %d", op)
 		}
@@ -1693,6 +1760,8 @@ func vmIndex(cont, idx object.Object) (object.Object, error) {
 			return NADA, nil
 		}
 		return par.Valor, nil
+	case *object.Instancia:
+		return membroVM(c, idx)
 	}
 	// lista, texto e dicionario sao indexaveis.
 	return nil, fmt.Errorf("so da pra indexar lista, texto ou dicionario, e isso ai e %s", cont.Type())
@@ -1714,6 +1783,8 @@ func vmIndexSet(cont, idx, val object.Object) error {
 			return fmt.Errorf("essa chave (%s) nao da pra usar num dicionario", idx.Type())
 		}
 		c.Bota(chave.ChaveHash(), object.ParDic{Chave: idx, Valor: val})
+	case *object.Instancia:
+		return poeMembroVM(c, idx, val)
 	default:
 		// mesmas mensagens do tree-walker (evalAtribuiIndice)
 		return fmt.Errorf("so da pra atribuir indice em lista ou dicionario, e isso ai e %s", cont.Type())
@@ -1752,7 +1823,7 @@ func iguaisRec(a, b object.Object, prof int, vistos map[[2]object.Object]bool) b
 		return false
 	}
 	switch a.(type) {
-	case *object.Lista, *object.Dicionario:
+	case *object.Lista, *object.Dicionario, *object.Instancia:
 		if a == b {
 			return true
 		}
@@ -1799,6 +1870,19 @@ func iguaisRec(a, b object.Object, prof int, vistos map[[2]object.Object]bool) b
 		for _, pa := range pares {
 			pb, ok := bd.Pega(pa.Chave.(object.Chaveavel).ChaveHash())
 			if !ok || !iguaisRec(pa.Valor, pb.Valor, prof, vistos) {
+				return false
+			}
+		}
+		return true
+	case *object.Instancia:
+		// == de treta compara campo a campo (igual struct do Go)
+		bi := b.(*object.Instancia)
+		if av.Tipo != bi.Tipo {
+			return false
+		}
+		ac, bc := av.Campos(), bi.Campos()
+		for j := range ac {
+			if !iguaisRec(ac[j], bc[j], prof, vistos) {
 				return false
 			}
 		}

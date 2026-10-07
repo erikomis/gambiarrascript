@@ -12,7 +12,7 @@ fatias, dot access), **tooling** (`gs check/init/bench/get/build/testa/doc/
 formata -w`, cache `.gsc`) e **distribuição** (release com binários,
 `install.sh`, playground + doc no GitHub Pages).
 
-Tiers 1–5 e 5b estão entregues. O backlog vivo:
+Tiers 1–5, 5b e 8 (POO estilo Go) estão entregues. O backlog vivo:
 
 | Onde | O que sobra |
 |---|---|
@@ -20,7 +20,7 @@ Tiers 1–5 e 5b estão entregues. O backlog vivo:
 | Bugs abertos | overflow, `importa`, erro entre engines |
 | Tier 6 | Homebrew, cobertura, sombreamento (`gs instala` + lock e `build --alvo` ✅) |
 | Tier 7 | MaxStack por função |
-| Tier 8 | POO no estilo Go (`treta`/`combinado`) — tem decisões em aberto |
+| Tier 8 | ✅ POO no estilo Go (`treta`/`combinado`) entregue — sobra método em tipo não-struct e visibilidade (fora de escopo) |
 | Tier 9 | sugestões novas: `//`, publicar a extensão no marketplace, playground com entrada |
 
 ---
@@ -575,106 +575,78 @@ Falta nesse tier:
       a JVM), a reserva sairia uma vez por frame no `OpCall` e o `push` viraria
       duas instruções.
 
-### Tier 8 — POO no modelo do Go (structs + métodos + interfaces, SEM herança)
+### Tier 8 — POO no modelo do Go (structs + métodos + interfaces, SEM herança) ✅ entregue
 
-Objetivo: trazer POO pro GambiarraScript **copiando o jeito do Go** —
-composição no lugar de herança, interface satisfeita de forma **implícita**
-(pelo comportamento, sem declarar), método como gambiarra **com receiver** e
-"construtor" só por convenção (uma gambiarra `nova_X`). Nada de `class`,
-`extends`, `this`, `new` nem herança. Isso **reabre** a decisão antiga de
-deixar `struct` formal de fora (o item "Records + métodos" do Tier 3, feito
-via dict): os dicts continuam existindo; a `treta` é a versão **nomeada, com
-campos tipados opcionais e métodos**.
+POO **copiando o jeito do Go** — composição no lugar de herança, interface
+satisfeita de forma **implícita**, método como gambiarra **com receiver** e
+"construtor" só por convenção (`nova_x`). Nada de `class`, `extends`, `this`,
+`new` nem herança. Os dicts continuam existindo; a `treta` é a versão
+**nomeada, com campos e métodos**. Guia em `web/content/docs/poo.mdx`,
+exemplo em `examples/poo.gs`, paridade em `vm/poo_test.go`.
 
-Princípios (iguais aos do Go):
+- [x] **Declarar struct** — `treta Nome` + um campo por linha (`x`,
+  `x = padrao`) + `acabou_finalmente`. Tipo de campo ficou de fora (campo é
+  dinâmico como tudo). Nome de treta (e de combinado) **começa com
+  maiúscula** — é a regra que separa tipo de valor na sintaxe.
+- [x] **Instanciar** — `Ponto{x: 1, y: 2}` (nomeado) ou `Ponto{1, 2}`
+  (posicional: todos os campos, igual Go; `Ponto{}` = tudo zero). Não mistura
+  os dois. Campo desconhecido/repetido = erro. **Ambiguidade com dicionário**:
+  só vira literal quando o nome começa com maiúscula (ou `modulo.Nome`) **e** o
+  `{` está na mesma linha — `mostra x {...}` e um `{...}` na linha de baixo de
+  `mostra LIMITE` continuam dicionário solto como antes. Bloco não usa chave,
+  então `se_colar p == Ponto{1, 2}` não tem a ambiguidade do Go.
+- [x] **DECISÃO: zero-value** — o padrão declarado (`y = 0`) ou `nada` (sem
+  tipo não dá pra ter `0`/`""` do Go). Padrão literal é constante; o resto vira
+  thunk que roda **a cada instância** (`itens = []` não é compartilhado).
+  Puxadinho nasce com a treta embutida zerada.
+- [x] **Métodos com receiver** — `gambiarra (p Ponto) distancia()`; chamada
+  `p.distancia()`; `obj.metodo` sem chamar = método ligado (vai pra
+  `mapeia`/`rota`/`bora`). Aridade conta sem o receiver ("o metodo Ponto.move
+  quer entre 1 e 2 parametro(s)").
+- [x] **DECISÃO: receiver valor vs ponteiro** — **tudo referência, método muta
+  a treta** (sem cópia no value receiver).
+- [x] **DECISÃO: campo × método** — mesmo nome na mesma treta = erro na
+  declaração do método (igual Go). Redeclarar método troca (igual gambiarra).
+- [x] **DECISÃO: onde declara** — treta, combinado e método só no **topo** do
+  arquivo (erro de parse dentro de bloco). Declare a treta antes dos métodos.
+- [x] **Interface (`combinado`)** — assinaturas `escreve(texto)`, combinado
+  embutido por nome; satisfação **implícita** e confere a aridade.
+  `satisfaz(v, Tipo)` → booleano (combinado: tem os métodos; treta: é
+  instância dela; combinado vazio = qualquer coisa).
+- [x] **Type switch / assertion** — `tipo(instancia)` devolve o nome da treta
+  (`object.NomeTipo`), então `escolhe tipo(v)` / `caso "Ponto"` é o type
+  switch. `tipo(Ponto)` = `"treta"`, `tipo(Forma)` = `"combinado"`. Assertion
+  é builtin (sem sintaxe nova): `como_tipo(v, Tipo)` devolve `v` ou quebra com
+  o motivo.
+- [x] **Composição / embedding (`puxadinho`)** — conceito, não keyword: linha
+  da treta que é só um nome maiúsculo (ou `modulo.Nome`) embute. Campos e
+  métodos sobem (promotion); acesso explícito `c.Animal.nome`; método
+  promovido recebe a treta de dentro como receiver. Regra do Go: o mais raso
+  ganha; empate na mesma profundidade só dá erro quando alguém acessa. No
+  literal o campo promovido não vale direto (`Cachorro{Animal: Animal{...}}`).
+- [x] **"Construtor" por convenção** — `gambiarra nova_ponto(x, y)`; só idioma
+  (doc + snippet).
+- [x] **DECISÃO: `==`** — campo a campo (mesma treta + campos iguais), igual
+  struct do Go; protegido contra ciclo igual lista/dicionário.
+- [x] **mostra / JSON** — `Ponto{x: 1, y: 2}` (texto com aspas, ciclo vira
+  `Ponto{...}`); `pra_json` dá objeto com o puxadinho achatado (igual
+  `encoding/json`); `bota {x, y} = p` desestrutura pelos campos.
+- [x] **Concorrência** — instância segue o desenho das coleções
+  (`object/colecoes.go`): trava só depois do modo concorrente, cada
+  leitura/escrita de campo atômica, nunca segura duas travas; a tabela de
+  métodos da treta também.
+- [ ] **DECISÃO: métodos em tipos não-struct** — fora de escopo (foco em
+  `treta`).
+- [ ] **DECISÃO: visibilidade** — fora de escopo (a maiúscula aqui é sintaxe
+  de tipo, não exportação).
 
-- **Sem herança, só composição** — encaixa uma treta dentro de outra
-  (embedding) e os campos/métodos "sobem" pra de fora (promotion).
-- **Interface implícita** — se a treta tem os métodos do `combinado`, ela já
-  satisfaz o combinado. Sem palavra `implementa`/`satisfaz`.
-- **Método = gambiarra com receiver** — `gambiarra (p Ponto) distancia()`.
-- **Sem construtor mágico** — convenção `nova_ponto(...)` devolvendo a treta
-  (igual ao `NewX()` do Go).
-- **Zero-value útil** — treta não inicializada já vem com os campos no valor
-  neutro (`0`, `""`, `nada`), como no Go.
-
-Itens (nomes de keyword **a decidir** — sugestões em *itálico*):
-
-- [ ] **Declarar struct** — bloco de campos fechado com `acabou_finalmente`,
-  tipo do campo opcional. *(`treta` = "o troço/a treta"; alt: `molde`,
-  `esquema`.)*
-      ```
-      treta Ponto
-          x
-          y
-      acabou_finalmente
-      ```
-- [ ] **Instanciar** — literal `Ponto{x: 1, y: 2}` (nomeado) ou `Ponto{1, 2}`
-  (posicional); campo faltante cai no zero-value.
-- [ ] **Métodos com receiver** — gambiarra com receiver antes do nome (cópia
-  fiel do Go); dentro, o receiver dá acesso aos campos por dot access.
-      ```
-      gambiarra (p Ponto) distancia()
-          funciona raiz(p.x*p.x + p.y*p.y)
-      acabou_finalmente
-
-      mostra Ponto{x: 3, y: 4}.distancia()   # 5
-      ```
-- [ ] **Interface (`combinado`)** — lista as assinaturas; satisfação
-  **implícita** (structural typing), igual Go. *(`combinado` = "o combinado
-  é...", um contrato; alt: `trato`, `promessa`.)*
-      ```
-      combinado Escritor
-          escreve(texto)
-      acabou_finalmente
-      ```
-- [ ] **Composição / embedding (`puxadinho`)** — encaixa uma treta anônima
-  dentro de outra; os campos e métodos da encaixada sobem pra de fora
-  (promotion). É o "puxadinho" da casa: estende sem virar herança.
-      ```
-      treta Animal
-          nome
-      acabou_finalmente
-      gambiarra (a Animal) fala()  funciona a.nome + " faz barulho"  acabou_finalmente
-
-      treta Cachorro
-          Animal        # embedding: puxa `nome` + `fala()`
-          raca
-      acabou_finalmente
-      # Cachorro{...}.fala() roda via promotion, sem redeclarar
-      ```
-- [ ] **"Construtor" por convenção** — sem keyword nova: uma gambiarra
-  `nova_ponto(x, y)` devolve `Ponto{...}` (idêntico ao `NewPonto()` do Go).
-  Só documentar como idioma.
-- [ ] **Type switch / type assertion** — em cima de interface: reusar
-  `escolhe`/`caso` por tipo (`escolhe tipo_de(v) / caso Ponto ...`) e um jeito
-  de assertion (`v.(Ponto)` → treta ou quebra). Builtin `tipo_de`.
-- [ ] **DECISÃO: receiver valor vs ponteiro** — Go copia no value receiver e
-  muta no pointer receiver. Como a linguagem é dinâmica e dict já é
-  referência, a proposta é **tudo referência, método muta a treta** (mais
-  simples que Go). Se quiser fidelidade total, avaliar cópia no value receiver.
-- [ ] **DECISÃO: métodos em tipos não-struct** — Go permite método em qualquer
-  tipo nomeado (ex.: `type MeuInt int`). Provável **fora de escopo** por ora;
-  foco em `treta`.
-- [ ] **DECISÃO: visibilidade** — Go exporta por maiúscula. A linguagem não usa
-  capitalização pra isso; provável **fora de escopo**, decidir depois.
-
-Onde mexe (fonte da verdade — mesma disciplina da migração EN mais abaixo):
-
-1. `token/token.go` — keywords novas (`treta`, `combinado`, e talvez
-   `puxadinho`) no mapa `keywords` + as constantes de token.
-2. `ast/ast.go` — nós `TretaDecl`, `CombinadoDecl`, `MetodoDecl` (gambiarra com
-   receiver) e `TretaLiteral` (o `AcessoCampo`/dot access já existe).
-3. `parser/parser.go` — parse das declarações e do literal `Tipo{...}`.
-4. `object/object.go` — `object.Treta` (nome + campos + tabela de métodos),
-   `object.Combinado` e a checagem de satisfação implícita.
-5. `interpreter/` **e** `compiler/`+`vm/` — avaliar/compilar tudo nos DOIS
-   engines, mantendo paridade (teste `TestParidade...`).
-6. `lsp/server.go` — keywords novas no autocomplete + hover.
-7. `editors/vscode/syntaxes/*.tmLanguage.json` e `snippets/*.json` — cor e
-   snippets.
-8. `examples/poo.gs` — exemplo cobrindo treta, método, combinado e puxadinho.
-9. `README.md` — documentar o modelo POO.
+Onde mexeu: `token` (TRETA, COMBINADO), `ast/poo.go`, `parser/poo.go`
+(lookahead extra pro `gambiarra (p T)`), `object/poo.go` (regra única:
+promotion, zero-value, satisfação, JSON), `interpreter/poo.go` e
+`compiler/poo.go` + `vm/poo.go` (OpTreta/OpCombinado/OpMetodo/OpInstancia
+com descritores no pool; `formatoGSC` 11), formatter (campo por linha com
+comentário), LSP (keywords, hover, linter, outline com struct/campos/métodos,
+definição/referências), REPL, `gs doc`, extensão VSCode e realce do site.
 
 ### Tier 9 — Próxima leva (sugestões novas, conferidas no código)
 

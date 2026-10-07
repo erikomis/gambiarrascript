@@ -27,7 +27,9 @@ no tree-walker (`gs roda --tree`).
 | `texto(v)` | `(qualquer)` | `texto` — conversao universal (o mesmo que o `mostra` imprime) |
 | `numero(t)` | `(texto)` | `numero` — aceita `"42"`, `" 3.5 "`, `"1e3"`; texto nao-numerico **da erro** |
 | `tamanho(x)` | `(texto, lista, dicionario ou conjunto)` | `numero` — em texto conta caracteres (UTF-8), nao bytes |
-| `tipo(x)` | `(qualquer)` | `texto` — `"numero"`, `"texto"`, `"booleano"`, `"nada"`, `"lista"`, `"dicionario"`, `"conjunto"`, `"funcao"`, `"erro"`, `"futuro"`, `"cano"`, `"trava"` ou `"nativo"` |
+| `tipo(x)` | `(qualquer)` | `texto` — `"numero"`, `"texto"`, `"booleano"`, `"nada"`, `"lista"`, `"dicionario"`, `"conjunto"`, `"funcao"`, `"erro"`, `"futuro"`, `"cano"`, `"trava"`, `"nativo"`, `"treta"`, `"combinado"` ou, pra instancia de treta, o nome dela (`"Ponto"`) |
+| `satisfaz(v, Tipo)` | `(qualquer, treta ou combinado)` | `booleano` — combinado: `v` tem os metodos; treta: `v` e instancia dela ([POO](/docs/poo)) |
+| `como_tipo(v, Tipo)` | `(qualquer, treta ou combinado)` | o proprio `v`, ou erro com o motivo — o `v.(T)` do Go |
 
 ```gambiarrascript
 mostra tipo(3.14)                # numero

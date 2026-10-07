@@ -4,6 +4,21 @@
     "body": ["gambiarra ${1:nome}(${2:args})", "\t${0}", "acabou_finalmente"],
     "description": "Declara uma funcao"
   },
+  "Treta (struct)": {
+    "prefix": "treta",
+    "body": ["treta ${1:Nome}", "\t${2:campo}", "acabou_finalmente", "", "gambiarra nova_${1/(.*)/${1:/downcase}/}(${2:campo})", "\tfunciona ${1:Nome}{${2:campo}: ${2:campo}}", "acabou_finalmente"],
+    "description": "Declara uma treta (struct estilo Go) com o \"construtor\" nova_x por convencao"
+  },
+  "Metodo (gambiarra com receiver)": {
+    "prefix": "metodo",
+    "body": ["gambiarra (${1:p} ${2:Tipo}) ${3:nome}(${4})", "\t${0}", "acabou_finalmente"],
+    "description": "Metodo de uma treta: o receiver vem antes do nome (muda a treta, tudo por referencia)"
+  },
+  "Combinado (interface)": {
+    "prefix": "combinado",
+    "body": ["combinado ${1:Nome}", "\t${2:metodo}(${3})", "acabou_finalmente"],
+    "description": "Interface estilo Go: satisfeita de forma implicita por quem tem os metodos"
+  },
   "Crava (constante)": {
     "prefix": "crava",
     "body": ["crava ${1:NOME} = ${0:valor}"],

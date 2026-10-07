@@ -33,7 +33,9 @@ Decorou essa tabela, decorou a lingua.
 | `deu_bom` / `deu_ruim` | `true` / `false`  | booleanos |
 | `nada`              | `null` / `None`      | o unico valor nulo |
 | `e` / `ou` / `nao`  | `and` / `or` / `not` | logicos (sempre devolvem booleano) |
-| `acabou_finalmente` | `}`                  | fecha **qualquer** bloco (`se_colar`, `escolhe`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`) |
+| `treta`             | `type X struct`      | declara uma struct (campos + metodos) — veja [POO](/docs/poo) |
+| `combinado`         | `type X interface`   | declara uma interface, satisfeita de forma implicita |
+| `acabou_finalmente` | `}`                  | fecha **qualquer** bloco (`se_colar`, `escolhe`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`, `treta`, `combinado`) |
 
 As palavras-chave sao fixas: nao tem alias pra escolher a que voce gosta mais
 (e nenhuma delas pode virar nome de variavel — nem `e`, `de` ou `em`). O que

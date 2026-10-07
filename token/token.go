@@ -101,6 +101,10 @@ const (
 
 	// concorrencia
 	BORA = "BORA" // bora fn(args) -> Futuro
+
+	// POO no modelo do Go (Tier 8)
+	TRETA     = "TRETA"     // treta Nome <campos> acabou_finalmente (struct)
+	COMBINADO = "COMBINADO" // combinado Nome <assinaturas> acabou_finalmente (interface)
 )
 
 var keywords = map[string]TokenType{
@@ -134,6 +138,8 @@ var keywords = map[string]TokenType{
 	"bora":              BORA,
 	"entao":             ENTAO,
 	"como":              COMO,
+	"treta":             TRETA,
+	"combinado":         COMBINADO,
 }
 
 // LookupIdent devolve o TokenType de uma keyword, ou IDENT se for um nome comum.
