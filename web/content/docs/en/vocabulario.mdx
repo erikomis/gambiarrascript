@@ -19,7 +19,7 @@ Memorize this table and you know the language.
 | `escolhe` / `caso`  | `switch` / `case`  | compares with `==`, no fallthrough; `se_nao_colar` is the default |
 | `enquanto`          | `while`            | loops while the condition is true |
 | `pra_cada i de A ate B` | `for i in range(A, B+1)` | inclusive numeric loop (counts up only) |
-| `pra_cada x em colecao` | `for x in ...` | for-each over a list or dict (iterates the **keys** of a dict) |
+| `pra_cada x em colecao` | `for x in ...` | for-each over a list, dict or set (iterates the **keys** of a dict) |
 | `pra_cada i, v em colecao` | `enumerate` / `.items()` | index + item for lists, key + value for dicts |
 | `gambiarra`         | `func` / `fn` / `def`| declares a function (named) or a lambda (anonymous) |
 | `funciona`          | `return`           | returns a value from a function |
@@ -106,7 +106,7 @@ The [Standard library](/docs/biblioteca) (pt) has the full reference. Quick map:
 | String | `maiusculo` `minusculo` `tira_espaco` `substitui` `separa` `junta` `fatia` `contem` `comeca_com` `termina_com` `formata` |
 | Regex | `busca_regex` `acha_regex` `combina_regex` `substitui_regex` `separa_regex` |
 | List | `adiciona` `remove` `ordena` `ordena_com` `inverte` `mapeia` `filtra` `reduz` `acha` `acha_indice` `unicos` `achatada` `ordena_por` `agrupa_por` `zip` `enumera` `soma` `media` |
-| Dict | `chaves` `tem` |
+| Dict | `chaves` `tem` `remove` (deletes the key) |
 | Set | `conjunto` `contem_conjunto` `adiciona_conjunto` `remove_conjunto` `uniao` `intersecao` `diferenca` |
 | Number | `raiz` `abs` `arredonda` `teto` `chao` `min` `max` `seno` `cosseno` `tangente` `log` `log10` `exp` (+ the value `pi`) |
 | Random | `aleatorio` `semente` `embaralha` `escolhe_um` `uuid` |

@@ -19,7 +19,7 @@ Decorou essa tabela, decorou a lingua.
 | `escolhe` / `caso`  | `switch` / `case`    | compara com `==`, sem fallthrough; `se_nao_colar` e o default |
 | `enquanto`          | `while`              | loop enquanto condicao for verdadeira |
 | `pra_cada i de A ate B` | `for i in range(A, B+1)` | loop numerico inclusivo (so sobe) |
-| `pra_cada x em colecao` | `for x in ...`   | for-each em lista ou dicionario (no dic, as **chaves**) |
+| `pra_cada x em colecao` | `for x in ...`   | for-each em lista, dicionario ou conjunto (no dic, as **chaves**) |
 | `pra_cada i, v em colecao` | `for i, v in enumerate(...)` / `.items()` | indice + item na lista, chave + valor no dic |
 | `gambiarra`         | `func` / `fn` / `def`| declara funcao (com nome) ou lambda (sem nome) |
 | `funciona`          | `return`             | devolve valor da gambiarra |
@@ -105,7 +105,7 @@ para referencia rapida:
 | Texto | `maiusculo` `minusculo` `tira_espaco` `substitui` `separa` `junta` `fatia` `contem` `comeca_com` `termina_com` `formata` |
 | Regex | `busca_regex` `acha_regex` `combina_regex` `substitui_regex` `separa_regex` |
 | Lista | `adiciona` `remove` `ordena` `ordena_com` `inverte` `mapeia` `filtra` `reduz` `acha` `acha_indice` `unicos` `achatada` `ordena_por` `agrupa_por` `zip` `enumera` `soma` `media` |
-| Dicionario | `chaves` `tem` |
+| Dicionario | `chaves` `tem` `remove` (apaga a chave) |
 | Conjunto | `conjunto` `contem_conjunto` `adiciona_conjunto` `remove_conjunto` `uniao` `intersecao` `diferenca` |
 | Numero | `raiz` `abs` `arredonda` `teto` `chao` `min` `max` `seno` `cosseno` `tangente` `log` `log10` `exp` (+ o valor `pi`) |
 | Aleatorio | `aleatorio` `semente` `embaralha` `escolhe_um` `uuid` |

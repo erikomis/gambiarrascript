@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"gambiarrascript/ast"
 	"gambiarrascript/code"
@@ -333,7 +334,10 @@ func (c *Compiler) NomesGlobais() []string {
 	topo := c.scopes[0]
 	nomes := make([]string, 0, len(topo.symbols))
 	for nome, sym := range topo.symbols {
-		if sym.Scope == GlobalScope {
+		// `__*` sao os temporarios que o proprio compilador cria (__it_gs0,
+		// __seq_gs0, __erro_gsN, __esc_gs...): moram no global mas nao sao do
+		// usuario, e apareciam no TAB do REPL
+		if sym.Scope == GlobalScope && !strings.HasPrefix(nome, "__") {
 			nomes = append(nomes, nome)
 		}
 	}

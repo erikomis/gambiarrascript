@@ -745,8 +745,12 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				chaves := make([]object.Object, 0, c.Tamanho())
 				c.Itera(func(par object.ParDic) { chaves = append(chaves, par.Chave) })
 				vm.push(object.NovaLista(chaves))
+			case *object.Conjunto:
+				// retrato dos itens na ordem de insercao; com dois nomes o
+				// OpIterPar trata como lista (indice, item)
+				vm.push(object.NovaLista(c.Valores()))
 			default:
-				panic(VMError{err: &object.Erro{Message: fmt.Sprintf("pra_cada ... em ... so funciona com lista ou dicionario, e isso ai e %s", it.Type()), Kind: "runtime"}})
+				panic(VMError{err: &object.Erro{Message: fmt.Sprintf("pra_cada ... em ... so funciona com lista, dicionario ou conjunto, e isso ai e %s", it.Type()), Kind: "runtime"}})
 			}
 			ip++
 		case code.OpGetLocal:
@@ -1533,9 +1537,34 @@ func ehVerdade(o object.Object) bool {
 	}
 }
 
-func iguais(a, b object.Object) bool {
+// iguais compara por valor. Estrutura que contem ela mesma nao pode descer pra
+// sempre: mesma logica do interpreter.iguais (mesma colecao dos dois lados e
+// igual de cara; passado de profSemMemoria niveis, par (a, b) que ja esta em
+// comparacao e "igual ate aqui").
+func iguais(a, b object.Object) bool { return iguaisRec(a, b, 0, nil) }
+
+const profSemMemoria = 64
+
+func iguaisRec(a, b object.Object, prof int, vistos map[[2]object.Object]bool) bool {
 	if a.Type() != b.Type() {
 		return false
+	}
+	switch a.(type) {
+	case *object.Lista, *object.Dicionario:
+		if a == b {
+			return true
+		}
+		if prof >= profSemMemoria {
+			if vistos == nil {
+				vistos = map[[2]object.Object]bool{}
+			}
+			par := [2]object.Object{a, b}
+			if vistos[par] {
+				return true
+			}
+			vistos[par] = true
+		}
+		prof++
 	}
 	switch av := a.(type) {
 	case *object.Texto:
@@ -1554,7 +1583,7 @@ func iguais(a, b object.Object) bool {
 			return false
 		}
 		for i, e := range ae {
-			if !iguais(e, be[i]) {
+			if !iguaisRec(e, be[i], prof, vistos) {
 				return false
 			}
 		}
@@ -1567,7 +1596,7 @@ func iguais(a, b object.Object) bool {
 		}
 		for _, pa := range pares {
 			pb, ok := bd.Pega(pa.Chave.(object.Chaveavel).ChaveHash())
-			if !ok || !iguais(pa.Valor, pb.Valor) {
+			if !ok || !iguaisRec(pa.Valor, pb.Valor, prof, vistos) {
 				return false
 			}
 		}

@@ -297,9 +297,27 @@ Ainda abertos (pedem decisão de semântica):
 - [x] Interpolação engolia lixo calado (`"${3.14159:.2f}"` imprimia
       `3.14159`): um laço "se sobrou algo, ignora" no `parser.interpolar`.
       Agora sobra vira erro de parse — e o `:.2f` virou formato de verdade.
-- [ ] Miudezas: `tamanho()` não aceita conjunto; ordem de impressão do
-      conjunto é aleatória; falha de conexão do `busca` vem com tipo
-      `"builtin"` em vez de `"rede"`; REPL na VM lista temporários `__*` no TAB.
+- [x] Não tinha como apagar chave de dicionário. Agora `remove(dic, chave)`
+      (um nome só pro conceito: o mesmo `remove` da lista, e também
+      `remove(conjunto, item)`). Mesmo contrato do de lista: devolve `nada`,
+      tirar o que não está lá é no-op calado; chave que não pode ser chave
+      (lista...) é erro, igual o `tem`. Chave que volta entra no fim da ordem.
+      `remove_conjunto` continua devolvendo o próprio conjunto.
+- [x] Estrutura que contém ela mesma (`adiciona(xs, xs)`) estourava a pilha
+      do Go — fatal, derrubava o processo — no `mostra`, no `pra_json` e no
+      `==`. Agora `mostra` imprime `[1, 2, [...]]` / `{"eu": {...}}` (igual
+      Python), `pra_json` dá erro ("estrutura que contem ela mesma nao vira
+      JSON") e `==` termina (dois ciclos do mesmo formato são iguais). Tudo
+      por ponteiro, só no caminho atual (`[s, s]` sem ciclo sai inteiro), e
+      sem alocar nada em estrutura rasa.
+- [x] Miudezas: `tamanho()` aceita conjunto; o conjunto lembra a ordem de
+      inserção igual o dicionário (`mostra`, `pra_cada` — que agora também
+      aceita conjunto — e `uniao`/`intersecao`/`diferenca`), com
+      bota/tira/contém O(1): os dois usam o mesmo miolo `ordenado`, em que
+      remover deixa buraco e compacta quando passa da metade (o `Tira` do
+      dicionário era O(n)); falha de conexão do `busca` (DNS, recusada,
+      timeout, resposta cortada) vem com tipo `"rede"`; REPL na VM não lista
+      mais os temporários `__*` no TAB.
 
 ### Tier 6 — Tooling / ecossistema
 

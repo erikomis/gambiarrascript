@@ -2,6 +2,7 @@ package interpreter
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -150,6 +151,54 @@ func TestBuscaErroDeTransporte(t *testing.T) {
 	res := builtinBusca([]object.Object{&object.Texto{Value: "://url-quebrada"}})
 	if res.Type() != object.ERRO_OBJ {
 		t.Fatalf("esperava ERRO, got %s: %s", res.Type(), res.Inspect())
+	}
+}
+
+// falha de rede (DNS, conexao recusada, timeout, resposta cortada) vem com
+// erro_tipo "rede"; url com esquema errado continua "builtin"
+func TestBuscaFalhaDeRedeTemTipoRede(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("sem rede local: %v", err)
+	}
+	recusada := "http://" + ln.Addr().String() + "/"
+	ln.Close()
+
+	lento := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+	}))
+	defer lento.Close()
+	timeout := object.NovoDicionario()
+	kt := &object.Texto{Value: "timeout"}
+	timeout.Bota(kt.ChaveHash(), object.ParDic{Chave: kt, Valor: object.NumFloat(0.05)})
+
+	cortado := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		io.WriteString(w, "so um pedaco")
+	}))
+	defer cortado.Close()
+
+	casos := []struct {
+		nome string
+		args []object.Object
+		kind string
+	}{
+		{"recusada", []object.Object{&object.Texto{Value: recusada}}, KindRede},
+		{"dns", []object.Object{&object.Texto{Value: "http://gambiarra-nao-existe.invalid/"}}, KindRede},
+		{"timeout", []object.Object{&object.Texto{Value: lento.URL}, timeout}, KindRede},
+		{"resposta cortada", []object.Object{&object.Texto{Value: cortado.URL}}, KindRede},
+		{"esquema", []object.Object{&object.Texto{Value: "ftp://exemplo.com/x"}}, KindBuiltin},
+	}
+	for _, c := range casos {
+		res := builtinBusca(c.args)
+		e, ok := res.(*object.Erro)
+		if !ok {
+			t.Errorf("%s: esperava erro, veio %s: %s", c.nome, res.Type(), res.Inspect())
+			continue
+		}
+		if e.Kind != c.kind {
+			t.Errorf("%s: tipo %q, esperava %q (%s)", c.nome, e.Kind, c.kind, e.Message)
+		}
 	}
 }
 

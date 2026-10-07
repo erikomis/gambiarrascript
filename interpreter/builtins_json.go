@@ -32,16 +32,31 @@ func builtinPraJson(args []object.Object) object.Object {
 	}
 	var buf bytes.Buffer
 	if erro := escreveJson(&buf, args[0]); erro != nil {
+		if erro.Message == "deu ruim: "+msgCicloJson {
+			return erroBuiltin("pra_json(): %s", msgCicloJson)
+		}
 		return erro
 	}
 	return &object.Texto{Value: buf.String()}
 }
+
+// msgCicloJson: lista/dicionario que contem ele mesmo (`adiciona(xs, xs)`) nao
+// tem JSON — descer nele estourava a pilha do Go e derrubava o processo.
+const msgCicloJson = "estrutura que contem ela mesma nao vira JSON, parca"
 
 // escreveJson serializa o valor direto no buffer. E escrito na mao (em vez de
 // montar um map[string]interface{} e chamar json.Marshal) porque o Marshal
 // ordena as chaves de map alfabeticamente — o dicionario tem que sair na ordem
 // de insercao, igual JSON.stringify do JS e json.dumps do Python.
 func escreveJson(buf *bytes.Buffer, o object.Object) *object.Erro {
+	return escreveJsonRec(buf, o, nil)
+}
+
+// escreveJsonRec carrega emCurso: as listas/dicionarios abertos no caminho
+// ate aqui (por ponteiro). Achar de novo um deles e ciclo; a mesma lista em
+// dois lugares lado a lado (sem ciclo) sai normal nos dois. O map so nasce
+// quando aparece colecao dentro de colecao.
+func escreveJsonRec(buf *bytes.Buffer, o object.Object, emCurso map[object.Object]bool) *object.Erro {
 	switch val := o.(type) {
 	case *object.Nada:
 		buf.WriteString("null")
@@ -66,17 +81,27 @@ func escreveJson(buf *bytes.Buffer, o object.Object) *object.Erro {
 	case *object.Texto:
 		escreveTextoJson(buf, val.Value)
 	case *object.Lista:
+		if emCurso[val] {
+			return erroBuiltin("%s", msgCicloJson)
+		}
 		buf.WriteByte('[')
 		for i, e := range val.Visao() {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			if erro := escreveJson(buf, e); erro != nil {
+			if ehColecaoJson(e) {
+				emCurso = marcaEmCurso(emCurso, val)
+			}
+			if erro := escreveJsonRec(buf, e, emCurso); erro != nil {
 				return erro
 			}
 		}
+		delete(emCurso, val)
 		buf.WriteByte(']')
 	case *object.Dicionario:
+		if emCurso[val] {
+			return erroBuiltin("%s", msgCicloJson)
+		}
 		buf.WriteByte('{')
 		var erro *object.Erro
 		primeiro := true
@@ -90,11 +115,15 @@ func escreveJson(buf *bytes.Buffer, o object.Object) *object.Erro {
 			primeiro = false
 			escreveTextoJson(buf, chaveJson(par.Chave))
 			buf.WriteByte(':')
-			erro = escreveJson(buf, par.Valor)
+			if ehColecaoJson(par.Valor) {
+				emCurso = marcaEmCurso(emCurso, val)
+			}
+			erro = escreveJsonRec(buf, par.Valor, emCurso)
 		})
 		if erro != nil {
 			return erro
 		}
+		delete(emCurso, val)
 		buf.WriteByte('}')
 	default:
 		return erroBuiltin("nao da pra virar json: %s", o.Type())
@@ -124,4 +153,21 @@ func chaveJson(o object.Object) string {
 		return k.Inspect()
 	}
 	return o.Inspect()
+}
+
+func ehColecaoJson(o object.Object) bool {
+	switch o.(type) {
+	case *object.Lista, *object.Dicionario:
+		return true
+	}
+	return false
+}
+
+// marcaEmCurso poe a colecao no caminho (criando o map se ainda nao tinha).
+func marcaEmCurso(emCurso map[object.Object]bool, c object.Object) map[object.Object]bool {
+	if emCurso == nil {
+		emCurso = map[object.Object]bool{}
+	}
+	emCurso[c] = true
+	return emCurso
 }

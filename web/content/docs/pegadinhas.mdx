@@ -155,6 +155,20 @@ mostra nada == nada   # deu_bom
 mostra "" == nada     # deu_ruim
 ```
 
+## Botar `nada` nao apaga a chave
+
+`bota d["k"] = nada` deixa a chave **la**, com valor `nada` — `tem(d, "k")`
+continua `deu_bom` e ela aparece em `chaves(d)` e no `pra_cada`. Pra apagar de
+verdade, `remove(d, "k")`.
+
+```gambiarrascript
+bota d = {"k": 1}
+bota d["k"] = nada
+mostra tem(d, "k")    # deu_bom
+remove(d, "k")
+mostra tem(d, "k")    # deu_ruim
+```
+
 ## Ordem de avaliacao na chamada muda entre os motores
 
 Numa chamada `f(args)`, o tree-walker (`gs roda --tree`) avalia **primeiro** o

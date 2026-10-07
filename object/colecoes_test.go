@@ -85,3 +85,66 @@ func TestTravaSeguraEReentrada(t *testing.T) {
 		t.Fatalf("contador %d, queria 4000", n)
 	}
 }
+
+// ordenado (miolo do dicionario/conjunto): depois de muito bota/tira, com os
+// buracos e as compactacoes no meio, a ordem tem que ser exatamente a de um
+// modelo ingenuo (slice de chaves, tira arrastando o resto).
+func TestOrdenadoMantemOrdemComBuracos(t *testing.T) {
+	o := novoOrdenado[int]()
+	var modelo []string
+	valores := map[string]int{}
+	chave := func(s string) HashKey { return HashKey{Tipo: TEXTO_OBJ, Valor: s} }
+	for passo := 0; passo < 5000; passo++ {
+		k := "k" + strconv.Itoa((passo*7919)%97)
+		if passo%3 == 0 {
+			if o.tira(chave(k)) {
+				for i, m := range modelo {
+					if m == k {
+						modelo = append(modelo[:i], modelo[i+1:]...)
+						break
+					}
+				}
+				delete(valores, k)
+			}
+			continue
+		}
+		if _, ja := valores[k]; !ja {
+			modelo = append(modelo, k)
+		}
+		valores[k] = passo
+		o.bota(chave(k), passo)
+	}
+	var got []string
+	o.cada(func(k HashKey, v int) {
+		got = append(got, k.Valor)
+		if valores[k.Valor] != v {
+			t.Errorf("%s = %d, queria %d", k.Valor, v, valores[k.Valor])
+		}
+	})
+	if len(got) != len(modelo) || o.tamanho() != len(modelo) {
+		t.Fatalf("tamanho %d/%d, modelo %d", len(got), o.tamanho(), len(modelo))
+	}
+	for i := range got {
+		if got[i] != modelo[i] {
+			t.Fatalf("ordem diverge na posicao %d: %v vs %v", i, got, modelo)
+		}
+	}
+	if len(o.slots) > 2*len(modelo)+17 {
+		t.Fatalf("buracos nao foram compactados: %d slots pra %d vivos", len(o.slots), len(modelo))
+	}
+}
+
+// Inspect de estrutura que contem ela mesma nao pode descer pra sempre
+func TestInspectComCiclo(t *testing.T) {
+	xs := NovaLista(nil)
+	xs.Adiciona(xs)
+	if got := xs.Inspect(); got != "[[...]]" {
+		t.Fatalf("lista: %q", got)
+	}
+	d := NovoDicionario()
+	k := &Texto{Value: "eu"}
+	d.Bota(k.ChaveHash(), ParDic{Chave: k, Valor: d})
+	if got := d.Inspect(); got != `{"eu": {...}}` {
+		t.Fatalf("dicionario: %q", got)
+	}
+}

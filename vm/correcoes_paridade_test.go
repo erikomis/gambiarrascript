@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"net"
 	"strings"
 	"testing"
 )
@@ -503,4 +504,197 @@ acabou_finalmente`
 	if !strings.Contains(errStr, "vaza") {
 		t.Fatalf("esperava erro de vaza fora de laco, veio %q", errStr)
 	}
+}
+
+// remove(dicionario, chave) apaga a chave — antes nao tinha jeito nenhum de
+// tirar chave de dicionario. Mesmo contrato do remove de lista: devolve nada,
+// e chave que nao existe e um no-op calado. Chave que volta entra no fim.
+func TestRemoveChaveDeDicionario(t *testing.T) {
+	casos := []struct{ src, saida, erro string }{
+		{`bota d = {"a": 1, "b": 2, "c": 3}
+mostra remove(d, "b")
+mostra d
+mostra tamanho(d)
+mostra tem(d, "b")
+mostra d["b"]
+remove(d, "nem_existe")
+mostra d
+bota d["b"] = 9
+mostra d
+mostra chaves(d)`, "nada\n{\"a\": 1, \"c\": 3}\n2\ndeu_ruim\nnada\n{\"a\": 1, \"c\": 3}\n{\"a\": 1, \"c\": 3, \"b\": 9}\n[a, c, b]\n", ""},
+		// chave numero/booleano e texto "1" sao chaves diferentes
+		{`bota d = {1: "um", "1": "texto um", deu_bom: "sim"}
+remove(d, 1)
+remove(d, deu_bom)
+mostra d`, "{\"1\": \"texto um\"}\n", ""},
+		// apagar dentro do pra_cada: o laco percorre as chaves de antes, e a
+		// chave apagada no meio vem com valor nada
+		{`bota d = {"a": 1, "b": 2, "c": 3}
+pra_cada k, v em d
+    mostra "${k}=${v}"
+    se_colar k == "a"
+        remove(d, "b")
+    acabou_finalmente
+acabou_finalmente
+mostra d`, "a=1\nb=nada\nc=3\n{\"a\": 1, \"c\": 3}\n", ""},
+		// apaga quase tudo e o dicionario continua usavel e na ordem
+		{`bota d = {}
+pra_cada i de 1 ate 100
+    bota d[i] = i * i
+acabou_finalmente
+pra_cada i de 1 ate 99
+    remove(d, i)
+acabou_finalmente
+mostra d
+bota d["x"] = 1
+mostra chaves(d)
+mostra tamanho(d)`, "{100: 10000}\n[100, x]\n2\n", ""},
+		{`bota d = {"a": 1}
+remove(d, [1])`, "", "remove() nao consegue usar LISTA como chave"},
+		// remove(lista) continua igual
+		{`bota xs = [1, 2, 1]
+mostra remove(xs, 1)
+remove(xs, 7)
+mostra xs`, "nada\n[2, 1]\n", ""},
+		{`remove(3, 1)`, "", "remove() espera lista, dicionario ou conjunto, veio NUMERO"},
+	}
+	for _, c := range casos {
+		esperaNosDois(t, c.src, c.saida, c.erro)
+	}
+}
+
+// conjunto: remove(conj, item) tambem vale (mesmo contrato: nada), tamanho()
+// aceita conjunto e a ordem e a de insercao — na impressao e no pra_cada.
+func TestConjuntoTamanhoRemoveEOrdem(t *testing.T) {
+	casos := []struct{ src, saida, erro string }{
+		{`bota c = conjunto([3, 1, 2, 3, 1])
+mostra tamanho(c)
+mostra c
+mostra remove(c, 1)
+remove(c, 42)
+mostra c
+mostra tamanho(c)
+mostra remove_conjunto(c, 3)
+adiciona_conjunto(c, 1)
+adiciona_conjunto(c, 3)
+mostra c`, "3\n{3, 1, 2}\nnada\n{3, 2}\n2\n{2}\n{2, 1, 3}\n", ""},
+		{`mostra tamanho(conjunto([]))
+mostra conjunto([])`, "0\nconjunto()\n", ""},
+		{`bota c = conjunto([])
+pra_cada i de 1 ate 30
+    adiciona_conjunto(c, 31 - i)
+acabou_finalmente
+mostra c`, "{30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1}\n", ""},
+		{`bota c = conjunto(["z", "a", "m"])
+pra_cada x em c
+    mostra x
+acabou_finalmente
+pra_cada i, x em c
+    mostra "${i}:${x}"
+acabou_finalmente`, "z\na\nm\n0:z\n1:a\n2:m\n", ""},
+		{`mostra uniao(conjunto([3, 1]), conjunto([2, 1, 0]))
+mostra intersecao(conjunto([3, 2, 1]), conjunto([1, 3]))
+mostra diferenca(conjunto([3, 2, 1]), conjunto([2]))
+mostra conjunto("banana")`, "{3, 1, 2, 0}\n{3, 1}\n{3, 1}\n{\"b\", \"a\", \"n\"}\n", ""},
+		// tira e poe muito: os buracos da remocao nao baguncam a ordem
+		{`bota c = conjunto([])
+pra_cada i de 1 ate 200
+    adiciona_conjunto(c, i)
+acabou_finalmente
+pra_cada i de 1 ate 197
+    remove(c, i)
+acabou_finalmente
+adiciona_conjunto(c, 1)
+mostra c
+mostra tamanho(c)`, "{198, 199, 200, 1}\n4\n", ""},
+	}
+	for _, c := range casos {
+		esperaNosDois(t, c.src, c.saida, c.erro)
+	}
+}
+
+// estrutura que contem ela mesma: mostra/texto/interpolacao imprimem a marca
+// [...]/{...} (igual Python), pra_json da erro e == nao fica em laco eterno.
+// Antes os tres estouravam a pilha do Go e derrubavam o processo.
+func TestEstruturaQueContemElaMesma(t *testing.T) {
+	casos := []struct{ src, saida, erro string }{
+		{`bota xs = []
+adiciona(xs, xs)
+mostra xs
+bota ys = [1, 2]
+adiciona(ys, ys)
+mostra ys
+mostra "${ys}"
+mostra texto(ys)`, "[[...]]\n[1, 2, [...]]\n[1, 2, [...]]\n[1, 2, [...]]\n", ""},
+		{`bota d = {"nome": "x"}
+bota d["eu"] = d
+mostra d
+bota a = []
+bota m = {"lista": a}
+adiciona(a, m)
+mostra a
+mostra m`, "{\"nome\": \"x\", \"eu\": {...}}\n[{\"lista\": [...]}]\n{\"lista\": [{...}]}\n", ""},
+		// mesma lista duas vezes (sem ciclo) NAO e marcada
+		{`bota s = [1]
+bota par = [s, s]
+mostra par
+mostra pra_json(par)
+bota d = {"a": s, "b": s}
+mostra d
+mostra pra_json(d)`, "[[1], [1]]\n[[1],[1]]\n{\"a\": [1], \"b\": [1]}\n{\"a\":[1],\"b\":[1]}\n", ""},
+		{`bota xs = []
+adiciona(xs, xs)
+pra_json(xs)`, "", "pra_json(): estrutura que contem ela mesma nao vira JSON, parca"},
+		{`bota d = {"a": [1]}
+adiciona(d["a"], d)
+arruma
+    pra_json(d)
+quebrou err
+    mostra erro_msg(err)
+acabou_finalmente`, "deu ruim: pra_json(): estrutura que contem ela mesma nao vira JSON, parca\n", ""},
+		{`bota a = []
+adiciona(a, a)
+bota b = []
+adiciona(b, b)
+mostra a == a
+mostra a == b
+mostra a != b
+bota c = [1]
+adiciona(c, c)
+mostra a == c
+bota p = []
+bota q = [p]
+adiciona(p, q)
+mostra a == p
+bota d1 = {"x": 1}
+bota d1["eu"] = d1
+bota d2 = {"x": 1}
+bota d2["eu"] = d2
+mostra d1 == d2
+bota d2["x"] = 2
+mostra d1 == d2
+bota xs = [a]
+mostra xs == [b]
+remove(xs, b)
+mostra xs`, "deu_bom\ndeu_bom\ndeu_ruim\ndeu_ruim\ndeu_bom\ndeu_bom\ndeu_ruim\ndeu_bom\n[]\n", ""},
+	}
+	for _, c := range casos {
+		esperaNosDois(t, c.src, c.saida, c.erro)
+	}
+}
+
+// falha de conexao do busca e erro de rede, nao de builtin
+func TestBuscaFalhaDeConexaoETipoRede(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("sem rede local: %v", err)
+	}
+	endereco := ln.Addr().String()
+	ln.Close() // porta fechada: conexao recusada
+	src := `arruma
+    busca("http://` + endereco + `/")
+quebrou err
+    mostra erro_tipo(err)
+acabou_finalmente`
+	esperaNosDois(t, src, "rede\n", "")
 }

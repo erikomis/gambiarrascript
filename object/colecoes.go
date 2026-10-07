@@ -43,12 +43,28 @@ func NovaLista(elems []Object) *Lista {
 }
 
 func (l *Lista) Type() ObjectType { return LISTA_OBJ }
-func (l *Lista) Inspect() string {
+func (l *Lista) Inspect() string  { return l.inspect(nil) }
+
+// inspect com emCurso: as colecoes que ja estao sendo impressas mais acima
+// (ver "ciclos" no fim do arquivo).
+func (l *Lista) inspect(emCurso map[Object]bool) string {
+	if emCurso[l] {
+		return "[...]"
+	}
 	elems := l.Visao()
 	partes := make([]string, len(elems))
 	for i, e := range elems {
-		partes[i] = e.Inspect()
+		if ehColecaoAninhavel(e) {
+			if emCurso == nil {
+				emCurso = map[Object]bool{}
+			}
+			emCurso[l] = true
+			partes[i] = inspectDentro(e, emCurso)
+		} else {
+			partes[i] = e.Inspect()
+		}
 	}
+	delete(emCurso, l)
 	return "[" + strings.Join(partes, ", ") + "]"
 }
 
@@ -260,6 +276,98 @@ func FatiaLista(l *Lista, inicio, fim *Numero) *Lista {
 	return NovaLista(elems)
 }
 
+// ---------------------------------------------------------------- ordenado
+
+// ordenado e o miolo do Dicionario e do Conjunto: valores por chave lembrando
+// a ordem em que ENTRARAM, com pega/bota/tira O(1). Sem a ordem a iteracao
+// usava a do map do Go, que e embaralhada de proposito e muda a cada execucao
+// — `pra_cada k em d` (e o `mostra` de um conjunto) saia diferente toda vez.
+// Igual Python 3.7+ e JS: quem chega primeiro, sai primeiro.
+//
+// Tirar deixa um buraco no slice (vivo=false) em vez de arrastar o resto pra
+// tras; quando os buracos passam da metade o slice e compactado, entao o custo
+// amortizado continua O(1). Nao trava nada: quem usa (Dicionario/Conjunto) e
+// que segura a trava dele.
+type ordenado[V any] struct {
+	pos     map[HashKey]int // chave -> indice em slots
+	slots   []slot[V]
+	buracos int
+}
+
+type slot[V any] struct {
+	k    HashKey
+	v    V
+	vivo bool
+}
+
+func novoOrdenado[V any]() ordenado[V] {
+	return ordenado[V]{pos: map[HashKey]int{}}
+}
+
+func (o *ordenado[V]) tamanho() int { return len(o.pos) }
+
+func (o *ordenado[V]) pega(k HashKey) (V, bool) {
+	if i, ok := o.pos[k]; ok {
+		return o.slots[i].v, true
+	}
+	var zero V
+	return zero, false
+}
+
+// bota insere ou atualiza. Atualizar chave que ja existe NAO muda o lugar dela
+// na ordem (igual Python/JS). Devolve true se a chave era nova.
+func (o *ordenado[V]) bota(k HashKey, v V) bool {
+	if i, ok := o.pos[k]; ok {
+		o.slots[i].v = v
+		return false
+	}
+	o.pos[k] = len(o.slots)
+	o.slots = append(o.slots, slot[V]{k: k, v: v, vivo: true})
+	return true
+}
+
+// tira remove a chave. Devolve true se existia.
+func (o *ordenado[V]) tira(k HashKey) bool {
+	i, ok := o.pos[k]
+	if !ok {
+		return false
+	}
+	delete(o.pos, k)
+	o.slots[i] = slot[V]{} // buraco (e solta o valor pro GC)
+	o.buracos++
+	switch {
+	case len(o.pos) == 0:
+		o.slots = o.slots[:0]
+		o.buracos = 0
+	case o.buracos > 16 && o.buracos*2 > len(o.slots):
+		o.compacta()
+	}
+	return true
+}
+
+// compacta tira os buracos no lugar, mantendo a ordem dos vivos.
+func (o *ordenado[V]) compacta() {
+	vivos := o.slots[:0]
+	for _, s := range o.slots {
+		if s.vivo {
+			o.pos[s.k] = len(vivos)
+			vivos = append(vivos, s)
+		}
+	}
+	clear(o.slots[len(vivos):])
+	o.slots = vivos
+	o.buracos = 0
+}
+
+// cada roda f em cada valor vivo, na ordem de entrada. f nao pode mexer aqui.
+func (o *ordenado[V]) cada(f func(HashKey, V)) {
+	for _, s := range o.slots {
+		if s.vivo {
+			f(s.k, s.v)
+		}
+	}
+}
+
 // ---------------------------------------------------------------- Dicionario
 
 type ParDic struct {
@@ -269,26 +377,37 @@ type ParDic struct {
 
 type Dicionario struct {
 	mu    sync.Mutex // so usado com o modo concorrente ligado
-	pares map[HashKey]ParDic
-	// ordem guarda as chaves na ordem em que ENTRARAM. Sem ela a iteracao usava
-	// a ordem do map do Go, que e embaralhada de proposito e muda a cada
-	// execucao — `pra_cada k em d` saia diferente toda vez que voce rodava.
-	// Igual Python 3.7+ e JS: quem chega primeiro, sai primeiro.
-	ordem []HashKey
+	pares ordenado[ParDic]
 }
 
 // NovoDicionario cria um dicionario vazio pronto pra receber Bota.
 func NovoDicionario() *Dicionario {
-	return &Dicionario{pares: map[HashKey]ParDic{}}
+	return &Dicionario{pares: novoOrdenado[ParDic]()}
 }
 
 func (d *Dicionario) Type() ObjectType { return DICIONARIO_OBJ }
-func (d *Dicionario) Inspect() string {
+func (d *Dicionario) Inspect() string  { return d.inspect(nil) }
+
+func (d *Dicionario) inspect(emCurso map[Object]bool) string {
+	if emCurso[d] {
+		return "{...}"
+	}
 	pares := d.Pares()
 	partes := make([]string, 0, len(pares))
 	for _, par := range pares {
-		partes = append(partes, inspectComAspas(par.Chave)+": "+inspectComAspas(par.Valor))
+		var v string
+		if ehColecaoAninhavel(par.Valor) {
+			if emCurso == nil {
+				emCurso = map[Object]bool{}
+			}
+			emCurso[d] = true
+			v = inspectDentro(par.Valor, emCurso)
+		} else {
+			v = inspectComAspas(par.Valor)
+		}
+		partes = append(partes, inspectComAspas(par.Chave)+": "+v)
 	}
+	delete(emCurso, d)
 	return "{" + strings.Join(partes, ", ") + "}"
 }
 
@@ -296,23 +415,22 @@ func (d *Dicionario) Inspect() string {
 func (d *Dicionario) Tamanho() int {
 	if concorrencia.Load() {
 		d.mu.Lock()
-		n := len(d.pares)
+		n := d.pares.tamanho()
 		d.mu.Unlock()
 		return n
 	}
-	return len(d.pares)
+	return d.pares.tamanho()
 }
 
 // Pega busca o par da chave.
 func (d *Dicionario) Pega(k HashKey) (ParDic, bool) {
 	if concorrencia.Load() {
 		d.mu.Lock()
-		par, ok := d.pares[k]
+		par, ok := d.pares.pega(k)
 		d.mu.Unlock()
 		return par, ok
 	}
-	par, ok := d.pares[k]
-	return par, ok
+	return d.pares.pega(k)
 }
 
 // PegaTexto e o atalho pra chave texto (`d["nome"]`) usado pelos builtins.
@@ -326,37 +444,21 @@ func (d *Dicionario) PegaTexto(nome string) (Object, bool) {
 func (d *Dicionario) Bota(k HashKey, par ParDic) {
 	if concorrencia.Load() {
 		d.mu.Lock()
-		d.bota(k, par)
+		d.pares.bota(k, par)
 		d.mu.Unlock()
 		return
 	}
-	d.bota(k, par)
+	d.pares.bota(k, par)
 }
 
-func (d *Dicionario) bota(k HashKey, par ParDic) {
-	if _, ja := d.pares[k]; !ja {
-		d.ordem = append(d.ordem, k)
-	}
-	d.pares[k] = par
-}
-
-// Tira remove a chave do dicionario e da ordem. Devolve true se existia.
+// Tira remove a chave do dicionario (O(1) amortizado). Devolve true se
+// existia. Se a chave voltar depois, ela entra no FIM da ordem.
 func (d *Dicionario) Tira(k HashKey) bool {
 	if concorrencia.Load() {
 		d.mu.Lock()
 		defer d.mu.Unlock()
 	}
-	if _, ja := d.pares[k]; !ja {
-		return false
-	}
-	delete(d.pares, k)
-	for i, o := range d.ordem {
-		if o == k {
-			d.ordem = append(d.ordem[:i], d.ordem[i+1:]...)
-			break
-		}
-	}
-	return true
+	return d.pares.tira(k)
 }
 
 // Chaves devolve uma COPIA das chaves na ordem de insercao.
@@ -365,8 +467,8 @@ func (d *Dicionario) Chaves() []HashKey {
 		d.mu.Lock()
 		defer d.mu.Unlock()
 	}
-	out := make([]HashKey, len(d.ordem))
-	copy(out, d.ordem)
+	out := make([]HashKey, 0, d.pares.tamanho())
+	d.pares.cada(func(k HashKey, _ ParDic) { out = append(out, k) })
 	return out
 }
 
@@ -377,10 +479,8 @@ func (d *Dicionario) Pares() []ParDic {
 		d.mu.Lock()
 		defer d.mu.Unlock()
 	}
-	out := make([]ParDic, len(d.ordem))
-	for i, k := range d.ordem {
-		out[i] = d.pares[k]
-	}
+	out := make([]ParDic, 0, d.pares.tamanho())
+	d.pares.cada(func(_ HashKey, par ParDic) { out = append(out, par) })
 	return out
 }
 
@@ -394,21 +494,21 @@ func (d *Dicionario) Itera(f func(ParDic)) {
 		}
 		return
 	}
-	for _, k := range d.ordem {
-		f(d.pares[k])
-	}
+	d.pares.cada(func(_ HashKey, par ParDic) { f(par) })
 }
 
 // ---------------------------------------------------------------- Conjunto
 
-// Conjunto implementa set com chaves do mesmo Dicionario (Chaveavel).
+// Conjunto implementa set com chaves do mesmo Dicionario (Chaveavel). Lembra a
+// ordem de insercao igual o dicionario: `mostra` e `pra_cada` saem sempre na
+// mesma ordem (antes era a ordem embaralhada do map do Go).
 type Conjunto struct {
 	mu    sync.Mutex // so usado com o modo concorrente ligado
-	itens map[HashKey]Object
+	itens ordenado[Object]
 }
 
 func NovoConjunto() *Conjunto {
-	return &Conjunto{itens: map[HashKey]Object{}}
+	return &Conjunto{itens: novoOrdenado[Object]()}
 }
 
 // Adiciona insere v no conjunto. Devolve true se era novo.
@@ -422,11 +522,10 @@ func (c *Conjunto) Adiciona(v Object) bool {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 	}
-	if _, existe := c.itens[k]; existe {
-		return false
+	if _, existe := c.itens.pega(k); existe {
+		return false // ja tinha: fica o primeiro, no lugar dele
 	}
-	c.itens[k] = v
-	return true
+	return c.itens.bota(k, v)
 }
 
 // Contem devolve true se v esta no conjunto.
@@ -438,11 +537,11 @@ func (c *Conjunto) Contem(v Object) bool {
 	k := ch.ChaveHash()
 	if concorrencia.Load() {
 		c.mu.Lock()
-		_, existe := c.itens[k]
+		_, existe := c.itens.pega(k)
 		c.mu.Unlock()
 		return existe
 	}
-	_, existe := c.itens[k]
+	_, existe := c.itens.pega(k)
 	return existe
 }
 
@@ -457,11 +556,7 @@ func (c *Conjunto) Remove(v Object) bool {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 	}
-	if _, existe := c.itens[k]; !existe {
-		return false
-	}
-	delete(c.itens, k)
-	return true
+	return c.itens.tira(k)
 }
 
 // Tamanho devolve quantos itens o conjunto tem agora.
@@ -470,19 +565,17 @@ func (c *Conjunto) Tamanho() int {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 	}
-	return len(c.itens)
+	return c.itens.tamanho()
 }
 
-// Valores devolve uma COPIA dos itens (ordem nao garantida).
+// Valores devolve uma COPIA dos itens, na ordem de insercao.
 func (c *Conjunto) Valores() []Object {
 	if concorrencia.Load() {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 	}
-	out := make([]Object, 0, len(c.itens))
-	for _, v := range c.itens {
-		out = append(out, v)
-	}
+	out := make([]Object, 0, c.itens.tamanho())
+	c.itens.cada(func(_ HashKey, v Object) { out = append(out, v) })
 	return out
 }
 
@@ -497,4 +590,39 @@ func (c *Conjunto) Inspect() string {
 		return "conjunto()"
 	}
 	return "{" + strings.Join(partes, ", ") + "}"
+}
+
+// ---------------------------------------------------------------- ciclos
+
+// Estrutura que contem ela mesma (`adiciona(xs, xs)`, `bota d["eu"] = d`)
+// fazia o Inspect descer pra sempre e estourar a pilha do Go — fatal, nem o
+// recover pega, derrubava o processo. Agora a colecao que ja esta sendo
+// impressa mais acima no caminho vira a marca [...] ou {...}, igual o Python.
+//
+// emCurso e por PONTEIRO e guarda so o caminho atual: a mesma lista aparecendo
+// duas vezes lado a lado (`[s, s]`, sem ciclo) sai inteira nas duas. O map so
+// e criado quando aparece colecao dentro de colecao — lista de numero nao paga
+// nada. As colecoes sao lidas por retrato (Visao/Pares), entao nenhuma trava
+// fica presa enquanto a de dentro e impressa.
+
+// ehColecaoAninhavel diz se o valor pode (direta ou indiretamente) conter
+// colecao — e portanto fechar um ciclo. Conjunto so guarda chave (texto,
+// numero, booleano), entao nunca fecha.
+func ehColecaoAninhavel(o Object) bool {
+	switch o.(type) {
+	case *Lista, *Dicionario:
+		return true
+	}
+	return false
+}
+
+// inspectDentro imprime uma lista/dicionario que esta dentro de outra colecao.
+func inspectDentro(o Object, emCurso map[Object]bool) string {
+	switch c := o.(type) {
+	case *Lista:
+		return c.inspect(emCurso)
+	case *Dicionario:
+		return c.inspect(emCurso)
+	}
+	return inspectComAspas(o)
 }

@@ -6,7 +6,8 @@ description: "Colecoes do GambiarraScript: lista (array), dicionario (hash map c
 GambiarraScript tem tres colecoes: **lista** (array ordenado, indice inteiro),
 **dicionario** (hash map que lembra a ordem de insercao, chave em
 texto/numero/booleano) e **conjunto** (set). Lista e dicionario suportam
-`pra_cada`, indexacao `x[i]` e atribuicao `bota x[i] = v`.
+indexacao `x[i]` e atribuicao `bota x[i] = v`; as tres suportam `pra_cada`,
+`tamanho` e `remove`.
 
 ## Listas
 
@@ -65,6 +66,25 @@ bota misto = [1, "dois", [3, 4], {"cinco": 5}]
 mostra misto[2][1]         # 4
 mostra misto[3]["cinco"]   # 5
 ```
+
+Lista ou dicionario pode ate guardar **ele mesmo**. Na hora de imprimir, o
+pedaco que fecharia o ciclo vira `[...]` (ou `{...}`), igual o Python; o `==`
+entre estruturas assim termina normal; e o `pra_json` da erro, porque JSON nao
+tem como representar ciclo:
+
+```gambiarrascript
+bota xs = [1, 2]
+adiciona(xs, xs)
+mostra xs                  # [1, 2, [...]]
+
+bota no = {"nome": "raiz"}
+bota no["pai"] = no
+mostra no                  # {"nome": "raiz", "pai": {...}}
+
+pra_json(xs)               # erro: pra_json(): estrutura que contem ela mesma nao vira JSON, parca
+```
+
+A mesma lista em dois lugares (`[s, s]`) nao e ciclo: sai inteira nas duas.
 
 ### Builtins de lista
 
@@ -178,6 +198,7 @@ outra NUMERO. Elas nao colidem; sao duas chaves distintas.
 | `tamanho(dic)` | `(dicionario)` | `numero` | numero de pares |
 | `chaves(dic)` | `(dicionario)` | `lista` | na ordem de insercao |
 | `tem(dic, chave)` | `(dicionario, valor)` | `booleano` | confere se a chave existe |
+| `remove(dic, chave)` | `(dicionario, valor)` | `nada` | **muta**: apaga a chave; se ela nao existe, nao faz nada |
 
 ```gambiarrascript
 bota d = {"a": 1, "b": 2, "c": 3}
@@ -185,7 +206,18 @@ mostra tamanho(d)               # 3
 mostra chaves(d)                # [a, b, c]
 mostra tem(d, "b")              # deu_bom
 mostra tem(d, "z")              # deu_ruim
+
+remove(d, "b")
+mostra d                        # {"a": 1, "c": 3}
+remove(d, "z")                  # chave que nao existe: nao faz nada
+bota d["b"] = 2                 # chave que volta entra no fim
+mostra chaves(d)                # [a, c, b]
 ```
+
+`bota d["b"] = nada` **nao** apaga: a chave continua la (com valor `nada`) e
+`tem(d, "b")` segue `deu_bom`. Pra tirar de verdade, `remove`. Apagar dentro
+de um `pra_cada` no mesmo dicionario e seguro: o laco percorre as chaves de
+quando comecou, e a que sumiu no meio vem com valor `nada`.
 
 ### Iteracao com `pra_cada`
 
@@ -258,12 +290,25 @@ mostra [nome, idade, cpf]             # [Erik, 25, nada]
 
 `conjunto(lista)` cria um set (sem repetidos). Operacoes: `contem_conjunto`,
 `adiciona_conjunto`, `remove_conjunto`, `uniao`, `intersecao`, `diferenca` —
-veja [Biblioteca padrao](/docs/biblioteca#conjunto). A ordem de impressao de um
-conjunto nao e garantida.
+veja [Biblioteca padrao](/docs/biblioteca#conjunto). `tamanho(c)` conta os
+itens e `remove(c, item)` tira um (devolve `nada`, igual na lista; o
+`remove_conjunto` devolve o proprio conjunto). Igual ao dicionario, o conjunto
+**lembra a ordem de insercao**: `mostra` e `pra_cada` saem sempre na mesma
+ordem.
 
 ```gambiarrascript
 bota vistos = conjunto(["ana", "bia", "ana"])
 adiciona_conjunto(vistos, "caio")
+mostra vistos                            # {"ana", "bia", "caio"}
+mostra tamanho(vistos)                   # 3
 mostra contem_conjunto(vistos, "ana")    # deu_bom
 mostra contem_conjunto(vistos, "duda")   # deu_ruim
+
+remove(vistos, "bia")
+pra_cada nome em vistos
+    mostra nome                          # ana, depois caio
+acabou_finalmente
 ```
+
+Com dois nomes (`pra_cada i, nome em vistos`) vem a posicao e o item, igual
+na lista.

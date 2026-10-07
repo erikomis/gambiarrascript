@@ -33,6 +33,8 @@ JSON malformado da erro (pegue com `arruma` se vier de fora).
 Faz o caminho inverso — saida **compacta** (sem espacos), respeitando a ordem
 de insercao do dicionario. Chave numero/booleano vira string (`{1: "x"}` →
 `{"1":"x"}`). Conjunto, gambiarra, cano e futuro nao viram JSON (da erro).
+Lista ou dicionario que contem ele mesmo (`adiciona(xs, xs)`) tambem nao:
+`pra_json(): estrutura que contem ela mesma nao vira JSON, parca`.
 
 ```gambiarrascript
 mostra pra_json({"nada": nada, "pi": 3.14, "lista": [1, "a"]})   # {"nada":null,"pi":3.14,"lista":[1,"a"]}

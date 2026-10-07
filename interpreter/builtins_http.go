@@ -74,6 +74,12 @@ func builtinBusca(args []object.Object) object.Object {
 	if err != nil {
 		return erroBuiltin("nao consegui montar a requisicao pra %q: %v", urlObj.Value, err)
 	}
+	// url errada e erro de quem chamou (builtin); dai pra baixo tudo que
+	// falhar no cliente — DNS, conexao recusada, timeout, conexao caindo no
+	// meio da resposta — e erro de rede: erro_tipo(e) == "rede"
+	if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+		return erroBuiltin("busca() so fala http e https, e essa url ai e %q", urlObj.Value)
+	}
 	for k, v := range cabecalhos {
 		req.Header.Set(k, v)
 	}
@@ -90,15 +96,15 @@ func builtinBusca(args []object.Object) object.Object {
 	resp, err := cliente.Do(req)
 	if err != nil {
 		if ehErroCertificado(err) {
-			return erroBuiltin("deu ruim na conexao com %q: o certificado nao passou (%v) — servidor de dev com certificado proprio? passa {\"ca\": \"ca.pem\"}", urlObj.Value, err)
+			return erroBuiltinKind(KindRede, "deu ruim na conexao com %q: o certificado nao passou (%v) — servidor de dev com certificado proprio? passa {\"ca\": \"ca.pem\"}", urlObj.Value, err)
 		}
-		return erroBuiltin("deu ruim na conexao com %q: %v", urlObj.Value, err)
+		return erroBuiltinKind(KindRede, "deu ruim na conexao com %q: %v", urlObj.Value, err)
 	}
 	defer resp.Body.Close()
 
 	corpo, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return erroBuiltin("deu ruim lendo a resposta de %q: %v", urlObj.Value, err)
+		return erroBuiltinKind(KindRede, "deu ruim lendo a resposta de %q: %v", urlObj.Value, err)
 	}
 
 	return montaResposta(resp, corpo)

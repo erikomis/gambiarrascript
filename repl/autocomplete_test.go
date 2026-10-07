@@ -3,6 +3,8 @@ package repl
 import (
 	"strings"
 	"testing"
+
+	"gambiarrascript/vm"
 )
 
 func TestPalavraAntes(t *testing.T) {
@@ -35,6 +37,40 @@ func TestAutocompletaPrefixoComum(t *testing.T) {
 func TestAutocompletaSemMatch(t *testing.T) {
 	if _, _, ok := autocompleta("xyz", 3, []string{"tamanho"}); ok {
 		t.Fatalf("nao devia completar sem match")
+	}
+}
+
+// Os temporarios que o compilador cria (`__it_gs0`, `__cont_gs0`,
+// `__erro_gsN`...) moram no escopo global da sessao, mas nao sao do usuario:
+// nao podem aparecer no TAB.
+func TestAutocompleteEscondeTemporarios(t *testing.T) {
+	var out strings.Builder
+	s := vm.NovaSessao(&out)
+	fonte := "bota meu_valor = 1\n" +
+		"pra_cada i em [1, 2]\n    mostra i\nacabou_finalmente\n" +
+		"pra_cada k, v em {\"a\": 1}\n    mostra k\nacabou_finalmente\n" +
+		"enquanto meu_valor < 3\n    meu_valor += 1\nacabou_finalmente\n" +
+		"arruma\n    quebra(\"x\")\nquebrou err\n    mostra 1\nfinalmente\n    mostra 2\nacabou_finalmente\n" +
+		"escolhe meu_valor\ncaso 3\n    mostra 3\nacabou_finalmente\n"
+	avalia(s, fonte, &out)
+	if strings.Contains(out.String(), "deu ruim") {
+		t.Fatalf("fonte do teste quebrou: %s", out.String())
+	}
+	nomes := nomesCompletaveis(s)
+	achouMeu := false
+	for _, n := range nomes {
+		if strings.HasPrefix(n, "__") {
+			t.Errorf("temporario %q apareceu no autocomplete", n)
+		}
+		if n == "meu_valor" {
+			achouMeu = true
+		}
+	}
+	if !achouMeu {
+		t.Errorf("a variavel do usuario sumiu do autocomplete: %v", nomes)
+	}
+	if _, _, ok := autocompleta("__", 2, nomes); ok {
+		t.Errorf("TAB depois de __ completou temporario")
 	}
 }
 

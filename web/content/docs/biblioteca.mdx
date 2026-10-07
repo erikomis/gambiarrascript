@@ -26,7 +26,7 @@ no tree-walker (`gs roda --tree`).
 | --- | --- | --- |
 | `texto(v)` | `(qualquer)` | `texto` — conversao universal (o mesmo que o `mostra` imprime) |
 | `numero(t)` | `(texto)` | `numero` — aceita `"42"`, `" 3.5 "`, `"1e3"`; texto nao-numerico **da erro** |
-| `tamanho(x)` | `(texto, lista ou dicionario)` | `numero` — em texto conta caracteres (UTF-8), nao bytes |
+| `tamanho(x)` | `(texto, lista, dicionario ou conjunto)` | `numero` — em texto conta caracteres (UTF-8), nao bytes |
 | `tipo(x)` | `(qualquer)` | `texto` — `"numero"`, `"texto"`, `"booleano"`, `"nada"`, `"lista"`, `"dicionario"`, `"conjunto"`, `"funcao"`, `"erro"`, `"futuro"`, `"cano"`, `"trava"` ou `"nativo"` |
 
 ```gambiarrascript
@@ -98,7 +98,7 @@ Os que **mutam** a lista recebida (e devolvem `nada`):
 | Builtin | Assinatura | Notas |
 | --- | --- | --- |
 | `adiciona(lista, item)` | `(lista, valor)` | poe no fim |
-| `remove(lista, item)` | `(lista, valor)` | tira a **primeira** ocorrencia igual (`==`); se nao achar, nao faz nada |
+| `remove(lista, item)` | `(lista, valor)` | `nada` — tira a **primeira** ocorrencia igual (`==`); se nao achar, nao faz nada. Tambem apaga chave de dicionario e item de conjunto (abaixo) |
 | `ordena(lista)` | `(lista)` | crescente, estavel; so numeros **ou** so textos (misturar da erro) |
 | `ordena_com(lista, fn)` | `(lista, gambiarra)` | `fn(a, b)` devolve booleano (`a` vem antes?) ou numero (`<0`, `0`, `>0`) |
 | `inverte(lista)` | `(lista)` | inverte no lugar |
@@ -133,10 +133,20 @@ Os que **devolvem algo novo** (a original fica intacta):
 | `chaves(dic)` | `(dicionario)` | `lista` de chaves, na **ordem de insercao** |
 | `tem(dic, chave)` | `(dicionario, valor)` | `booleano` |
 | `tamanho(dic)` | `(dicionario)` | `numero` de pares |
+| `remove(dic, chave)` | `(dicionario, texto/numero/booleano)` | `nada` — **apaga** a chave (muta); chave que nao existe nao faz nada |
+
+```gambiarrascript
+bota d = {"a": 1, "b": 2}
+remove(d, "a")
+mostra d                     # {"b": 2}
+remove(d, "nem_tem")         # nao faz nada (nem erro)
+```
 
 ## Conjunto
 
-Conjunto (set) e um tipo proprio: sem repetidos, comparacao pelo `==`.
+Conjunto (set) e um tipo proprio: sem repetidos, comparacao pelo `==`. Igual
+ao dicionario, ele **lembra a ordem de insercao**: `mostra`, `pra_cada` e
+`uniao`/`intersecao`/`diferenca` saem sempre na mesma ordem.
 
 | Builtin | Assinatura | Devolve |
 | --- | --- | --- |
@@ -144,17 +154,21 @@ Conjunto (set) e um tipo proprio: sem repetidos, comparacao pelo `==`.
 | `contem_conjunto(c, v)` | `(conjunto, valor)` | `booleano` |
 | `adiciona_conjunto(c, v)` | `(conjunto, valor)` | o proprio conjunto (muta) |
 | `remove_conjunto(c, v)` | `(conjunto, valor)` | o proprio conjunto (muta) |
+| `remove(c, v)` | `(conjunto, valor)` | `nada` — tira o item (muta), mesmo contrato do `remove` de lista |
+| `tamanho(c)` | `(conjunto)` | `numero` de itens |
 | `uniao(a, b)` / `intersecao(a, b)` / `diferenca(a, b)` | `(conjunto, conjunto)` | `conjunto` novo |
 
 ```gambiarrascript
 bota s = conjunto([1, 2, 3, 2, 1])
-mostra s                                                 # {1, 2, 3} (em alguma ordem)
+mostra s                                                 # {1, 2, 3}
+mostra tamanho(s)                                        # 3
 mostra contem_conjunto(s, 2)                             # deu_bom
-mostra intersecao(conjunto([1, 2, 3]), conjunto([2, 3, 4]))   # {2, 3} (idem)
+mostra intersecao(conjunto([3, 2, 1]), conjunto([2, 3, 4]))   # {3, 2}
+remove(s, 1)
+pra_cada x em s
+    mostra x                                             # 2, depois 3
+acabou_finalmente
 ```
-
-A ordem em que um conjunto e impresso **nao e garantida**, e `tamanho()` nao
-aceita conjunto — se precisar contar, faca `unicos(lista)` e conte a lista.
 
 ## Numeros e matematica
 
@@ -334,7 +348,7 @@ Exemplo completo em `examples/seguranca.gs`.
 | Builtin | Assinatura | Devolve |
 | --- | --- | --- |
 | `de_json(t)` | `(texto)` | dicionario / lista / texto / numero / booleano / `nada` |
-| `pra_json(v)` | `(valor)` | `texto` compacto (sem espacos) |
+| `pra_json(v)` | `(valor)` | `texto` compacto (sem espacos); lista/dicionario que contem ele mesmo da erro |
 
 A ordem das chaves e preservada nos dois sentidos. Veja [JSON](/docs/json).
 

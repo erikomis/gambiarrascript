@@ -192,6 +192,8 @@ func builtinTamanho(args []object.Object) object.Object {
 		return object.NumInt(int64(arg.Tamanho()))
 	case *object.Dicionario:
 		return object.NumInt(int64(arg.Tamanho()))
+	case *object.Conjunto:
+		return object.NumInt(int64(arg.Tamanho()))
 	case *object.Texto:
 		return object.NumInt(int64(len([]rune(arg.Value))))
 	default:

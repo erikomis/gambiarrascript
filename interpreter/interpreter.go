@@ -803,9 +803,39 @@ func isTruthy(obj object.Object) bool {
 	}
 }
 
-func iguais(a, b object.Object) bool {
+// iguais compara por valor (lista e dicionario descem recursivo).
+//
+// Estrutura que contem ela mesma (`adiciona(xs, xs)`) descia pra sempre e
+// estourava a pilha do Go. Agora a mesma colecao dos dois lados e igual de
+// cara, e passado de profSemMemoria niveis a comparacao anota os pares (a, b)
+// que ja estao sendo comparados: cair de novo num par anotado e "igual ate
+// aqui" — se tiver diferenca, o resto da comparacao acha. Assim dois ciclos
+// do mesmo formato dao igual e a comparacao sempre termina. Comparacao rasa
+// (o normal) nao aloca nada. A VM tem a mesma logica em vm.iguais.
+func iguais(a, b object.Object) bool { return iguaisRec(a, b, 0, nil) }
+
+const profSemMemoria = 64
+
+func iguaisRec(a, b object.Object, prof int, vistos map[[2]object.Object]bool) bool {
 	if a.Type() != b.Type() {
 		return false
+	}
+	switch a.(type) {
+	case *object.Lista, *object.Dicionario:
+		if a == b {
+			return true
+		}
+		if prof >= profSemMemoria {
+			if vistos == nil {
+				vistos = map[[2]object.Object]bool{}
+			}
+			par := [2]object.Object{a, b}
+			if vistos[par] {
+				return true
+			}
+			vistos[par] = true
+		}
+		prof++
 	}
 	switch av := a.(type) {
 	case *object.Texto:
@@ -832,7 +862,7 @@ func iguais(a, b object.Object) bool {
 			return false
 		}
 		for j, e := range ae {
-			if !iguais(e, be[j]) {
+			if !iguaisRec(e, be[j], prof, vistos) {
 				return false
 			}
 		}
@@ -845,7 +875,7 @@ func iguais(a, b object.Object) bool {
 		}
 		for _, pa := range pares {
 			pb, ok := bd.Pega(pa.Chave.(object.Chaveavel).ChaveHash())
-			if !ok || !iguais(pa.Valor, pb.Valor) {
+			if !ok || !iguaisRec(pa.Valor, pb.Valor, prof, vistos) {
 				return false
 			}
 		}
@@ -968,6 +998,12 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 
 	doisNomes := len(node.Vars) == 2
 
+	// conjunto: percorre um retrato dos itens na ordem de insercao, como se
+	// fosse lista (com dois nomes vem indice e item — igual a VM)
+	if conj, ok := it.(*object.Conjunto); ok {
+		it = object.NovaLista(conj.Valores())
+	}
+
 	switch c := it.(type) {
 	case *object.Lista:
 		// com concorrencia percorre um retrato tirado agora (ParaIterar); sem,
@@ -1025,7 +1061,7 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 			}
 		}
 	default:
-		return newError(node.Token.Line, "pra_cada ... em ... so funciona com lista ou dicionario, e isso ai e %s", it.Type())
+		return newError(node.Token.Line, "pra_cada ... em ... so funciona com lista, dicionario ou conjunto, e isso ai e %s", it.Type())
 	}
 	return NADA
 }

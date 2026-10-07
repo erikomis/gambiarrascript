@@ -23,7 +23,17 @@ acabou_finalmente
 | `corpo_base64` | texto | **so** quando o corpo nao e texto UTF-8 valido (imagem, zip, pdf): os bytes em base64 |
 
 Status 4xx/5xx **nao** e erro: vem no `status`/`ok` pra voce decidir. Erro de
-verdade (DNS, conexao recusada, timeout) estoura — pegue com `arruma`.
+verdade (DNS, conexao recusada, timeout, conexao caindo no meio da resposta)
+estoura com `erro_tipo(e) == "rede"` — pegue com `arruma`. URL que nem e
+`http://`/`https://` e erro de quem chamou (`"builtin"`).
+
+```gambiarrascript
+arruma
+    busca("http://127.0.0.1:1/")
+quebrou erro
+    mostra erro_tipo(erro)     # rede
+acabou_finalmente
+```
 
 ## Opcoes (metodo, corpo, cabecalhos, timeout)
 

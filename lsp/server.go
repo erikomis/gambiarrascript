@@ -136,7 +136,7 @@ func init() {
 
 // docsBuiltin descreve cada builtin pro hover do LSP.
 var docsBuiltin = map[string]string{
-	"tamanho":         "tamanho(x) -> numero: devolve o tamanho de lista, dicionario ou texto.",
+	"tamanho":         "tamanho(x) -> numero: devolve o tamanho de lista, dicionario, conjunto ou texto.",
 	"chaves":          "chaves(dicionario) -> lista: devolve as chaves do dicionario.",
 	"tem":             "tem(dicionario, chave) -> booleano: checa se a chave existe.",
 	"texto":           "texto(valor) -> texto: converte qualquer valor em texto.",
@@ -145,7 +145,7 @@ var docsBuiltin = map[string]string{
 	"rota":            "rota(metodo, caminho, handler): registra uma rota no servidor HTTP. Caminho aceita parametro (/usuarios/:id → pedido.params.id) e curinga no fim (/arquivos/*resto).",
 	"escuta":          "escuta(porta, [opcoes]): sobe o servidor HTTP e bloqueia. Porta numero ou texto (\":8080\", \"127.0.0.1:0\"); ctrl+c desliga com calma. HTTPS (e wss://): {\"tls\": {\"cert\": \"cert.pem\", \"chave\": \"chave.pem\"}}.",
 	"de_json":         "de_json(texto) -> valor: converte JSON em valor GambiarraScript.",
-	"pra_json":        "pra_json(valor) -> texto: serializa um valor pra JSON.",
+	"pra_json":        "pra_json(valor) -> texto: serializa um valor pra JSON (estrutura que contem ela mesma da erro).",
 	"separa":          "separa(texto, separador) -> lista: quebra o texto em partes.",
 	"junta":           "junta(lista, separador) -> texto: junta os itens da lista num texto.",
 	"maiusculo":       "maiusculo(texto) -> texto: converte pra maiusculas.",
@@ -157,7 +157,7 @@ var docsBuiltin = map[string]string{
 	"termina_com":     "termina_com(texto, sufixo) -> booleano.",
 	"tira_espaco":     "tira_espaco(texto) -> texto: remove espacos nas pontas (trim).",
 	"adiciona":        "adiciona(lista, item): adiciona item ao final da lista (muda a lista).",
-	"remove":          "remove(lista, item): remove a primeira ocorrencia de item.",
+	"remove":          "remove(colecao, item) -> nada: muta a colecao. Lista: tira a primeira ocorrencia igual; dicionario: apaga a chave; conjunto: tira o item. Se nao tiver, nao faz nada.",
 	"ordena":          "ordena(lista): ordena a lista in-place (numeros ou textos).",
 	"inverte":         "inverte(lista): inverte a lista in-place.",
 	"formata":         "formata(modelo, valores...) -> texto: printf com verbos do Go (%v %s %d %f, padding %05d, casas %.2f).",
