@@ -435,14 +435,14 @@ func cmdInstala(args []string) {
 	}
 }
 
-// erroRecusa: o conteudo baixado nao bate com o lock.
+// erroRecusa: o conteudo baixado (ou a url do lock) nao bate com o fixado.
 type erroRecusa struct{ detalhes []string }
 
 func (e erroRecusa) Error() string {
-	return "RECUSADO: conteudo diferente do que o " + arqLock + " fixou\n" +
+	return "RECUSADO: dependencia nao bate com o que o " + arqLock + " fixou\n" +
 		strings.Join(e.detalhes, "\n") + "\n" +
 		"Isso pode ser ataque na cadeia de suprimentos (alguem trocou o arquivo no\n" +
-		"servidor) ou o autor reescreveu a tag/branch. Nada foi instalado.\n" +
+		"servidor ou editou o lock) ou o autor reescreveu a tag/branch. Nada foi instalado.\n" +
 		"Se voce confere a mudanca e confia nela: gs instala --atualiza"
 }
 
@@ -488,12 +488,20 @@ func instalaDependencias(dir string, atualiza, inseguro bool, w io.Writer) error
 		}
 		ant, temAnt := lock.Dependencias[nome]
 		if temLock && temAnt && !atualiza && ant.Fonte == f.Spec {
+			// a url do lock e dado derivado da fonte, nao fonte de confianca:
+			// um PR que so mexe no gambiarra.lock (que ninguem le no review)
+			// podia apontar pra outro servidor com o hash do arquivo dele.
+			// Baixa sempre de onde a fonte do gambiarra.json manda.
+			if ant.URL != f.URL {
+				recusas = append(recusas, fmt.Sprintf("  %s\n    o lock manda baixar de %s\n    mas a fonte \"%s\" resolve pra %s\n    (lock editado na mao?)", nome, ant.URL, f.Spec, f.URL))
+				continue
+			}
 			// atalho offline: o arquivo local ja e o que o lock fixou
 			if b, err := os.ReadFile(filepath.Join(dir, dirModulos, nome+".gs")); err == nil && sha256Hex(b) == ant.SHA256 {
 				passos = append(passos, passo{nome: nome, entrada: ant, nota: "ja confere com o lock"})
 				continue
 			}
-			corpo, err := baixa(ant.URL, inseguro, limiteModulo)
+			corpo, err := baixa(f.URL, inseguro, limiteModulo)
 			if err != nil {
 				return fmt.Errorf("dependencia %q: %v", nome, err)
 			}

