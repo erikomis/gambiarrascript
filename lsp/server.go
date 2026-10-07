@@ -567,6 +567,10 @@ type typechecker struct {
 	scopes     []map[string]bool
 	botaScopes []map[string]*varUso // paralelo a scopes: vars `bota` (p/ nao-usada)
 	diags      []Diagnostico
+	// nomes ligados no topo do programa em qualquer ponto: dentro de uma
+	// gambiarra eles ja existem quando ela roda (os 2 engines resolvem global
+	// declarada depois da funcao). No topo, usar antes de botar continua aviso.
+	globaisDoTopo map[string]bool
 }
 
 func (tc *typechecker) pushScope() {
@@ -665,6 +669,23 @@ func (tc *typechecker) erro(linha, coluna, tam int, msg string) {
 }
 
 func (tc *typechecker) walkProgram(prog *ast.Program) {
+	tc.globaisDoTopo = map[string]bool{}
+	for _, s := range prog.Statements {
+		switch n := s.(type) {
+		case *ast.BotaStatement:
+			if n.Name != nil {
+				tc.globaisDoTopo[n.Name.Value] = true
+			}
+		case *ast.CravaStatement:
+			tc.globaisDoTopo[n.Name.Value] = true
+		case *ast.GambiarraStatement:
+			tc.globaisDoTopo[n.Name.Value] = true
+		case *ast.DesestruturaStatement:
+			for _, nome := range n.Names {
+				tc.globaisDoTopo[nome.Value] = true
+			}
+		}
+	}
 	for _, s := range prog.Statements {
 		tc.walkStmt(s)
 	}
@@ -829,7 +850,8 @@ func (tc *typechecker) walkExpr(e ast.Expression) {
 		nome := n.Value
 		tc.marcaUsado(nome)
 		_, predefinida := object.Predefinidas[nome]
-		if !tc.resolvivel(nome) && !builtinsSet[nome] && !predefinida && !ehKeyword(nome) {
+		dentroDeFuncao := len(tc.scopes) > 1
+		if !tc.resolvivel(nome) && !(dentroDeFuncao && tc.globaisDoTopo[nome]) && !builtinsSet[nome] && !predefinida && !ehKeyword(nome) {
 			tc.warn(n.Token.Line, n.Token.Coluna, "`"+nome+"` pode estar indefinido (nao e builtin nem keyword)")
 		}
 	case *ast.PrefixExpression:

@@ -109,3 +109,21 @@ mostra responde_json(1)`)
 		t.Fatalf("builtin do servidor acusado como indefinido: %v", diags)
 	}
 }
+
+func TestLintGlobalDeclaradaDepoisDaFuncao(t *testing.T) {
+	// a gambiarra so roda depois: os 2 engines enxergam a global
+	diags := diagsDeTypecheck(t, `gambiarra usa()
+    funciona LIMITE + 1
+acabou_finalmente
+bota LIMITE = 10
+mostra usa()`)
+	if contemMsg(diags, "indefinido") {
+		t.Fatalf("global declarada depois da funcao nao e indefinida: %v", diags)
+	}
+	// no topo, usar antes de botar e erro de verdade em runtime: continua aviso
+	diags = diagsDeTypecheck(t, `mostra cedo
+bota cedo = 1`)
+	if !contemMsg(diags, "indefinido") {
+		t.Fatalf("uso no topo antes de botar devia avisar: %v", diags)
+	}
+}
