@@ -2,9 +2,11 @@ package interpreter
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/base64"
 	"io"
 	"net/http"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -28,6 +30,7 @@ func builtinBusca(args []object.Object) object.Object {
 	var corpoReq io.Reader
 	cabecalhos := map[string]string{}
 	timeout := timeoutPadraoHTTP
+	var cfgTLS *tls.Config
 
 	if len(args) == 2 {
 		opcoes, ok := args[1].(*object.Dicionario)
@@ -62,6 +65,9 @@ func builtinBusca(args []object.Object) object.Object {
 		} else if t > 0 {
 			timeout = t
 		}
+		if cfgTLS, erro = tlsDoClienteHTTP("busca", opcoes); erro != nil {
+			return erro
+		}
 	}
 
 	req, err := http.NewRequest(metodo, urlObj.Value, corpoReq)
@@ -73,8 +79,19 @@ func builtinBusca(args []object.Object) object.Object {
 	}
 
 	cliente := &http.Client{Timeout: timeout}
+	if cfgTLS != nil {
+		tr, erro := transporteTLS("busca", cfgTLS)
+		if erro != nil {
+			return erro
+		}
+		defer tr.CloseIdleConnections()
+		cliente.Transport = tr
+	}
 	resp, err := cliente.Do(req)
 	if err != nil {
+		if ehErroCertificado(err) {
+			return erroBuiltin("deu ruim na conexao com %q: o certificado nao passou (%v) — servidor de dev com certificado proprio? passa {\"ca\": \"ca.pem\"}", urlObj.Value, err)
+		}
 		return erroBuiltin("deu ruim na conexao com %q: %v", urlObj.Value, err)
 	}
 	defer resp.Body.Close()
@@ -85,6 +102,19 @@ func builtinBusca(args []object.Object) object.Object {
 	}
 
 	return montaResposta(resp, corpo)
+}
+
+// transporteTLS monta um transporte novo (copia do padrao do Go: proxy,
+// HTTP/2, timeouts) com o tls.Config de "ca"/"inseguro". No navegador o
+// fetch nao deixa mexer na validacao do certificado: erro claro em vez de
+// ignorar calado.
+func transporteTLS(nome string, cfg *tls.Config) (*http.Transport, *object.Erro) {
+	if runtime.GOOS == "js" {
+		return nil, erroBuiltin("%s(): \"ca\" e \"inseguro\" nao funcionam no navegador (wasm) — quem valida o certificado la e o proprio navegador", nome)
+	}
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = cfg
+	return tr, nil
 }
 
 // opcaoCorpo le o corpo da requisicao de UMA das opcoes: "corpo" (texto),

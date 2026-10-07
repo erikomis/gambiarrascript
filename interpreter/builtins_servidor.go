@@ -3,8 +3,10 @@ package interpreter
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"net"
 	"net/http"
@@ -220,13 +222,42 @@ func enderecoDeEscuta(arg object.Object) (string, *object.Erro) {
 	return "", erroBuiltin("escuta(): a porta tem que ser numero ou texto (\":8080\"), veio %s", arg.Type())
 }
 
+// opcoesDeEscuta le o segundo argumento do escuta: {"tls": {"cert", "chave"}}.
+// Devolve o tls.Config (nil = HTTP puro).
+func opcoesDeEscuta(o object.Object) (*tls.Config, *object.Erro) {
+	d, ok := o.(*object.Dicionario)
+	if !ok {
+		return nil, erroBuiltin("escuta(): as opcoes tem que ser dicionario, tipo {\"tls\": {\"cert\": \"cert.pem\", \"chave\": \"chave.pem\"}}, veio %s", o.Type())
+	}
+	var cfg *tls.Config
+	for _, par := range d.Pares() {
+		k, ok := par.Chave.(*object.Texto)
+		if !ok || k.Value != "tls" {
+			return nil, erroBuiltin("escuta(): opcao %s nao existe (a que existe: tls)", chaveComAspas(par.Chave))
+		}
+		var e *object.Erro
+		if cfg, e = configTLSServidor("escuta", par.Valor); e != nil {
+			return nil, e
+		}
+	}
+	return cfg, nil
+}
+
 func (s *servidorEstado) builtinEscuta(args []object.Object) object.Object {
-	if len(args) != 1 {
-		return erroBuiltin("escuta() quer 1 argumento (porta), veio %d", len(args))
+	if len(args) != 1 && len(args) != 2 {
+		return erroBuiltin("escuta() quer 1 ou 2 argumentos (porta, [opcoes]), veio %d", len(args))
 	}
 	endereco, erro := enderecoDeEscuta(args[0])
 	if erro != nil {
 		return erro
+	}
+	// o certificado e lido ANTES de abrir a porta: arquivo faltando e erro
+	// na hora, nao um servidor de pe que derruba todo handshake
+	var cfgTLS *tls.Config
+	if len(args) == 2 {
+		if cfgTLS, erro = opcoesDeEscuta(args[1]); erro != nil {
+			return erro
+		}
 	}
 	ln, err := net.Listen("tcp", endereco)
 	if err != nil {
@@ -236,17 +267,30 @@ func (s *servidorEstado) builtinEscuta(args []object.Object) object.Object {
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: prazoCabecalho,
 		IdleTimeout:       prazoOcioso,
+		TLSConfig:         cfgTLS,
+		ErrorLog:          log.New(logDoServidor{s.i}, "", 0),
 	}
 	srv.RegisterOnShutdown(s.fechaWebsockets)
 
-	s.i.logaErro("servidor de pe em http://%s (ctrl+c pra parar)\n", enderecoLegivel(ln.Addr()))
+	esquema := "http"
+	if cfgTLS != nil {
+		esquema = "https"
+	}
+	s.i.logaErro("servidor de pe em %s://%s (ctrl+c pra parar)\n", esquema, enderecoLegivel(ln.Addr()))
 
 	sinais := make(chan os.Signal, 1)
 	signal.Notify(sinais, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sinais)
 
 	fim := make(chan error, 1)
-	go func() { fim <- srv.Serve(ln) }()
+	go func() {
+		if cfgTLS != nil {
+			// cert ja esta no TLSConfig; o ServeTLS liga o HTTP/2 tambem
+			fim <- srv.ServeTLS(ln, "", "")
+			return
+		}
+		fim <- srv.Serve(ln)
+	}()
 
 	select {
 	case err := <-fim:
@@ -268,6 +312,19 @@ func (s *servidorEstado) builtinEscuta(args []object.Object) object.Object {
 	}
 	s.i.logaErro("servidor desligado, falou!\n")
 	return NADA
+}
+
+// logDoServidor e o ErrorLog do net/http: manda pro stderr do interpretador
+// (com o lock da saida), menos o "TLS handshake error" — cliente falando
+// http:// na porta https ou que nao confia no certificado ja ve o erro do
+// lado dele; no servidor isso so polui o log.
+type logDoServidor struct{ i *Interpreter }
+
+func (l logDoServidor) Write(p []byte) (int, error) {
+	if !strings.Contains(string(p), "TLS handshake error") {
+		l.i.logaErro("%s", p)
+	}
+	return len(p), nil
 }
 
 // enderecoLegivel troca o "[::]:8080" do Listen por "localhost:8080".

@@ -264,6 +264,8 @@ var nomesBuiltins = []string{
 	"responde_json", "antes", "depois", "cors", "serve_pasta", "rota_ws", "conecta_ws",
 	// concorrencia: lock explicito
 	"trava", "com_trava",
+	// tls: certificado autoassinado pra dev
+	"gera_certificado",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que

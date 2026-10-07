@@ -70,7 +70,8 @@ ou dicionario (viram JSON), `responde_json(valor, status)` ou
 `{"status", "corpo", "cabecalhos"}`. Tem middleware (`antes`/`depois`),
 `cors()`, `serve_pasta(prefixo, pasta)` e WebSocket (`rota_ws` no servidor,
 `conecta_ws` no cliente, com `envia`/`recebe`/`fecha`). `escuta(porta)` sobe
-o servidor e desliga com calma no ctrl+c. Erro no handler vira `500`
+o servidor e desliga com calma no ctrl+c; `escuta(porta, {"tls": {"cert":
+"cert.pem", "chave": "chave.pem"}})` sobe em HTTPS (e `wss://`). Erro no handler vira `500`
 generico pro cliente e o detalhe vai pro stderr. Cada requisicao roda na
 propria goroutine. Exemplos: `examples/api_rest.gs` e `examples/chat_ws.gs`;
 doc completa em [Servidor HTTP](https://erikomis.github.io/gambiarrascript/docs/servidor/).

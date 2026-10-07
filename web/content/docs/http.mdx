@@ -48,6 +48,34 @@ mostra de_json(r.corpo).json.msg      # salve
   `corpo`, `json` e `corpo_base64` sao exclusivos: mandar dois da erro.
 - `cabecalhos`: dicionario texto → texto.
 - `timeout`: em segundos (aceita fracao); default 30.
+- `ca` e `inseguro`: confianca do `https://` (veja abaixo).
+
+## HTTPS com certificado proprio: ca e inseguro
+
+`https://` funciona direto e valida o certificado contra os CAs do sistema —
+site de verdade nao precisa de nada. Pra falar com um servidor de dev (ou da
+rede interna) com certificado proprio:
+
+```gambiarrascript
+bota r = busca("https://localhost:8443/", {"ca": "cert.pem"})
+```
+
+- `ca`: caminho de um PEM com o(s) certificado(s) de CA em que confiar — ou o
+  PEM em si (texto que comeca com `-----BEGIN`, ex.: o `cert` do
+  [`gera_certificado`](/docs/servidor#gera_certificadohosts--so-pra-desenvolvimento)).
+  Com `ca`, **so** esse CA vale (os do sistema saem), igual `curl --cacert`.
+  Arquivo que nao existe ou sem certificado valido da erro do tipo `"io"`.
+- `inseguro`: com `deu_bom` **nao valida o certificado**.
+
+<Callout title="inseguro e so pra teste" type="warn">
+  `{"inseguro": deu_bom}` aceita qualquer certificado — inclusive o de quem
+  estiver no meio da conexao lendo e trocando tudo (senha, token, cookie).
+  Use so pra testar na tua maquina; o certo e passar o `ca`.
+</Callout>
+
+Certificado que nao passa (CA desconhecido, nome errado, vencido) estoura com
+a dica: `deu ruim na conexao com "https://...": o certificado nao passou (...)`.
+`ca` e `inseguro` nao funcionam no playground (no navegador quem valida e ele).
 
 ## JSON e binario
 

@@ -462,7 +462,7 @@ log_info("subiu", {"porta": cfg.porta, "extras": cfg._})
 | --- | --- | --- |
 | `busca(url, [opcoes])` | `(texto, [dicionario])` | `dicionario` `{status, ok, corpo, cabecalhos, [corpo_base64]}` |
 | `rota(metodo, caminho, handler)` | `(texto, texto, gambiarra)` | `nada` — registra a rota (`/usuarios/:id`, `/arquivos/*resto`) |
-| `escuta(porta)` | `(numero ou texto)` | bloqueia servindo (cada requisicao em paralelo); ctrl+c desliga com calma |
+| `escuta(porta, [opcoes])` | `(numero ou texto, [dicionario])` | bloqueia servindo (cada requisicao em paralelo); ctrl+c desliga com calma. HTTPS com `{"tls": {"cert": "cert.pem", "chave": "chave.pem"}}` |
 | `responde_json(valor, [status])` | `(valor, [numero])` | `dicionario` de resposta com o JSON |
 | `antes(handler)` | `(gambiarra(pedido))` | `nada` — middleware antes das rotas |
 | `depois(handler)` | `(gambiarra(pedido, resposta))` | `nada` — middleware depois das rotas |
@@ -470,8 +470,9 @@ log_info("subiu", {"porta": cfg.porta, "extras": cfg._})
 | `serve_pasta(prefixo, pasta)` | `(texto, texto)` | `nada` — arquivos estaticos |
 | `rota_ws(caminho, handler)` | `(texto, gambiarra(ws, pedido))` | `nada` — endpoint WebSocket |
 | `conecta_ws(url, [opcoes])` | `(texto, [dicionario])` | conexao WebSocket (usa `envia`/`recebe`/`fecha`) |
+| `gera_certificado([hosts])` | `([lista de texto])` | `dicionario` `{cert, chave}` em PEM — autoassinado, **so pra dev** |
 
-Opcoes do `busca` (`metodo`, `corpo`, `json`, `corpo_base64`, `cabecalhos`, `timeout`) em
+Opcoes do `busca` (`metodo`, `corpo`, `json`, `corpo_base64`, `cabecalhos`, `timeout`, `ca`, `inseguro`) em
 [HTTP (cliente)](/docs/http); `pedido` e resposta do handler em
 [Servidor HTTP](/docs/servidor).
 
@@ -482,14 +483,14 @@ cano: `envia`, `recebe` (bloqueia; `nada` quando o outro lado fechou) e `fecha`.
 
 | Builtin | Assinatura | Devolve |
 | --- | --- | --- |
-| `conecta_tcp(end, [opcoes])` | `(texto "host:porta", [dicionario])` | conexao — opcoes `{"modo": "linha"/"bruto", "timeout": segundos}` |
-| `escuta_tcp(porta, handler, [opcoes])` | `(numero ou texto, gambiarra(conexao), [dicionario])` | bloqueia servindo; cada conexao numa goroutine. Opcoes: `modo`, `timeout`, `pronto`, `para` |
+| `conecta_tcp(end, [opcoes])` | `(texto "host:porta", [dicionario])` | conexao — opcoes `{"modo": "linha"/"bruto", "timeout": segundos, "tls": deu_bom ou {"servidor", "inseguro", "ca"}}` |
+| `escuta_tcp(porta, handler, [opcoes])` | `(numero ou texto, gambiarra(conexao), [dicionario])` | bloqueia servindo; cada conexao numa goroutine. Opcoes: `modo`, `timeout`, `pronto`, `para`, `tls` (`{"cert", "chave"}`) |
 | `endereco(con)` | `(conexao)` | `texto` `"ip:porta"` do outro lado |
 | `conecta_udp(end, [opcoes])` | `(texto, [dicionario])` | conexao UDP (um datagrama por `envia`/`recebe`); opcao `timeout` |
 | `escuta_udp(porta, handler, [opcoes])` | `(numero ou texto, gambiarra(mensagem, remetente), [dicionario])` | bloqueia; o texto que o handler devolver volta pro remetente. Opcoes: `pronto`, `para` |
 | `envia_udp(end, texto)` | `(texto, texto)` | `nada` — manda um datagrama e esquece |
 
-Enquadramento, timeout e parada graciosa em [Rede (TCP/UDP)](/docs/rede).
+Enquadramento, timeout, TLS e parada graciosa em [Rede (TCP/UDP)](/docs/rede).
 
 ## Banco de dados
 

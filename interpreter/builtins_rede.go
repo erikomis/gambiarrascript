@@ -9,6 +9,8 @@ package interpreter
 
 import (
 	"bufio"
+	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -42,6 +44,9 @@ type opcoesRede struct {
 	timeout time.Duration
 	pronto  *object.Cano
 	para    *object.Cano
+	// tls cru: o formato muda entre cliente e servidor, quem le e o builtin
+	// (configTLSCliente / configTLSServidor)
+	tls object.Object
 }
 
 // lerOpcoesRede valida o dicionario de opcoes contra as chaves permitidas
@@ -70,6 +75,8 @@ func lerOpcoesRede(nome string, o object.Object, permitidas ...string) (opcoesRe
 				return op, erroBuiltin("%s(): timeout tem que ser numero de segundos maior que zero, veio %s", nome, par.Valor.Inspect())
 			}
 			op.timeout = time.Duration(n.Value * float64(time.Second))
+		case "tls":
+			op.tls = par.Valor
 		case "pronto", "para":
 			c, ok := par.Valor.(*object.Cano)
 			if !ok {
@@ -180,7 +187,11 @@ func novaConexaoTCP(conn net.Conn, op opcoesRede) *object.Nativo {
 	if !c.bruto {
 		c.leitor = bufio.NewReader(conn)
 	}
-	return &object.Nativo{Rotulo: "conexao tcp com " + conn.RemoteAddr().String(), Valor: c}
+	rotulo := "conexao tcp com "
+	if _, ok := conn.(*tls.Conn); ok {
+		rotulo = "conexao tls com "
+	}
+	return &object.Nativo{Rotulo: rotulo + conn.RemoteAddr().String(), Valor: c}
 }
 
 func (c *conexaoTCP) Envia(v object.Object) error {
@@ -265,15 +276,36 @@ func (i *Interpreter) builtinConectaTcp(args []object.Object) object.Object {
 	var op opcoesRede
 	if len(args) == 2 {
 		var e *object.Erro
-		if op, e = lerOpcoesRede("conecta_tcp", args[1], "modo", "timeout"); e != nil {
+		if op, e = lerOpcoesRede("conecta_tcp", args[1], "modo", "timeout", "tls"); e != nil {
 			return e
 		}
 	}
-	conn, err := net.DialTimeout("tcp", end.Value, op.timeout)
+	var cfgTLS *tls.Config
+	if op.tls != nil {
+		var e *object.Erro
+		if cfgTLS, e = configTLSCliente("conecta_tcp", op.tls); e != nil {
+			return e
+		}
+	}
+	var (
+		conn net.Conn
+		err  error
+	)
+	if cfgTLS != nil {
+		// o tls.Dialer tira o SNI do host do endereco (se "servidor" nao veio)
+		// e o timeout cobre conectar + handshake
+		d := &tls.Dialer{NetDialer: &net.Dialer{Timeout: op.timeout}, Config: cfgTLS}
+		conn, err = d.DialContext(context.Background(), "tcp", end.Value)
+	} else {
+		conn, err = net.DialTimeout("tcp", end.Value, op.timeout)
+	}
 	if err != nil {
 		var ne net.Error
 		if errors.As(err, &ne) && ne.Timeout() {
 			return erroBuiltinKind(KindRede, "conecta_tcp(): %s nao atendeu em %s (timeout)", end.Value, segundos(op.timeout))
+		}
+		if cfgTLS != nil && ehErroCertificado(err) {
+			return erroBuiltinKind(KindRede, "conecta_tcp(): o certificado de %s nao passou (%v) — servidor de dev com certificado proprio? passa {\"tls\": {\"ca\": \"ca.pem\"}}", end.Value, err)
 		}
 		return erroBuiltinKind(KindRede, "conecta_tcp(): nao rolou conectar em %s: %v", end.Value, err)
 	}
@@ -381,7 +413,14 @@ func (i *Interpreter) builtinEscutaTcp(args []object.Object) object.Object {
 	}
 	var op opcoesRede
 	if len(args) == 3 {
-		if op, e = lerOpcoesRede("escuta_tcp", args[2], "modo", "timeout", "pronto", "para"); e != nil {
+		if op, e = lerOpcoesRede("escuta_tcp", args[2], "modo", "timeout", "pronto", "para", "tls"); e != nil {
+			return e
+		}
+	}
+	// certificado lido antes de abrir a porta: arquivo faltando e erro na hora
+	var cfgTLS *tls.Config
+	if op.tls != nil {
+		if cfgTLS, e = configTLSServidor("escuta_tcp", op.tls); e != nil {
 			return e
 		}
 	}
@@ -391,6 +430,9 @@ func (i *Interpreter) builtinEscutaTcp(args []object.Object) object.Object {
 	ln, err := net.Listen("tcp", endereco)
 	if err != nil {
 		return erroBuiltinKind(KindRede, "escuta_tcp(): nao consegui escutar em %s: %v", endereco, err)
+	}
+	if cfgTLS != nil {
+		ln = tls.NewListener(ln, cfgTLS)
 	}
 	parou, desliga := esperaParada(op.para)
 	defer desliga()
@@ -445,6 +487,19 @@ func (i *Interpreter) builtinEscutaTcp(args []object.Object) object.Object {
 				mu.Unlock()
 				wg.Done()
 			}()
+			// handshake antes do handler, com prazo: quem conecta e nao fala
+			// TLS (ou nao confia no certificado) nem chega no codigo do usuario
+			if tc, ok := c.conn.(*tls.Conn); ok {
+				ctx, cancela := context.WithTimeout(context.Background(), prazoHandshakeTLS)
+				err := tc.HandshakeContext(ctx)
+				cancela()
+				if err != nil {
+					if !errors.Is(err, net.ErrClosed) {
+						i.logaErroRede("escuta_tcp: handshake tls com %s falhou: %v", c.endereco(), err)
+					}
+					return
+				}
+			}
 			i.rodaHandler("escuta_tcp", c.endereco(), handler, []object.Object{nat})
 		}()
 	}

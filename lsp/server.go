@@ -108,6 +108,8 @@ var builtinsCompletion = []string{
 	"log_debug", "log_info", "log_aviso", "log_erro", "opcoes", "carrega_env",
 	// concorrencia
 	"trava", "com_trava",
+	// tls
+	"gera_certificado",
 }
 
 // builtinsSet espelha builtinsCompletion num map pra lookup rapido.
@@ -139,9 +141,9 @@ var docsBuiltin = map[string]string{
 	"tem":             "tem(dicionario, chave) -> booleano: checa se a chave existe.",
 	"texto":           "texto(valor) -> texto: converte qualquer valor em texto.",
 	"numero":          "numero(texto) -> numero: converte texto em numero.",
-	"busca":           "busca(url, [opcoes]) -> dicionario: faz uma requisicao HTTP.",
+	"busca":           "busca(url, [opcoes]) -> dicionario: faz uma requisicao HTTP. Opcoes: metodo, corpo, json, corpo_base64, cabecalhos, timeout, ca (confia nesse CA, pra https com certificado proprio), inseguro (nao valida o certificado — so dev).",
 	"rota":            "rota(metodo, caminho, handler): registra uma rota no servidor HTTP. Caminho aceita parametro (/usuarios/:id → pedido.params.id) e curinga no fim (/arquivos/*resto).",
-	"escuta":          "escuta(porta): sobe o servidor HTTP e bloqueia. Porta numero ou texto (\":8080\", \"127.0.0.1:0\"); ctrl+c desliga com calma.",
+	"escuta":          "escuta(porta, [opcoes]): sobe o servidor HTTP e bloqueia. Porta numero ou texto (\":8080\", \"127.0.0.1:0\"); ctrl+c desliga com calma. HTTPS (e wss://): {\"tls\": {\"cert\": \"cert.pem\", \"chave\": \"chave.pem\"}}.",
 	"de_json":         "de_json(texto) -> valor: converte JSON em valor GambiarraScript.",
 	"pra_json":        "pra_json(valor) -> texto: serializa um valor pra JSON.",
 	"separa":          "separa(texto, separador) -> lista: quebra o texto em partes.",
@@ -233,8 +235,8 @@ var docsBuiltin = map[string]string{
 	"gzip_descomprime": "gzip_descomprime(texto) -> texto: recebe um base64 de gzip_comprime e devolve o texto original.",
 	"tipo": "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"trava\", \"nativo\"). Gambiarra, lambda e builtin sao todas \"funcao\".",
 	// rede baixo nivel
-	"conecta_tcp": "conecta_tcp(host_porta, [opcoes]) -> conexao: abre um socket TCP (host_porta = \"127.0.0.1:9000\"). opcoes: {\"modo\": \"linha\"|\"bruto\", \"timeout\": segundos}. Usa com envia/recebe/fecha.",
-	"escuta_tcp":  "escuta_tcp(porta, handler, [opcoes]): servidor TCP; cada conexao roda handler(conexao) na propria goroutine. Bloqueia ate ctrl+c ou o cano opcoes.para. opcoes: modo, timeout, pronto, para.",
+	"conecta_tcp": "conecta_tcp(host_porta, [opcoes]) -> conexao: abre um socket TCP (host_porta = \"127.0.0.1:9000\"). opcoes: {\"modo\": \"linha\"|\"bruto\", \"timeout\": segundos, \"tls\": deu_bom | {\"servidor\", \"inseguro\", \"ca\"}}. Usa com envia/recebe/fecha.",
+	"escuta_tcp":  "escuta_tcp(porta, handler, [opcoes]): servidor TCP; cada conexao roda handler(conexao) na propria goroutine. Bloqueia ate ctrl+c ou o cano opcoes.para. opcoes: modo, timeout, pronto, para, tls ({\"cert\": \"cert.pem\", \"chave\": \"chave.pem\"}).",
 	"endereco":    "endereco(conexao) -> texto: \"ip:porta\" do outro lado da conexao tcp/udp.",
 	"escuta_udp":  "escuta_udp(porta, handler, [opcoes]): servidor UDP; handler(mensagem, remetente) por datagrama — o texto que ele devolver volta pro remetente. opcoes: pronto, para.",
 	"envia_udp":   "envia_udp(host_porta, texto): manda um datagrama UDP e esquece.",
@@ -262,7 +264,8 @@ var docsBuiltin = map[string]string{
 	"cors":          "cors([opcoes]): libera CORS e responde o preflight OPTIONS. Opcoes: origens, metodos, cabecalhos (listas), credenciais, max_idade.",
 	"serve_pasta":   "serve_pasta(prefixo, pasta): serve arquivos estaticos (GET/HEAD), index.html em pasta, sem sair da pasta nem mostrar dotfile.",
 	"rota_ws":       "rota_ws(caminho, gambiarra(ws, pedido), [opcoes]): endpoint WebSocket. Use recebe(ws) (nada = cliente saiu), envia(ws, msg) e fecha(ws). So a mesma origem entra; {\"origens\": [\"https://app.com\"]} libera outras (\"*\" = qualquer uma).",
-	"conecta_ws":    "conecta_ws(url, [opcoes]) -> conexao: cliente WebSocket (ws:// ou wss://). Opcoes: cabecalhos, timeout. Usa com envia/recebe/fecha.",
+	"conecta_ws":    "conecta_ws(url, [opcoes]) -> conexao: cliente WebSocket (ws:// ou wss://). Opcoes: cabecalhos, timeout, ca, inseguro. Usa com envia/recebe/fecha.",
+	"gera_certificado": "gera_certificado([hosts]) -> {\"cert\", \"chave\"}: certificado autoassinado (PEM) SO PRA DEV — hosts padrao localhost, 127.0.0.1, ::1. Passa direto no {\"tls\": ...} do escuta e o cert serve de {\"ca\": ...} no cliente.",
 }
 
 // docsKeyword descreve cada keyword pro hover do LSP.

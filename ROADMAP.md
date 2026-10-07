@@ -12,12 +12,11 @@ fatias, dot access), **tooling** (`gs check/init/bench/get/build/testa/doc/
 formata -w`, cache `.gsc`) e **distribuição** (release com binários,
 `install.sh`, playground + doc no GitHub Pages).
 
-Tiers 1–5 estão entregues. O backlog vivo:
+Tiers 1–5 e 5b estão entregues. O backlog vivo:
 
 | Onde | O que sobra |
 |---|---|
 | Tier 2/3 | DAP (debug), multi-catch, FFI — itens grandes, levas próprias |
-| Tier 5b | libs: TLS no TCP cru (HTTP/API, WebSocket, TCP/UDP, senha/AES/JWT, log, flags e .env ✅) |
 | Bugs abertos | overflow, `importa`, erro entre engines |
 | Tier 6 | Homebrew, cobertura, sombreamento (`gs instala` + lock e `build --alvo` ✅) |
 | Tier 7 | MaxStack por função |
@@ -230,16 +229,22 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
 - [x] **Compressão** — `gzip_comprime(texto)` → base64 dos bytes gzipped,
       `gzip_descomprime(base64)` → texto original. Veja `examples/compressao.gs`.
 
-### Tier 5b — Libs que ainda faltam
+### Tier 5b — Libs que faltavam ✅ entregue
 
 - [x] **HTTP cliente turbinado** — `busca(url, {metodo, corpo, json,
       corpo_base64, cabecalhos, timeout})` com GET/POST/PUT/DELETE/PATCH/
       HEAD/OPTIONS; resposta não-texto ganha `corpo_base64`.
-- [~] **Rede baixo nível** — feito: TCP (`conecta_tcp`, `escuta_tcp`,
+- [x] **Rede baixo nível** — TCP (`conecta_tcp`, `escuta_tcp`,
       `endereco`; modo linha ou bruto, timeout, parada graciosa), UDP
       (`escuta_udp`, `envia_udp`, `conecta_udp`) e WebSocket (`rota_ws` no
       servidor, `conecta_ws` no cliente), tudo via `envia`/`recebe`/`fecha`
-      (object.Conexao). Falta: TLS no TCP cru.
+      (object.Conexao).
+- [x] **TLS no TCP cru** (e HTTPS) — `escuta(porta, {"tls": {"cert",
+      "chave"}})` sobe HTTPS (e `wss://`), TLS 1.2+; `conecta_tcp(end,
+      {"tls": deu_bom | {"servidor", "inseguro", "ca"}})` e `escuta_tcp(...,
+      {"tls": {"cert", "chave"}})`; `busca`/`conecta_ws` ganham `ca` e
+      `inseguro`; `gera_certificado([hosts])` (autoassinado, só pra dev).
+      Cert/chave/CA aceitam caminho ou o PEM em si.
 - [x] **Crypto parte 2** — `hash_senha`/`confere_senha` (bcrypt, custo 12),
       `encripta`/`decripta` (AES-256-GCM; chave crua ou frase via scrypt),
       `gera_chave`, `token_aleatorio` e JWT HS256 (`jwt_assina`/`jwt_confere`,

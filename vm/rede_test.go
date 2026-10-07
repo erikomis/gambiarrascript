@@ -264,7 +264,7 @@ tenta(gambiarra() endereco(cano()) acabou_finalmente)
 	rodaRedeNosDois(t, src, ""+
 		"rede | deu ruim: conecta_tcp(): nao rolou conectar em 127.0.0.1:1: dial tcp 127.0.0.1:1: connect: connection refused\n"+
 		"builtin | deu ruim: conecta_tcp(): modo \"turbo\" nao existe — e \"linha\" (padrao) ou \"bruto\"\n"+
-		"builtin | deu ruim: conecta_tcp(): opcao \"tempo\" nao existe aqui (vale: modo, timeout)\n"+
+		"builtin | deu ruim: conecta_tcp(): opcao \"tempo\" nao existe aqui (vale: modo, timeout, tls)\n"+
 		"builtin | deu ruim: conecta_tcp(): timeout tem que ser numero de segundos maior que zero, veio 0\n"+
 		"builtin | deu ruim: escuta_tcp(): o handler tem que ser uma gambiarra(conexao), veio NUMERO\n"+
 		"builtin | deu ruim: endereco() espera uma conexao tcp/udp, veio CANO\n")

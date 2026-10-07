@@ -10,6 +10,7 @@ package interpreter
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
@@ -254,6 +255,7 @@ func builtinConectaWs(args []object.Object) object.Object {
 	}
 	cab := map[string]string{}
 	prazo := timeoutPadraoHTTP
+	var cfgTLS *tls.Config
 	if len(args) == 2 {
 		opcoes, ok := args[1].(*object.Dicionario)
 		if !ok {
@@ -268,6 +270,20 @@ func builtinConectaWs(args []object.Object) object.Object {
 		} else if t > 0 {
 			prazo = t
 		}
+		if cfgTLS, erro = tlsDoClienteHTTP("conecta_ws", opcoes); erro != nil {
+			return erro
+		}
+	}
+	opcoesDial := &websocket.DialOptions{}
+	if cfgTLS != nil {
+		tr, erro := transporteTLS("conecta_ws", cfgTLS)
+		if erro != nil {
+			return erro
+		}
+		// o handshake do websocket pede HTTP/1.1: o net/http ja nao tenta
+		// HTTP/2 em pedido de upgrade. Sem Timeout no Client — o prazo e o ctx.
+		defer tr.CloseIdleConnections()
+		opcoesDial.HTTPClient = &http.Client{Transport: tr}
 	}
 	h := http.Header{}
 	for k, v := range cab {
@@ -275,8 +291,12 @@ func builtinConectaWs(args []object.Object) object.Object {
 	}
 	ctx, cancela := context.WithTimeout(context.Background(), prazo)
 	defer cancela()
-	conn, resp, err := websocket.Dial(ctx, url.Value, &websocket.DialOptions{HTTPHeader: h})
+	opcoesDial.HTTPHeader = h
+	conn, resp, err := websocket.Dial(ctx, url.Value, opcoesDial)
 	if err != nil {
+		if ehErroCertificado(err) {
+			return erroBuiltinKind(KindRede, "conecta_ws(): o certificado de %q nao passou (%v) — servidor de dev com certificado proprio? passa {\"ca\": \"ca.pem\"}", url.Value, err)
+		}
 		extra := ""
 		if resp != nil && resp.StatusCode != http.StatusSwitchingProtocols {
 			extra = fmt.Sprintf(" (o servidor respondeu %d)", resp.StatusCode)

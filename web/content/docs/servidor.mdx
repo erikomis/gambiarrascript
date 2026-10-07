@@ -1,6 +1,6 @@
 ---
 title: Servidor HTTP
-description: rota(), escuta(), middleware, CORS, arquivos estaticos e WebSocket — API REST e tempo real no GambiarraScript.
+description: rota(), escuta(), HTTPS, middleware, CORS, arquivos estaticos e WebSocket — API REST e tempo real no GambiarraScript.
 ---
 
 ```gambiarrascript
@@ -199,7 +199,7 @@ serve_pasta("/", "./site")          # site estatico inteiro
 - `rota()` registrada no mesmo caminho ganha da pasta. O caminho da pasta e
   relativo a onde o `gs` foi rodado.
 
-## escuta(porta)
+## escuta(porta, [opcoes])
 
 Sobe o servidor e **bloqueia**. Aceita numero (`8080`) ou texto com o
 endereco (`":8080"`, `"127.0.0.1:3000"`, `"0"`/`"127.0.0.1:0"` = porta livre
@@ -221,7 +221,64 @@ cuidado ao mexer em lista/dicionario compartilhado entre handlers (veja
 [Concorrencia](/docs/concorrencia#estado-compartilhado)) — o
 `examples/api_rest.gs` usa um `cano(1)` como trava.
 
+## HTTPS: escuta(porta, {"tls": ...})
+
+```gambiarrascript
+rota("GET", "/", gambiarra() funciona "salve, seguro" acabou_finalmente)
+escuta(8443, {"tls": {"cert": "cert.pem", "chave": "chave.pem"}})
+```
+
+```
+servidor de pe em https://localhost:8443 (ctrl+c pra parar)
+```
+
+- `cert` e `chave` sao os arquivos **PEM** do certificado (com a cadeia, se
+  tiver intermediario — o `fullchain.pem` do Let's Encrypt) e da chave
+  privada. Texto que comeca com `-----BEGIN` e tratado como o proprio PEM
+  (veja `gera_certificado` abaixo).
+- O certificado e lido **antes** de abrir a porta: arquivo que nao existe ou
+  que nao e PEM valido (ou chave de outro certificado) da erro do tipo `"io"`
+  na hora, com o caminho na mensagem — nada de servidor de pe que derruba
+  todo handshake.
+- TLS **1.2 no minimo**; suites e curvas ficam no padrao do Go (so as
+  seguras). HTTP/2 vem de brinde pra quem pedir.
+- **`rota_ws` vira `wss://`** sozinho: mesma porta, mesmo certificado.
+- Tudo o resto (rotas, middleware, desligamento com calma, timeouts) e igual.
+  Cliente falando `http://` na porta https ou que nao confia no certificado
+  nao polui o stderr: o erro aparece do lado dele.
+
+<Callout title="Em producao">
+  Muitas vezes o TLS termina **antes** do teu servidor: um proxy reverso
+  (nginx, Caddy, Traefik) ou o load balancer da nuvem segura o certificado
+  (e renova sozinho) e repassa HTTP puro pro `escuta(8080)` na rede interna.
+  Nesse caso nao precisa do `{"tls": ...}` — e o IP do cliente vem no
+  cabecalho `X-Forwarded-For`. O `tls` aqui e pra quando o `gs` fica exposto
+  direto, ou pra testar `https://`/`wss://` em casa.
+</Callout>
+
+### gera_certificado([hosts]) — so pra desenvolvimento
+
+```gambiarrascript
+bota par = gera_certificado()      # {"cert": "-----BEGIN CERTIFICATE-----...", "chave": "-----BEGIN PRIVATE KEY-----..."}
+escreve_arquivo("cert.pem", par.cert) # pro curl --cacert / outro cliente confiar
+escuta(8443, {"tls": par})         # o PEM em si vale no lugar do caminho
+```
+
+Gera um certificado **autoassinado** (ECDSA P-256, vale 1 ano) e devolve
+`{"cert", "chave"}` em PEM. Hosts padrao: `localhost`, `127.0.0.1` e `::1`;
+passe outros com `gera_certificado(["meu.dev", "192.168.0.10"])` (IP vira IP,
+o resto vira nome). Ele e o proprio CA, entao o cliente confia passando o
+`cert` como `ca`: `busca(url, {"ca": par.cert})` ou `curl --cacert cert.pem`.
+
+<Callout title="Nao use em producao">
+  Navegador nenhum confia nesse certificado (vai mostrar aviso). Em producao
+  use um certificado de verdade (Let's Encrypt, o do teu provedor) ou deixe o
+  proxy reverso cuidar do TLS. A chave sai em texto: nao commite o `chave.pem`.
+</Callout>
+
 ## WebSocket: rota_ws(caminho, handler, [opcoes])
+
+Com `escuta(porta, {"tls": ...})` o mesmo endpoint atende `wss://`.
 
 ```gambiarrascript
 bota conexoes = []
@@ -283,6 +340,10 @@ fecha(ws)
 ```
 
 Mesma conexao do servidor: `envia`/`recebe`/`fecha` funcionam igual.
-`timeout` (segundos, default 30) vale so pra conectar. Falhou → erro de rede
+`timeout` (segundos, default 30) vale so pra conectar. `wss://` valida o
+certificado contra os CAs do sistema; pra falar com servidor de dev de
+certificado proprio, `{"ca": "cert.pem"}` (caminho ou o PEM em si — com ele so
+esse CA vale) ou, em ultimo caso, `{"inseguro": deu_bom}` — mesmas opcoes do
+[`busca`](/docs/http#https-com-certificado-proprio-ca-e-inseguro). Falhou → erro de rede
 (`conecta_ws(): nao consegui conectar em "ws://..." (o servidor respondeu 401): ...`).
 WebSocket nao roda no playground (navegador).

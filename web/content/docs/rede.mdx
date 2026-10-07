@@ -1,6 +1,6 @@
 ---
 title: Rede (TCP/UDP)
-description: "conecta_tcp, escuta_tcp, escuta_udp: socket cru que se usa igual a um cano."
+description: "conecta_tcp, escuta_tcp, escuta_udp: socket cru (com TLS opcional) que se usa igual a um cano."
 ---
 
 Pra falar protocolo que nao e HTTP (chat, eco, Redis na unha, jogo, telnet de
@@ -28,6 +28,7 @@ fecha(c)
 | --- | --- | --- |
 | `"modo"` | `"linha"` | `"linha"` ou `"bruto"` (veja abaixo) |
 | `"timeout"` | sem limite | segundos (aceita `0.5`). Vale pra conectar e pra **cada** `recebe`/`envia` |
+| `"tls"` | sem TLS | `deu_bom` ou `{"servidor", "inseguro", "ca"}` — veja [TLS](#tls) |
 
 ### Modo linha (padrao)
 
@@ -102,6 +103,7 @@ Opcoes:
 | opcao | o que faz |
 | --- | --- |
 | `"modo"`, `"timeout"` | iguais ao `conecta_tcp`, valem pra toda conexao aceita |
+| `"tls"` | `{"cert": "cert.pem", "chave": "chave.pem"}` — serve TLS (veja [TLS](#tls)) |
 | `"pronto"` | um cano: assim que a porta abre, o servidor manda nele o endereco real (`"127.0.0.1:54321"`) — util com porta `0` |
 | `"para"` | um cano: quando alguem fechar (ou mandar qualquer coisa nele), o servidor para igual no ctrl+c |
 
@@ -124,6 +126,59 @@ mostra recebe(c)          # salve, tropa
 
 fecha(para)               # derruba o servidor
 espera(srv)               # e espera ele terminar
+```
+
+## TLS
+
+Mesmo socket, criptografado. Depois de conectar, `envia`/`recebe`/`fecha`, os
+modos linha/bruto e o timeout funcionam igualzinho.
+
+**Cliente**:
+
+```gambiarrascript
+bota c = conecta_tcp("smtp.exemplo.com:465", {"tls": deu_bom, "timeout": 10})
+mostra recebe(c)
+```
+
+- `{"tls": deu_bom}` valida o certificado do servidor contra os CAs do
+  sistema e manda o SNI com o host do endereco (`smtp.exemplo.com`). TLS 1.2
+  no minimo. `deu_ruim` = sem TLS.
+- Dicionario pra ajustar:
+
+| chave | o que faz |
+| --- | --- |
+| `"servidor"` | nome pra SNI e pra validar o certificado, quando o endereco e IP ou outro nome (`conecta_tcp("10.0.0.5:6380", {"tls": {"servidor": "redis.interno"}})`) |
+| `"ca"` | caminho do PEM (ou o PEM em si) do CA em que confiar — **so** ele vale, os do sistema saem. Pra servidor de dev/rede interna |
+| `"inseguro"` | `deu_bom` nao valida nada — so pra teste: qualquer um no meio le e troca tudo |
+
+Certificado que nao passa e erro `"rede"` com a dica do `ca`:
+`conecta_tcp(): o certificado de 127.0.0.1:9443 nao passou (...)`.
+
+**Servidor**:
+
+```gambiarrascript
+escuta_tcp(9443, eco, {"tls": {"cert": "cert.pem", "chave": "chave.pem"}})
+```
+
+- `cert`/`chave` em PEM (caminho ou o PEM em si — da pra passar direto o
+  [`gera_certificado()`](/docs/servidor#gera_certificadohosts--so-pra-desenvolvimento)
+  em dev). Arquivo faltando ou invalido e erro `"io"` antes de abrir a porta.
+- O handshake acontece **antes** do handler (prazo de 10s): quem conecta
+  falando texto puro ou sem confiar no certificado nem chega no teu codigo —
+  vai pro stderr `escuta_tcp: handshake tls com 127.0.0.1:51814 falhou: ...` e a conexao fecha.
+- Teste na mao: `openssl s_client -connect 127.0.0.1:9443 -CAfile cert.pem`.
+
+```gambiarrascript
+bota par = gera_certificado()
+bota pronto = cano(1)
+bota para = cano()
+bota srv = bora escuta_tcp("127.0.0.1:0", eco, {"tls": par, "pronto": pronto, "para": para})
+bota c = conecta_tcp(recebe(pronto), {"tls": {"ca": par.cert}})
+envia(c, "salve")
+mostra recebe(c)          # eco: salve
+fecha(c)
+fecha(para)
+espera(srv)
 ```
 
 ## Timeout

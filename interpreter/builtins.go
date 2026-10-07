@@ -19,6 +19,7 @@ var builtins = map[string]*object.Builtin{
 	// servidor/rede (o resto do servidor e por instancia, no New)
 	"responde_json": {Nome: "responde_json", Fn: builtinRespondeJson},
 	"conecta_ws":    {Nome: "conecta_ws", Fn: builtinConectaWs},
+	"gera_certificado": {Nome: "gera_certificado", Fn: builtinGeraCertificado},
 	"tipo":     {Nome: "tipo", Fn: builtinTipo},
 	"trava":    {Nome: "trava", Fn: builtinTrava},
 
