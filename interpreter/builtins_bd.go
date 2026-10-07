@@ -163,7 +163,7 @@ func builtinConsulta(args []object.Object) object.Object {
 	if err := rows.Err(); err != nil {
 		return erroBuiltin("iteracao: %v", err)
 	}
-	return &object.Lista{Elements: linhas}
+	return object.NovaLista(linhas)
 }
 
 // builtinExecuta roda INSERT/UPDATE/DELETE e devolve o numero de linhas
@@ -204,8 +204,9 @@ func argParaGo(args []object.Object) ([]interface{}, *object.Erro) {
 	}
 	if len(args) == 1 {
 		if lst, ok := args[0].(*object.Lista); ok {
-			out := make([]interface{}, 0, len(lst.Elements))
-			for _, a := range lst.Elements {
+			elems := lst.Visao()
+			out := make([]interface{}, 0, len(elems))
+			for _, a := range elems {
 				out = append(out, objParaGo(a))
 			}
 			return out, nil

@@ -99,6 +99,33 @@ propria goroutine e para com calma no ctrl+c. UDP: `escuta_udp(porta,
 gambiarra(msg, remetente) ...)`, `envia_udp` e `conecta_udp`. Exemplos em
 `examples/eco_tcp.gs`, `examples/cliente_tcp.gs` e `examples/udp.gs`.
 
+## Concorrencia e colecoes
+
+Handler de `rota`/`rota_ws`/`escuta_tcp`, `bora` e `paralelo` rodam em
+goroutines de verdade, e lista, dicionario e conjunto aguentam isso: cada
+operacao (`d["k"]`, `bota d["k"] = v`, `adiciona`, `remove`, `tamanho`,
+`pra_cada`...) e atomica e nunca derruba o processo, igual o GIL do Python.
+Operacao COMPOSTA nao e — `bota d["n"] = d["n"] + 1` em duas goroutines pode
+perder incremento. Pra isso tem trava:
+
+```
+bota t = trava()
+bota visitas = {"n": 0}
+rota("GET", "/", gambiarra(pedido)
+    bota n = com_trava(t, gambiarra()
+        bota visitas["n"] = visitas["n"] + 1
+        funciona visitas["n"]
+    acabou_finalmente)
+    funciona "visita numero " + n
+acabou_finalmente)
+```
+
+`com_trava(t, gambiarra)` roda a gambiarra segurando a trava, devolve o que
+ela devolver e solta sempre — erro dentro sobe normal pra quem chamou. A
+trava nao e reentrante: pedir a mesma trava de dentro do proprio `com_trava`
+da erro (em vez de travar pra sempre). `pra_cada` numa colecao que outra
+goroutine esta mexendo percorre um retrato tirado no comeco do laco.
+
 ## JSON
 
 ```

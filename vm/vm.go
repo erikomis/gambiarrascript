@@ -310,6 +310,9 @@ func (vm *VM) execBoraCall(argc int) {
 	copy(args, vm.stack[vm.sp-1-argc:vm.sp-1])
 	vm.sp -= argc + 1
 
+	// liga o modo concorrente ANTES do `go` (ver object/concorrencia.go)
+	object.AtivaConcorrencia()
+
 	fut := object.NovoFuturo()
 	switch fn := callee.(type) {
 	case *object.CompiledFunction:
@@ -390,7 +393,7 @@ func (vm *VM) espalhaArgs(mascara string) int {
 		if !ok {
 			panic(VMError{err: &object.Erro{Message: "so da pra espalhar lista, veio " + object.NomeTipo(v), Kind: "runtime"}})
 		}
-		args = append(args, l.Elements...)
+		args = append(args, l.Visao()...)
 	}
 	vm.garanteEspaco(base + len(args) + 1)
 	copy(vm.stack[base:], args)
@@ -439,12 +442,12 @@ func (vm *VM) ajustaArgs(cf *object.CompiledFunction, bp, argc int) *object.Erro
 		variadicIdx := cf.NumArgs - 1
 		resto := make([]object.Object, argc-variadicIdx)
 		copy(resto, vm.stack[bp+variadicIdx:bp+argc])
-		vm.stack[bp+variadicIdx] = &object.Lista{Elements: resto}
+		vm.stack[bp+variadicIdx] = object.NovaLista(resto)
 		argc = cf.NumArgs
 	}
 	for i := argc; i < cf.NumArgs; i++ {
 		if cf.Variadic && i == cf.NumArgs-1 {
-			vm.stack[bp+i] = &object.Lista{Elements: []object.Object{}}
+			vm.stack[bp+i] = object.NovaLista([]object.Object{})
 		} else {
 			vm.stack[bp+i] = NADA
 		}
@@ -616,13 +619,20 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				// global enderecada mas nunca escrita (ex.: so atribuida num
 				// ramo que nao rodou): vale `nada`, igual ao tree-walker.
 				vm.push(NADA)
+			} else if object.ConcorrenciaAtiva() {
+				vm.push(pegaGlobalTravado(vm.globals, idx))
 			} else {
 				vm.push(vm.globals[idx])
 			}
 		case code.OpSetGlobal:
 			idx := int(code.ReadUint16(fn.Bytecode[ip+1:]))
 			ip += 3
-			vm.globals[idx] = vm.pop()
+			v := vm.pop()
+			if object.ConcorrenciaAtiva() {
+				poeGlobalTravado(vm.globals, idx, v)
+			} else {
+				vm.globals[idx] = v
+			}
 		case code.OpJump:
 			pos := int(code.ReadUint16(fn.Bytecode[ip+1:]))
 			ip = pos
@@ -648,7 +658,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			elems := make([]object.Object, n)
 			copy(elems, vm.stack[vm.sp-n:vm.sp])
 			vm.sp -= n
-			vm.push(&object.Lista{Elements: elems})
+			vm.push(object.NovaLista(elems))
 		case code.OpHash:
 			n := int(code.ReadUint16(fn.Bytecode[ip+1:]))
 			ip += 3
@@ -696,21 +706,24 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			if !ok {
 				panic(VMError{err: &object.Erro{Message: fmt.Sprintf("range .. de %d..%d e gigante demais", ln.Int, hn.Int), Kind: "runtime"}})
 			}
-			vm.push(&object.Lista{Elements: elems})
+			vm.push(object.NovaLista(elems))
 			ip++
 		case code.OpIndexOuNada:
 			idx := vm.pop()
 			cont := vm.pop()
 			switch cc := cont.(type) {
 			case *object.Lista:
-				if n, ok := idx.(*object.Numero); ok && n.EhInt && n.Int >= 0 && int(n.Int) < len(cc.Elements) {
-					vm.push(cc.Elements[n.Int])
-				} else {
-					vm.push(NADA)
+				var v object.Object
+				if n, ok := idx.(*object.Numero); ok && n.EhInt && n.Int >= 0 {
+					v, _ = cc.Pega(int(n.Int))
 				}
+				if v == nil {
+					v = NADA
+				}
+				vm.push(v)
 			case *object.Dicionario:
 				if ch, ok := idx.(object.Chaveavel); ok {
-					if par, existe := cc.Pares[ch.ChaveHash()]; existe {
+					if par, existe := cc.Pega(ch.ChaveHash()); existe {
 						vm.push(par.Valor)
 					} else {
 						vm.push(NADA)
@@ -726,11 +739,12 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			it := vm.pop()
 			switch c := it.(type) {
 			case *object.Lista:
-				vm.push(c)
+				// com concorrencia o laco percorre um retrato tirado agora
+				vm.push(c.ParaIterar())
 			case *object.Dicionario:
-				chaves := make([]object.Object, 0, len(c.Pares))
+				chaves := make([]object.Object, 0, c.Tamanho())
 				c.Itera(func(par object.ParDic) { chaves = append(chaves, par.Chave) })
-				vm.push(&object.Lista{Elements: chaves})
+				vm.push(object.NovaLista(chaves))
 			default:
 				panic(VMError{err: &object.Erro{Message: fmt.Sprintf("pra_cada ... em ... so funciona com lista ou dicionario, e isso ai e %s", it.Type()), Kind: "runtime"}})
 			}
@@ -803,7 +817,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					nExtras := argc - variadicIdx
 					restElems := make([]object.Object, nExtras)
 					copy(restElems, vm.stack[bp+variadicIdx:bp+argc])
-					vm.stack[bp+variadicIdx] = &object.Lista{Elements: restElems}
+					vm.stack[bp+variadicIdx] = object.NovaLista(restElems)
 					argc = cf.NumArgs
 				}
 				// default params: pad missing slots com NADA. Excecao: se o
@@ -812,7 +826,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				if argc < cf.NumArgs {
 					for i := argc; i < cf.NumArgs; i++ {
 						if cf.Variadic && i == cf.NumArgs-1 {
-							vm.stack[bp+i] = &object.Lista{Elements: []object.Object{}}
+							vm.stack[bp+i] = object.NovaLista([]object.Object{})
 						} else {
 							vm.stack[bp+i] = NADA
 						}
@@ -871,13 +885,13 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					nExtras := argc - variadicIdx
 					restElems := make([]object.Object, nExtras)
 					copy(restElems, vm.stack[bpCall+variadicIdx:bpCall+argc])
-					vm.stack[bpCall+variadicIdx] = &object.Lista{Elements: restElems}
+					vm.stack[bpCall+variadicIdx] = object.NovaLista(restElems)
 					argc = cf.NumArgs
 				}
 				if argc < cf.NumArgs {
 					for i := argc; i < cf.NumArgs; i++ {
 						if cf.Variadic && i == cf.NumArgs-1 {
-							vm.stack[bpCall+i] = &object.Lista{Elements: []object.Object{}}
+							vm.stack[bpCall+i] = object.NovaLista([]object.Object{})
 						} else {
 							vm.stack[bpCall+i] = NADA
 						}
@@ -977,10 +991,10 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			if !sok {
 				panic(VMError{err: &object.Erro{Message: "IterPar: __seq tem que ser lista", Kind: "runtime"}})
 			}
-			if i < 0 || i >= len(seqList.Elements) {
+			mid, dentro := seqList.Pega(i)
+			if !dentro {
 				panic(VMError{err: &object.Erro{Message: "IterPar: indice fora do range", Kind: "runtime"}})
 			}
-			mid := seqList.Elements[i]
 			// orig pode ser lista ou dict
 			if dOrig, isDict := orig.(*object.Dicionario); isDict {
 				// mid e a chave
@@ -988,13 +1002,13 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				if !ok {
 					panic(VMError{err: &object.Erro{Message: "IterPar: chave nao e chaveavel", Kind: "runtime"}})
 				}
-				par, existe := dOrig.Pares[chave.ChaveHash()]
+				par, existe := dOrig.Pega(chave.ChaveHash())
 				var valor object.Object = NADA
 				if existe {
 					valor = par.Valor
 				}
-				vm.push(mid)      // chave
-				vm.push(valor)    // valor
+				vm.push(mid)   // chave
+				vm.push(valor) // valor
 			} else {
 				// lista: 1o nome = indice (i), 2o = elemento (mid)
 				vm.push(vm.num.Int(int64(i)))
@@ -1448,11 +1462,11 @@ func vmIndex(cont, idx object.Object) (object.Object, error) {
 		if !ok {
 			return nil, fmt.Errorf("indice de lista tem que ser numero")
 		}
-		pos, dentro := object.IndiceNormalizado(int(n.Value), len(c.Elements))
+		v, dentro := c.Indice(int(n.Value))
 		if !dentro {
 			return nil, fmt.Errorf("esse indice (%d) ta fora da lista, o", int(n.Value))
 		}
-		return c.Elements[pos], nil
+		return v, nil
 	case *object.Texto:
 		n, ok := idx.(*object.Numero)
 		if !ok {
@@ -1469,7 +1483,7 @@ func vmIndex(cont, idx object.Object) (object.Object, error) {
 		if !ok {
 			return nil, fmt.Errorf("chave de dicionario invalida")
 		}
-		par, existe := c.Pares[chave.ChaveHash()]
+		par, existe := c.Pega(chave.ChaveHash())
 		if !existe {
 			return NADA, nil
 		}
@@ -1486,11 +1500,9 @@ func vmIndexSet(cont, idx, val object.Object) error {
 		if !ok {
 			return fmt.Errorf("indice de lista tem que ser numero")
 		}
-		pos, dentro := object.IndiceNormalizado(int(n.Value), len(c.Elements))
-		if !dentro {
+		if !c.Poe(int(n.Value), val) {
 			return fmt.Errorf("esse indice (%d) ta fora da lista, o", int(n.Value))
 		}
-		c.Elements[pos] = val
 	case *object.Dicionario:
 		chave, ok := idx.(object.Chaveavel)
 		if !ok {
@@ -1535,23 +1547,26 @@ func iguais(a, b object.Object) bool {
 	case *object.Nada:
 		return true
 	case *object.Lista:
-		bl := b.(*object.Lista)
-		if len(av.Elements) != len(bl.Elements) {
+		// retratos: comparar elemento aninhado trava outra colecao, e nunca
+		// seguramos duas travas ao mesmo tempo
+		ae, be := av.Visao(), b.(*object.Lista).Visao()
+		if len(ae) != len(be) {
 			return false
 		}
-		for i, e := range av.Elements {
-			if !iguais(e, bl.Elements[i]) {
+		for i, e := range ae {
+			if !iguais(e, be[i]) {
 				return false
 			}
 		}
 		return true
 	case *object.Dicionario:
 		bd := b.(*object.Dicionario)
-		if len(av.Pares) != len(bd.Pares) {
+		pares := av.Pares()
+		if len(pares) != bd.Tamanho() {
 			return false
 		}
-		for k, pa := range av.Pares {
-			pb, ok := bd.Pares[k]
+		for _, pa := range pares {
+			pb, ok := bd.Pega(pa.Chave.(object.Chaveavel).ChaveHash())
 			if !ok || !iguais(pa.Valor, pb.Valor) {
 				return false
 			}
@@ -1559,4 +1574,25 @@ func iguais(a, b object.Object) bool {
 		return true
 	}
 	return a == b
+}
+
+// globaisMu protege o slice de globais (dividido entre a VM raiz, os clones do
+// `bora` e as VMs de cada entrada da Sessao) depois que o modo concorrente
+// liga. Sem ela duas goroutines gravando global ao mesmo tempo podiam deixar
+// uma interface pela metade (tipo de um valor, dado do outro) pra quem le — e
+// isso derruba o processo. Antes da concorrencia ninguem trava. E uma so pro
+// processo porque o slice da Sessao sobrevive as VMs que o usam.
+var globaisMu sync.RWMutex
+
+func pegaGlobalTravado(globals []object.Object, idx int) object.Object {
+	globaisMu.RLock()
+	v := globals[idx]
+	globaisMu.RUnlock()
+	return v
+}
+
+func poeGlobalTravado(globals []object.Object, idx int, v object.Object) {
+	globaisMu.Lock()
+	globals[idx] = v
+	globaisMu.Unlock()
 }

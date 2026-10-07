@@ -1,8 +1,6 @@
 package interpreter
 
 import (
-	"sort"
-
 	"gambiarrascript/object"
 )
 
@@ -14,7 +12,7 @@ func builtinAdiciona(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("adiciona() espera uma lista, veio %s", args[0].Type())
 	}
-	l.Elements = append(l.Elements, args[1])
+	l.Adiciona(args[1])
 	return NADA
 }
 
@@ -26,13 +24,22 @@ func builtinRemove(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("remove() espera uma lista, veio %s", args[0].Type())
 	}
-	for idx, e := range l.Elements {
-		if iguais(e, args[1]) {
-			l.Elements = append(l.Elements[:idx], l.Elements[idx+1:]...)
-			break
+	// acha por valor num retrato (iguais pode travar colecao aninhada, entao
+	// nao roda com a trava desta lista) e tira pela identidade do elemento
+	// achado. Se outra goroutine tirou esse mesmo elemento no meio do caminho,
+	// procura de novo: o remove nunca "some" sem tirar nada.
+	for {
+		var alvo object.Object
+		for _, e := range l.Visao() {
+			if iguais(e, args[1]) {
+				alvo = e
+				break
+			}
+		}
+		if alvo == nil || l.RemoveObjeto(alvo) {
+			return NADA
 		}
 	}
-	return NADA
 }
 
 func builtinOrdena(args []object.Object) object.Object {
@@ -44,13 +51,13 @@ func builtinOrdena(args []object.Object) object.Object {
 		return erroBuiltin("ordena() espera uma lista, veio %s", args[0].Type())
 	}
 	var primeiroErro *object.Erro
-	sort.SliceStable(l.Elements, func(i, j int) bool {
+	l.Ordena(func(a, b object.Object) bool {
 		if primeiroErro != nil {
 			return false
 		}
-		menor, ok := comparaLista(l.Elements[i], l.Elements[j])
+		menor, ok := comparaLista(a, b)
 		if !ok {
-			primeiroErro = erroBuiltin("ordena() nao soube comparar %s com %s", l.Elements[i].Type(), l.Elements[j].Type())
+			primeiroErro = erroBuiltin("ordena() nao soube comparar %s com %s", a.Type(), b.Type())
 			return false
 		}
 		return menor
@@ -69,9 +76,7 @@ func builtinInverte(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("inverte() espera uma lista, veio %s", args[0].Type())
 	}
-	for i, j := 0, len(l.Elements)-1; i < j; i, j = i+1, j-1 {
-		l.Elements[i], l.Elements[j] = l.Elements[j], l.Elements[i]
-	}
+	l.Inverte()
 	return NADA
 }
 

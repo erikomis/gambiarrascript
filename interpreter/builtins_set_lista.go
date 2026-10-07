@@ -29,7 +29,7 @@ func builtinConjunto(args []object.Object) object.Object {
 	c := object.NovoConjunto()
 	switch v := args[0].(type) {
 	case *object.Lista:
-		for _, e := range v.Elements {
+		for _, e := range v.Visao() {
 			c.Adiciona(e)
 		}
 	case *object.Texto:
@@ -39,7 +39,7 @@ func builtinConjunto(args []object.Object) object.Object {
 	case *object.Dicionario:
 		v.Itera(func(p object.ParDic) { c.Adiciona(p.Chave) })
 	case *object.Conjunto:
-		for _, e := range v.Items {
+		for _, e := range v.Valores() {
 			c.Adiciona(e)
 		}
 	default:
@@ -104,10 +104,10 @@ func builtinUniao(args []object.Object) object.Object {
 		return e
 	}
 	out := object.NovoConjunto()
-	for _, v := range a.Items {
+	for _, v := range a.Valores() {
 		out.Adiciona(v)
 	}
-	for _, v := range b.Items {
+	for _, v := range b.Valores() {
 		out.Adiciona(v)
 	}
 	return out
@@ -119,7 +119,7 @@ func builtinIntersecao(args []object.Object) object.Object {
 		return e
 	}
 	out := object.NovoConjunto()
-	for _, v := range a.Items {
+	for _, v := range a.Valores() {
 		if b.Contem(v) {
 			out.Adiciona(v)
 		}
@@ -133,7 +133,7 @@ func builtinDiferenca(args []object.Object) object.Object {
 		return e
 	}
 	out := object.NovoConjunto()
-	for _, v := range a.Items {
+	for _, v := range a.Valores() {
 		if !b.Contem(v) {
 			out.Adiciona(v)
 		}
@@ -152,7 +152,9 @@ func (i *Interpreter) builtinReduz(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("reduz: lista esperada, veio %s", args[0].Type())
 	}
-	if len(lst.Elements) == 0 && len(args) < 3 {
+	seq := lst.ParaIterar()
+	n := seq.Tamanho()
+	if n == 0 && len(args) < 3 {
 		return NADA
 	}
 	fn := args[1]
@@ -161,11 +163,15 @@ func (i *Interpreter) builtinReduz(args []object.Object) object.Object {
 	if len(args) == 3 {
 		acc = args[2]
 	} else {
-		acc = lst.Elements[0]
+		acc, _ = seq.Pega(0)
 		idx = 1
 	}
-	for ; idx < len(lst.Elements); idx++ {
-		acc = i.applyFunction(fn, []object.Object{acc, lst.Elements[idx]}, 0, "<reduz>")
+	for ; idx < n; idx++ {
+		e, ok := seq.Pega(idx)
+		if !ok {
+			break // a propria gambiarra encolheu a lista
+		}
+		acc = i.applyFunction(fn, []object.Object{acc, e}, 0, "<reduz>")
 		if isError(acc) {
 			return acc
 		}
@@ -181,16 +187,20 @@ func (i *Interpreter) builtinAcha(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("acha: lista esperada, veio %s", args[0].Type())
 	}
-	for _, e := range lst.Elements {
+	var achado object.Object = NADA
+	percorre(lst, func(_ int, e object.Object) bool {
 		r := i.applyFunction(args[1], []object.Object{e}, 0, "<acha>")
 		if isError(r) {
-			return r
+			achado = r
+			return false
 		}
 		if ehVerdadeiro(r) {
-			return e
+			achado = e
+			return false
 		}
-	}
-	return NADA
+		return true
+	})
+	return achado
 }
 
 func (i *Interpreter) builtinAchaIndice(args []object.Object) object.Object {
@@ -201,16 +211,20 @@ func (i *Interpreter) builtinAchaIndice(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("acha_indice: lista esperada, veio %s", args[0].Type())
 	}
-	for idx, e := range lst.Elements {
+	var achado object.Object = object.NumInt(-1)
+	percorre(lst, func(idx int, e object.Object) bool {
 		r := i.applyFunction(args[1], []object.Object{e}, 0, "<acha_indice>")
 		if isError(r) {
-			return r
+			achado = r
+			return false
 		}
 		if ehVerdadeiro(r) {
-			return object.NumInt(int64(idx))
+			achado = object.NumInt(int64(idx))
+			return false
 		}
-	}
-	return object.NumInt(-1)
+		return true
+	})
+	return achado
 }
 
 func builtinUnicos(args []object.Object) object.Object {
@@ -222,13 +236,14 @@ func builtinUnicos(args []object.Object) object.Object {
 		return erroBuiltin("unicos: lista esperada, veio %s", args[0].Type())
 	}
 	seen := object.NovoConjunto()
-	out := make([]object.Object, 0, len(lst.Elements))
-	for _, e := range lst.Elements {
+	elems := lst.Visao()
+	out := make([]object.Object, 0, len(elems))
+	for _, e := range elems {
 		if seen.Adiciona(e) {
 			out = append(out, e)
 		}
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 func builtinAchatada(args []object.Object) object.Object {
@@ -239,15 +254,33 @@ func builtinAchatada(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("achatada: lista esperada, veio %s", args[0].Type())
 	}
-	out := make([]object.Object, 0, len(lst.Elements))
-	for _, e := range lst.Elements {
+	elems := lst.Visao()
+	out := make([]object.Object, 0, len(elems))
+	for _, e := range elems {
 		if sub, ok := e.(*object.Lista); ok {
-			out = append(out, sub.Elements...)
+			out = append(out, sub.Visao()...)
 		} else {
 			out = append(out, e)
 		}
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
+}
+
+// percorre chama f(indice, elemento) pra cada elemento da lista ate f devolver
+// false. Feito pra builtin que roda gambiarra do usuario a cada elemento: com
+// o modo concorrente ligado percorre um retrato (ParaIterar); sem, le elemento
+// a elemento pelo Pega (que passa a travar sozinho se a gambiarra ligar a
+// concorrencia no meio do caminho). O tamanho e o do inicio, igual o
+// pra_cada; se a gambiarra encolher a lista o laco para em vez de estourar.
+func percorre(l *object.Lista, f func(int, object.Object) bool) {
+	seq := l.ParaIterar()
+	n := seq.Tamanho()
+	for idx := 0; idx < n; idx++ {
+		e, ok := seq.Pega(idx)
+		if !ok || !f(idx, e) {
+			return
+		}
+	}
 }
 
 // ehVerdadeiro — fallback simples: nil/nada/deu_ruim → falso; resto → verdade.

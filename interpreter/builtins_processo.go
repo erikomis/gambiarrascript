@@ -28,7 +28,7 @@ func builtinRodaComando(args []object.Object) object.Object {
 		if !ok {
 			return erroBuiltin("roda_comando: 2o arg (args) tem que ser lista, veio %s", args[1].Type())
 		}
-		for idx, e := range lst.Elements {
+		for idx, e := range lst.Visao() {
 			t, ok := e.(*object.Texto)
 			if !ok {
 				return erroBuiltin("roda_comando: arg %d nao e texto, veio %s", idx, e.Type())

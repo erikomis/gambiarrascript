@@ -20,15 +20,21 @@ func (i *Interpreter) builtinMapeia(args []object.Object) object.Object {
 		return erroBuiltin("mapeia() espera uma lista, veio %s", args[0].Type())
 	}
 	fn := args[1]
-	out := make([]object.Object, 0, len(l.Elements))
-	for _, e := range l.Elements {
+	out := make([]object.Object, 0, l.Tamanho())
+	var erro object.Object
+	percorre(l, func(_ int, e object.Object) bool {
 		res := i.applyFunction(fn, []object.Object{e}, 0, "<mapeia>")
 		if isError(res) {
-			return res
+			erro = res
+			return false
 		}
 		out = append(out, res)
+		return true
+	})
+	if erro != nil {
+		return erro
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 // builtinFiltra devolve uma nova lista so com os elementos em que func devolveu
@@ -43,16 +49,22 @@ func (i *Interpreter) builtinFiltra(args []object.Object) object.Object {
 	}
 	fn := args[1]
 	out := make([]object.Object, 0)
-	for _, e := range l.Elements {
+	var erro object.Object
+	percorre(l, func(_ int, e object.Object) bool {
 		res := i.applyFunction(fn, []object.Object{e}, 0, "<filtra>")
 		if isError(res) {
-			return res
+			erro = res
+			return false
 		}
 		if isTruthy(res) {
 			out = append(out, e)
 		}
+		return true
+	})
+	if erro != nil {
+		return erro
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 // builtinOrdenaCom ordena a lista usando uma funcao comparator custom
@@ -67,12 +79,15 @@ func (i *Interpreter) builtinOrdenaCom(args []object.Object) object.Object {
 		return erroBuiltin("ordena_com() espera uma lista, veio %s", args[0].Type())
 	}
 	fn := args[1]
+	// o comparador e gambiarra do usuario: ordena uma COPIA sem trava nenhuma
+	// (a gambiarra pode ate mexer na lista) e no fim troca o conteudo de uma vez
+	elems := l.Copia()
 	var primeiroErro object.Object // *object.Erro ou *object.Sair (sai() no comparator)
-	sort.SliceStable(l.Elements, func(a, b int) bool {
+	sort.SliceStable(elems, func(a, b int) bool {
 		if primeiroErro != nil {
 			return false
 		}
-		ra := i.applyFunction(fn, []object.Object{l.Elements[a], l.Elements[b]}, 0, "<ordena_com>")
+		ra := i.applyFunction(fn, []object.Object{elems[a], elems[b]}, 0, "<ordena_com>")
 		if isError(ra) {
 			primeiroErro = ra
 			return false
@@ -95,6 +110,7 @@ func (i *Interpreter) builtinOrdenaCom(args []object.Object) object.Object {
 	if primeiroErro != nil {
 		return primeiroErro
 	}
+	l.Substitui(elems)
 	return NADA
 }
 
@@ -127,7 +143,7 @@ func (i *Interpreter) builtinArgumentos(args []object.Object) object.Object {
 	for idx, a := range i.argumentos {
 		elems[idx] = &object.Texto{Value: a}
 	}
-	return &object.Lista{Elements: elems}
+	return object.NovaLista(elems)
 }
 
 // bufferStdin cria um bufio.Reader preguiçoso sobre o stdin do interpretador,

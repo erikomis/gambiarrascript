@@ -115,7 +115,7 @@ func botaTexto(d *object.Dicionario, chave string, v object.Object) {
 
 func pegaTexto(d *object.Dicionario, chave string) (object.Object, bool) {
 	k := &object.Texto{Value: chave}
-	par, ok := d.Pares[k.ChaveHash()]
+	par, ok := d.Pega(k.ChaveHash())
 	if !ok {
 		return nil, false
 	}

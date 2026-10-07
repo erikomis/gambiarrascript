@@ -140,7 +140,7 @@ func (l *leitorJson) lista() (object.Object, error) {
 	l.pulaEspaco()
 	if l.pos < len(l.s) && l.s[l.pos] == ']' {
 		l.pos++
-		return &object.Lista{Elements: elems}, nil
+		return object.NovaLista(elems), nil
 	}
 	for {
 		l.pulaEspaco()
@@ -158,7 +158,7 @@ func (l *leitorJson) lista() (object.Object, error) {
 			l.pos++
 		case ']':
 			l.pos++
-			return &object.Lista{Elements: elems}, nil
+			return object.NovaLista(elems), nil
 		default:
 			return nil, l.erro("esperava `,` ou `]`")
 		}

@@ -138,15 +138,16 @@ t`
 	if !ok {
 		t.Fatalf("erro_pilha devia devolver lista de frames, veio %T (%s)", got, got.Inspect())
 	}
-	if len(lista.Elements) == 0 {
+	if lista.Tamanho() == 0 {
 		t.Fatalf("erro_pilha veio vazio, esperava o frame de f")
 	}
-	frame, ok := lista.Elements[0].(*object.Dicionario)
+	primeiro, _ := lista.Pega(0)
+	frame, ok := primeiro.(*object.Dicionario)
 	if !ok {
-		t.Fatalf("frame nao e dicionario, veio %T", lista.Elements[0])
+		t.Fatalf("frame nao e dicionario, veio %T", primeiro)
 	}
-	funcao := frame.Pares[(&object.Texto{Value: "funcao"}).ChaveHash()].Valor
-	linha := frame.Pares[(&object.Texto{Value: "linha"}).ChaveHash()].Valor
+	funcao, _ := frame.PegaTexto("funcao")
+	linha, _ := frame.PegaTexto("linha")
 	if funcao == nil || funcao.Inspect() != "f" {
 		t.Fatalf("frame sem funcao=f: %s", lista.Inspect())
 	}

@@ -27,7 +27,7 @@ no tree-walker (`gs roda --tree`).
 | `texto(v)` | `(qualquer)` | `texto` — conversao universal (o mesmo que o `mostra` imprime) |
 | `numero(t)` | `(texto)` | `numero` — aceita `"42"`, `" 3.5 "`, `"1e3"`; texto nao-numerico **da erro** |
 | `tamanho(x)` | `(texto, lista ou dicionario)` | `numero` — em texto conta caracteres (UTF-8), nao bytes |
-| `tipo(x)` | `(qualquer)` | `texto` — `"numero"`, `"texto"`, `"booleano"`, `"nada"`, `"lista"`, `"dicionario"`, `"conjunto"`, `"funcao"`, `"erro"`, `"futuro"`, `"cano"` ou `"nativo"` |
+| `tipo(x)` | `(qualquer)` | `texto` — `"numero"`, `"texto"`, `"booleano"`, `"nada"`, `"lista"`, `"dicionario"`, `"conjunto"`, `"funcao"`, `"erro"`, `"futuro"`, `"cano"`, `"trava"` ou `"nativo"` |
 
 ```gambiarrascript
 mostra tipo(3.14)                # numero
@@ -540,6 +540,8 @@ Detalhes em [Arruma / quebrou](/docs/erros).
 | `fecha(cano)` | `(cano ou conexao)` | `nada` — pode chamar mais de uma vez |
 | `espera(futuro)` | `(futuro ou lista de futuros)` | o valor (ou a lista de valores, na ordem) |
 | `paralelo(lista, fn)` | `(lista, gambiarra)` | `lista` com `fn(item)` rodado em paralelo (ate 256 de uma vez), na ordem original |
+| `trava()` | `()` | `trava` — lock pra usar com `com_trava` |
+| `com_trava(t, fn)` | `(trava, gambiarra)` | o que `fn()` devolver, rodada segurando a trava (solta sempre; erro sobe; nao e reentrante) |
 
 A palavra-chave `bora fn(args)` dispara a gambiarra numa goroutine e devolve
 um futuro. Detalhes em [Concorrencia](/docs/concorrencia).

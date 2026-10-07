@@ -326,6 +326,10 @@ func (i *Interpreter) ServidorHandler() http.Handler {
 }
 
 func (s *servidorEstado) Handler() http.Handler {
+	// cada requisicao (e cada websocket) roda o handler numa goroutine do
+	// net/http: liga o modo concorrente AGORA, antes da primeira (ver
+	// object/concorrencia.go)
+	object.AtivaConcorrencia()
 	return http.HandlerFunc(s.serve)
 }
 
@@ -512,7 +516,7 @@ func dicBota(d *object.Dicionario, chave string, valor object.Object) {
 }
 
 func dicPega(d *object.Dicionario, chave string) (object.Object, bool) {
-	par, ok := d.Pares[(&object.Texto{Value: chave}).ChaveHash()]
+	par, ok := d.Pega((&object.Texto{Value: chave}).ChaveHash())
 	if !ok {
 		return nil, false
 	}
@@ -597,10 +601,11 @@ func (s *servidorEstado) normaliza(r *http.Request, onde string, res object.Obje
 // numero, cabecalhos dicionario) e o formato de resposta; qualquer outro
 // dicionario e dado e vira JSON. `{"status": "ok"}` e dado (status texto).
 func ehDicResposta(d *object.Dicionario) bool {
-	if len(d.Pares) == 0 {
+	pares := d.Pares()
+	if len(pares) == 0 {
 		return false
 	}
-	for _, par := range d.Pares {
+	for _, par := range pares {
 		k, ok := par.Chave.(*object.Texto)
 		if !ok {
 			return false
@@ -639,7 +644,7 @@ func respostaDoDic(d *object.Dicionario) (*respostaHTTP, *object.Erro) {
 				case *object.Lista:
 					// varios valores = varias linhas (Set-Cookie de 2 cookies)
 					resp.cabecalhos.Del(nome.Value)
-					for _, e := range val.Elements {
+					for _, e := range val.Copia() {
 						if t, ok := e.(*object.Texto); ok {
 							resp.cabecalhos.Add(nome.Value, t.Value)
 						}
@@ -695,9 +700,9 @@ func (resp *respostaHTTP) dicionario() *object.Dicionario {
 			dicBota(cab, n, &object.Texto{Value: vs[0]})
 			continue
 		}
-		l := &object.Lista{}
+		l := object.NovaLista(make([]object.Object, 0, len(vs)))
 		for _, v := range vs {
-			l.Elements = append(l.Elements, &object.Texto{Value: v})
+			l.Adiciona(&object.Texto{Value: v})
 		}
 		dicBota(cab, n, l)
 	}

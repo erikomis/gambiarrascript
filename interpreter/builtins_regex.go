@@ -70,9 +70,9 @@ func builtinCombinaRegex(args []object.Object) object.Object {
 		for _, g := range m {
 			grp = append(grp, &object.Texto{Value: g})
 		}
-		out = append(out, &object.Lista{Elements: grp})
+		out = append(out, object.NovaLista(grp))
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 func builtinSubstituiRegex(args []object.Object) object.Object {
@@ -156,7 +156,7 @@ func builtinSeparaRegex(args []object.Object) object.Object {
 	for _, p := range parts {
 		out = append(out, &object.Texto{Value: p})
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 // compilaRegex retorna *regexp.Regexp compilado do argumento (Texto).

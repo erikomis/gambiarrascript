@@ -35,6 +35,8 @@ const (
 
 	// colecoes extras
 	CONJUNTO_OBJ = "CONJUNTO" // Set: chaves unicas
+
+	TRAVA_OBJ = "TRAVA" // lock explicito: trava() / com_trava(t, fn)
 )
 
 type Object interface {
@@ -210,17 +212,6 @@ type Nada struct{}
 func (n *Nada) Type() ObjectType { return NADA_OBJ }
 func (n *Nada) Inspect() string  { return "nada" }
 
-type Lista struct{ Elements []Object }
-
-func (l *Lista) Type() ObjectType { return LISTA_OBJ }
-func (l *Lista) Inspect() string {
-	partes := make([]string, len(l.Elements))
-	for i, e := range l.Elements {
-		partes[i] = e.Inspect()
-	}
-	return "[" + strings.Join(partes, ", ") + "]"
-}
-
 type Funcao struct {
 	Parametros []*ast.Parametro
 	Body       *ast.BlockStatement
@@ -257,7 +248,7 @@ type CompiledFunction struct {
 	Bytecode  []byte
 	Free      []Object
 	Linhas    []LinhaPC // tabela pc->linha pra erros com posicao
-	Variadic  bool       // true: ultimo param e ...resto (coleta args extras)
+	Variadic  bool      // true: ultimo param e ...resto (coleta args extras)
 }
 
 func (f *CompiledFunction) Type() ObjectType { return FUNCAO_OBJ }
@@ -392,16 +383,6 @@ func NormalizarFatia(inicio, fim *Numero, tamanho int) (int, int) {
 	return lo, hi
 }
 
-// FatiaLista devolve uma lista NOVA com os elementos [inicio:fim]. Copia o
-// trecho: fatiar direto o slice do Go dividia o array com a original, e um
-// adiciona na fatia sobrescrevia elemento da original.
-func FatiaLista(l *Lista, inicio, fim *Numero) *Lista {
-	lo, hi := NormalizarFatia(inicio, fim, len(l.Elements))
-	elems := make([]Object, hi-lo)
-	copy(elems, l.Elements[lo:hi])
-	return &Lista{Elements: elems}
-}
-
 type BuiltinFunc func(args []Object) Object
 
 type Builtin struct {
@@ -431,88 +412,6 @@ func (n *Numero) ChaveHash() HashKey {
 	return HashKey{Tipo: NUMERO_OBJ, Valor: FormatNumero(n.Value)}
 }
 func (b *Booleano) ChaveHash() HashKey { return HashKey{Tipo: BOOLEANO_OBJ, Valor: b.Inspect()} }
-
-type ParDic struct {
-	Chave Object
-	Valor Object
-}
-
-type Dicionario struct {
-	Pares map[HashKey]ParDic
-	// Ordem guarda as chaves na ordem em que ENTRARAM. Sem ela a iteracao usava
-	// a ordem do map do Go, que e embaralhada de proposito e muda a cada
-	// execucao — `pra_cada k em d` saia diferente toda vez que voce rodava.
-	// Igual Python 3.7+ e JS: quem chega primeiro, sai primeiro.
-	Ordem []HashKey
-}
-
-// NovoDicionario cria um dicionario vazio pronto pra receber Bota.
-func NovoDicionario() *Dicionario {
-	return &Dicionario{Pares: map[HashKey]ParDic{}}
-}
-
-// Bota insere ou atualiza um par mantendo a ordem de insercao. Sobrescrever
-// chave que ja existe NAO muda o lugar dela na ordem (igual Python/JS).
-func (d *Dicionario) Bota(k HashKey, par ParDic) {
-	if _, ja := d.Pares[k]; !ja {
-		d.Ordem = append(d.Ordem, k)
-	}
-	d.Pares[k] = par
-}
-
-// Tira remove a chave do dicionario e da ordem.
-func (d *Dicionario) Tira(k HashKey) {
-	if _, ja := d.Pares[k]; !ja {
-		return
-	}
-	delete(d.Pares, k)
-	for i, o := range d.Ordem {
-		if o == k {
-			d.Ordem = append(d.Ordem[:i], d.Ordem[i+1:]...)
-			break
-		}
-	}
-}
-
-// Chaves devolve as chaves na ordem de insercao. Se alguem escreveu direto no
-// mapa (sem passar por Bota), a chave orfa entra no fim em vez de sumir — a
-// iteracao pode perder a ORDEM, nunca um par.
-func (d *Dicionario) Chaves() []HashKey {
-	if len(d.Ordem) == len(d.Pares) {
-		return d.Ordem
-	}
-	vistas := make(map[HashKey]bool, len(d.Ordem))
-	ordem := make([]HashKey, 0, len(d.Pares))
-	for _, k := range d.Ordem {
-		if _, existe := d.Pares[k]; existe && !vistas[k] {
-			vistas[k] = true
-			ordem = append(ordem, k)
-		}
-	}
-	for k := range d.Pares {
-		if !vistas[k] {
-			ordem = append(ordem, k)
-		}
-	}
-	d.Ordem = ordem
-	return d.Ordem
-}
-
-// Itera roda a funcao em cada par, na ordem de insercao.
-func (d *Dicionario) Itera(f func(ParDic)) {
-	for _, k := range d.Chaves() {
-		f(d.Pares[k])
-	}
-}
-
-func (d *Dicionario) Type() ObjectType { return DICIONARIO_OBJ }
-func (d *Dicionario) Inspect() string {
-	partes := make([]string, 0, len(d.Pares))
-	d.Itera(func(par ParDic) {
-		partes = append(partes, inspectComAspas(par.Chave)+": "+inspectComAspas(par.Valor))
-	})
-	return "{" + strings.Join(partes, ", ") + "}"
-}
 
 // Nativo e um handle opaco que embrulha um valor Go (ex.: uma conexao de banco).
 type Nativo struct {
@@ -653,63 +552,4 @@ func inspectComAspas(o Object) string {
 		return `"` + t.Value + `"`
 	}
 	return o.Inspect()
-}
-
-// Conjunto implementa set com chaves do mesmo Dicionario (Chaveavel).
-type Conjunto struct {
-	Items map[HashKey]Object
-}
-
-func NovoConjunto() *Conjunto {
-	return &Conjunto{Items: map[HashKey]Object{}}
-}
-
-// Adiciona insere v no conjunto. Devolve true se era novo.
-func (c *Conjunto) Adiciona(v Object) bool {
-	ch, ok := v.(Chaveavel)
-	if !ok {
-		return false
-	}
-	k := ch.ChaveHash()
-	if _, existe := c.Items[k]; existe {
-		return false
-	}
-	c.Items[k] = v
-	return true
-}
-
-// Contem devolve true se v esta no conjunto.
-func (c *Conjunto) Contem(v Object) bool {
-	ch, ok := v.(Chaveavel)
-	if !ok {
-		return false
-	}
-	_, existe := c.Items[ch.ChaveHash()]
-	return existe
-}
-
-// Remove tira v do conjunto. Devolve true se existia.
-func (c *Conjunto) Remove(v Object) bool {
-	ch, ok := v.(Chaveavel)
-	if !ok {
-		return false
-	}
-	k := ch.ChaveHash()
-	if _, existe := c.Items[k]; !existe {
-		return false
-	}
-	delete(c.Items, k)
-	return true
-}
-
-func (c *Conjunto) Type() ObjectType { return CONJUNTO_OBJ }
-func (c *Conjunto) Inspect() string {
-	partes := make([]string, 0, len(c.Items))
-	for _, v := range c.Items {
-		partes = append(partes, inspectComAspas(v))
-	}
-	if len(partes) == 0 {
-		return "conjunto()"
-	}
-	return "{" + strings.Join(partes, ", ") + "}"
 }

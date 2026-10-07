@@ -28,8 +28,8 @@ func TestCombinaRegex(t *testing.T) {
 	if !ok {
 		t.Fatalf("esperava lista")
 	}
-	if len(l.Elements) != 2 {
-		t.Fatalf("esperava 2 matches, veio %d", len(l.Elements))
+	if l.Tamanho() != 2 {
+		t.Fatalf("esperava 2 matches, veio %d", l.Tamanho())
 	}
 }
 

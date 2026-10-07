@@ -10,32 +10,31 @@
 
 bota conexoes = []
 
-# cada conexao roda o handler na propria goroutine: a lista compartilhada
-# so muda com a trava na mao (cano de 1 lugar: envia tranca, recebe destranca)
-bota trava = cano(1)
-gambiarra com_trava(f)
-    envia(trava, deu_bom)
-    arruma
-        funciona f()
-    finalmente
-        recebe(trava)
-    acabou_finalmente
-acabou_finalmente
+# cada conexao roda o handler na propria goroutine. Cada operacao na lista
+# (adiciona, remove, fatia, tamanho) ja e atomica sozinha — duas goroutines
+# mexendo nela ao mesmo tempo nunca quebram nada. A trava e pra quando VARIAS
+# operacoes tem que rodar juntas, sem ninguem se meter no meio.
+bota sala = trava()
 
-# manda pra todo mundo. Copia a lista com a trava e envia fora dela: um
-# cliente lento nao segura os outros. Dicionario vai como JSON; envia pra
-# conexao que ja caiu so perde a mensagem (nao estoura).
+# manda pra todo mundo. `conexoes[0:]` tira um retrato da lista (atomico) e o
+# envio roda fora de qualquer trava: um cliente lento nao segura os outros.
+# Dicionario vai como JSON; envia pra conexao que ja caiu so perde a mensagem
+# (nao estoura).
 gambiarra espalha(msg)
-    bota alvos = com_trava(gambiarra() funciona conexoes[0:] acabou_finalmente)
-    pra_cada c em alvos
+    pra_cada c em conexoes[0:]
         envia(c, msg)
     acabou_finalmente
 acabou_finalmente
 
 rota_ws("/chat", gambiarra(ws, pedido)
     bota nome = pedido["query"]["nome"] ?? "anonimo"
-    com_trava(gambiarra() adiciona(conexoes, ws) acabou_finalmente)
-    mostra "${nome} entrou (${tamanho(conexoes)} na sala)"
+    # entrar e contar quem ta na sala e uma operacao so: com a trava, ninguem
+    # entra nem sai entre o adiciona e o tamanho
+    bota na_sala = com_trava(sala, gambiarra()
+        adiciona(conexoes, ws)
+        funciona tamanho(conexoes)
+    acabou_finalmente)
+    mostra "${nome} entrou (${na_sala} na sala)"
     espalha({"tipo": "entrou", "nome": nome})
     enquanto deu_bom
         bota texto_msg = recebe(ws) # bloqueia; nada = o cliente saiu
@@ -44,8 +43,11 @@ rota_ws("/chat", gambiarra(ws, pedido)
         acabou_finalmente
         espalha({"tipo": "msg", "nome": nome, "texto": texto_msg})
     acabou_finalmente
-    com_trava(gambiarra() remove(conexoes, ws) acabou_finalmente)
-    mostra "${nome} saiu"
+    bota ficaram = com_trava(sala, gambiarra()
+        remove(conexoes, ws)
+        funciona tamanho(conexoes)
+    acabou_finalmente)
+    mostra "${nome} saiu (${ficaram} na sala)"
     espalha({"tipo": "saiu", "nome": nome})
 acabou_finalmente)
 

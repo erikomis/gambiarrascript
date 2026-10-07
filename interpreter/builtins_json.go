@@ -67,7 +67,7 @@ func escreveJson(buf *bytes.Buffer, o object.Object) *object.Erro {
 		escreveTextoJson(buf, val.Value)
 	case *object.Lista:
 		buf.WriteByte('[')
-		for i, e := range val.Elements {
+		for i, e := range val.Visao() {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
@@ -78,16 +78,22 @@ func escreveJson(buf *bytes.Buffer, o object.Object) *object.Erro {
 		buf.WriteByte(']')
 	case *object.Dicionario:
 		buf.WriteByte('{')
-		for i, k := range val.Chaves() {
-			par := val.Pares[k]
-			if i > 0 {
+		var erro *object.Erro
+		primeiro := true
+		val.Itera(func(par object.ParDic) {
+			if erro != nil {
+				return
+			}
+			if !primeiro {
 				buf.WriteByte(',')
 			}
+			primeiro = false
 			escreveTextoJson(buf, chaveJson(par.Chave))
 			buf.WriteByte(':')
-			if erro := escreveJson(buf, par.Valor); erro != nil {
-				return erro
-			}
+			erro = escreveJson(buf, par.Valor)
+		})
+		if erro != nil {
+			return erro
 		}
 		buf.WriteByte('}')
 	default:

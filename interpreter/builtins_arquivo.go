@@ -153,7 +153,7 @@ func builtinLeDir(args []object.Object) object.Object {
 	for _, n := range nomes {
 		out = append(out, &object.Texto{Value: n})
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 // builtinCaminhoJunta usa filepath.Join pra juntar N pedacos num caminho

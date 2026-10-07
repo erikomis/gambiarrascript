@@ -116,8 +116,9 @@ func listaDeTextos(nome string, v object.Object) ([]string, *object.Erro) {
 	if !ok {
 		return nil, erroBuiltin("cors(): %q tem que ser lista de texto, veio %s", nome, v.Type())
 	}
-	out := make([]string, 0, len(l.Elements))
-	for _, e := range l.Elements {
+	elems := l.Copia()
+	out := make([]string, 0, len(elems))
+	for _, e := range elems {
 		t, ok := e.(*object.Texto)
 		if !ok {
 			return nil, erroBuiltin("cors(): %q tem que ser lista de texto, achei um %s la dentro", nome, e.Type())

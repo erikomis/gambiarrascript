@@ -93,7 +93,7 @@ func builtinBusca(args []object.Object) object.Object {
 func opcaoCorpo(d *object.Dicionario) ([]byte, string, *object.Erro) {
 	var achadas []string
 	for _, k := range []string{"corpo", "corpo_base64", "json"} {
-		if _, ok := d.Pares[(&object.Texto{Value: k}).ChaveHash()]; ok {
+		if _, ok := d.Pega((&object.Texto{Value: k}).ChaveHash()); ok {
 			achadas = append(achadas, k)
 		}
 	}
@@ -121,7 +121,7 @@ func opcaoCorpo(d *object.Dicionario) ([]byte, string, *object.Erro) {
 		}
 		return bs, "", nil
 	}
-	par := d.Pares[(&object.Texto{Value: "json"}).ChaveHash()]
+	par, _ := d.Pega((&object.Texto{Value: "json"}).ChaveHash())
 	var buf bytes.Buffer
 	if e := escreveJson(&buf, par.Valor); e != nil {
 		return nil, "", e
@@ -148,7 +148,7 @@ func metodoValido(m string) bool {
 
 // opcaoTexto le uma chave-texto do dicionario de opcoes; "" se ausente; erro se tipo errado.
 func opcaoTexto(d *object.Dicionario, chave string) (string, *object.Erro) {
-	par, existe := d.Pares[(&object.Texto{Value: chave}).ChaveHash()]
+	par, existe := d.Pega((&object.Texto{Value: chave}).ChaveHash())
 	if !existe {
 		return "", nil
 	}
@@ -161,7 +161,7 @@ func opcaoTexto(d *object.Dicionario, chave string) (string, *object.Erro) {
 
 func opcaoCabecalhos(d *object.Dicionario) (map[string]string, *object.Erro) {
 	out := map[string]string{}
-	par, existe := d.Pares[(&object.Texto{Value: "cabecalhos"}).ChaveHash()]
+	par, existe := d.Pega((&object.Texto{Value: "cabecalhos"}).ChaveHash())
 	if !existe {
 		return out, nil
 	}
@@ -169,8 +169,7 @@ func opcaoCabecalhos(d *object.Dicionario) (map[string]string, *object.Erro) {
 	if !ok {
 		return nil, erroBuiltin("a opcao \"cabecalhos\" tem que ser um dicionario, veio %s", par.Valor.Type())
 	}
-	for _, ch := range dic.Chaves() {
-		p := dic.Pares[ch]
+	for _, p := range dic.Pares() {
 		chave, ok := p.Chave.(*object.Texto)
 		if !ok {
 			return nil, erroBuiltin("nome de cabecalho tem que ser texto, veio %s", p.Chave.Type())
@@ -185,7 +184,7 @@ func opcaoCabecalhos(d *object.Dicionario) (map[string]string, *object.Erro) {
 }
 
 func opcaoTimeout(d *object.Dicionario) (time.Duration, *object.Erro) {
-	par, existe := d.Pares[(&object.Texto{Value: "timeout"}).ChaveHash()]
+	par, existe := d.Pega((&object.Texto{Value: "timeout"}).ChaveHash())
 	if !existe {
 		return 0, nil
 	}

@@ -104,5 +104,5 @@ func builtinGlob(args []object.Object) object.Object {
 	for i, m := range matches {
 		elems[i] = &object.Texto{Value: m}
 	}
-	return &object.Lista{Elements: elems}
+	return object.NovaLista(elems)
 }

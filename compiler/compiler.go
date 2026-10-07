@@ -262,6 +262,8 @@ var nomesBuiltins = []string{
 	"log_debug", "log_info", "log_aviso", "log_erro", "opcoes", "carrega_env",
 	// servidor parte 2 + websocket
 	"responde_json", "antes", "depois", "cors", "serve_pasta", "rota_ws", "conecta_ws",
+	// concorrencia: lock explicito
+	"trava", "com_trava",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que

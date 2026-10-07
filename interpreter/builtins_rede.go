@@ -52,8 +52,7 @@ func lerOpcoesRede(nome string, o object.Object, permitidas ...string) (opcoesRe
 	if !ok {
 		return op, erroBuiltin("%s(): as opcoes tem que ser um dicionario, veio %s", nome, o.Type())
 	}
-	for _, ch := range d.Chaves() {
-		par := d.Pares[ch]
+	for _, par := range d.Pares() {
 		k, ok := par.Chave.(*object.Texto)
 		if !ok || !contemTexto(permitidas, k.Value) {
 			return op, erroBuiltin("%s(): opcao %s nao existe aqui (vale: %s)", nome, inspectComAspasRede(par.Chave), strings.Join(permitidas, ", "))
@@ -386,6 +385,9 @@ func (i *Interpreter) builtinEscutaTcp(args []object.Object) object.Object {
 			return e
 		}
 	}
+	// cada conexao/datagrama roda o handler na propria goroutine: liga o modo
+	// concorrente ANTES (ver object/concorrencia.go)
+	object.AtivaConcorrencia()
 	ln, err := net.Listen("tcp", endereco)
 	if err != nil {
 		return erroBuiltinKind(KindRede, "escuta_tcp(): nao consegui escutar em %s: %v", endereco, err)
@@ -583,6 +585,9 @@ func (i *Interpreter) builtinEscutaUdp(args []object.Object) object.Object {
 			return e
 		}
 	}
+	// cada conexao/datagrama roda o handler na propria goroutine: liga o modo
+	// concorrente ANTES (ver object/concorrencia.go)
+	object.AtivaConcorrencia()
 	pc, err := net.ListenPacket("udp", endereco)
 	if err != nil {
 		return erroBuiltinKind(KindRede, "escuta_udp(): nao consegui escutar em %s: %v", endereco, err)

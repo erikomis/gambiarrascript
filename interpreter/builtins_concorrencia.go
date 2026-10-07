@@ -105,3 +105,46 @@ func (i *Interpreter) builtinFecha(args []object.Object) object.Object {
 	}
 	return erroBuiltin("fecha() espera um cano ou conexao, veio %s", args[0].Type())
 }
+
+// builtinTrava cria uma trava (lock) pra usar com com_trava.
+//
+//	bota t = trava()
+//	com_trava(t, gambiarra() { bota d["n"] = d["n"] + 1 })
+//
+// Cada operacao numa lista/dicionario/conjunto ja e atomica sozinha; a trava
+// e pra quando voce precisa que VARIAS operacoes (ler, calcular, escrever)
+// rodem juntas sem outra goroutine se meter no meio.
+func builtinTrava(args []object.Object) object.Object {
+	if len(args) != 0 {
+		return erroBuiltin("trava() nao quer argumento nenhum, veio %d", len(args))
+	}
+	return object.NovaTrava()
+}
+
+// builtinComTrava: com_trava(trava, gambiarra) roda a gambiarra (sem
+// argumentos) segurando a trava e devolve o que ela devolver. Solta a trava
+// SEMPRE — inclusive quando a gambiarra da erro, que sobe igualzinho pra quem
+// chamou (da pra pegar com arruma/quebrou). A trava NAO e reentrante: chamar
+// com_trava na mesma trava de dentro da propria gambiarra e erro (senao
+// travava pra sempre). Outra goroutine (bora, handler) que pedir a mesma trava
+// so espera a vez.
+func (i *Interpreter) builtinComTrava(args []object.Object) object.Object {
+	if len(args) != 2 {
+		return erroBuiltin("com_trava() quer 2 argumentos (trava, gambiarra), veio %d", len(args))
+	}
+	t, ok := args[0].(*object.Trava)
+	if !ok {
+		return erroBuiltin("com_trava() espera uma trava no 1o arg (cria com trava()), veio %s", object.NomeTipo(args[0]))
+	}
+	fn := args[1]
+	if !ehChamavel(fn) {
+		return erroBuiltin("com_trava() espera uma gambiarra no 2o arg, veio %s", object.NomeTipo(fn))
+	}
+	res, reentrou := t.Segura(func() object.Object {
+		return i.applyFunction(fn, nil, 0, "<com_trava>")
+	})
+	if reentrou {
+		return erroBuiltin("com_trava(): essa trava ja ta com voce — trava nao e reentrante, pedir de novo de dentro do com_trava ia travar pra sempre")
+	}
+	return res
+}

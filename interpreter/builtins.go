@@ -20,6 +20,7 @@ var builtins = map[string]*object.Builtin{
 	"responde_json": {Nome: "responde_json", Fn: builtinRespondeJson},
 	"conecta_ws":    {Nome: "conecta_ws", Fn: builtinConectaWs},
 	"tipo":     {Nome: "tipo", Fn: builtinTipo},
+	"trava":    {Nome: "trava", Fn: builtinTrava},
 
 	// texto
 	"formata":     {Nome: "formata", Fn: builtinFormata},
@@ -187,9 +188,9 @@ func builtinTamanho(args []object.Object) object.Object {
 	}
 	switch arg := args[0].(type) {
 	case *object.Lista:
-		return object.NumInt(int64(len(arg.Elements)))
+		return object.NumInt(int64(arg.Tamanho()))
 	case *object.Dicionario:
-		return object.NumInt(int64(len(arg.Pares)))
+		return object.NumInt(int64(arg.Tamanho()))
 	case *object.Texto:
 		return object.NumInt(int64(len([]rune(arg.Value))))
 	default:
@@ -205,9 +206,9 @@ func builtinChaves(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("chaves() so funciona com dicionario, veio %s", args[0].Type())
 	}
-	elems := make([]object.Object, 0, len(d.Pares))
+	elems := make([]object.Object, 0, d.Tamanho())
 	d.Itera(func(par object.ParDic) { elems = append(elems, par.Chave) })
-	return &object.Lista{Elements: elems}
+	return object.NovaLista(elems)
 }
 
 func builtinTem(args []object.Object) object.Object {
@@ -222,7 +223,7 @@ func builtinTem(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("tem() nao consegue usar %s como chave", args[1].Type())
 	}
-	_, existe := d.Pares[chave.ChaveHash()]
+	_, existe := d.Pega(chave.ChaveHash())
 	return boolDoNativo(existe)
 }
 

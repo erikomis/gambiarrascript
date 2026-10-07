@@ -62,7 +62,7 @@ func (i *Interpreter) builtinOpcoes(args []object.Object) object.Object {
 		case *object.Numero, *object.Texto, *object.Booleano, *object.Nada:
 		case *object.Lista:
 			// copia: o resultado nao pode ser o mesmo objeto do padrao
-			par.Valor = &object.Lista{Elements: append([]object.Object(nil), v.Elements...)}
+			par.Valor = object.NovaLista(v.Copia())
 		default:
 			erro = erroBuiltin("opcoes: padrao de --%s tem que ser numero, texto, booleano, lista ou nada, veio %s", k.Value, par.Valor.Type())
 			return
@@ -165,12 +165,13 @@ func (i *Interpreter) builtinOpcoes(args []object.Object) object.Object {
 		case *object.Lista:
 			if !listaTocada[chave] {
 				listaTocada[chave] = true
-				p = &object.Lista{}
+				p = object.NovaLista(nil)
 				res.Bota(k.ChaveHash(), object.ParDic{Chave: k, Valor: p})
 			} else {
-				p = res.Pares[k.ChaveHash()].Valor.(*object.Lista)
+				par, _ := res.Pega(k.ChaveHash())
+				p = par.Valor.(*object.Lista)
 			}
-			p.Elements = append(p.Elements, &object.Texto{Value: valor})
+			p.Adiciona(&object.Texto{Value: valor})
 			continue
 		default: // texto ou nada
 			v = &object.Texto{Value: valor}
@@ -181,7 +182,7 @@ func (i *Interpreter) builtinOpcoes(args []object.Object) object.Object {
 	if posicionais == nil {
 		posicionais = []object.Object{}
 	}
-	botaTexto(res, "_", &object.Lista{Elements: posicionais})
+	botaTexto(res, "_", object.NovaLista(posicionais))
 	return res
 }
 
@@ -258,7 +259,7 @@ func ajudaOpcoes(nomes []string, tipos map[string]object.Object, ajudas *object.
 			padrao = v.Inspect()
 		case *object.Lista:
 			flag += " <texto>..."
-			if len(v.Elements) > 0 {
+			if v.Tamanho() > 0 {
 				padrao = v.Inspect()
 			}
 		case *object.Texto:

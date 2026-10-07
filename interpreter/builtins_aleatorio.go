@@ -31,13 +31,12 @@ func builtinEmbaralha(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("embaralha: lista esperada, veio %s", args[0].Type())
 	}
-	out := make([]object.Object, len(lst.Elements))
-	copy(out, lst.Elements)
+	out := lst.Copia()
 	for i := len(out) - 1; i > 0; i-- {
 		j := rngIntn(i + 1)
 		out[i], out[j] = out[j], out[i]
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 // builtinEscolheUm devolve um elemento aleatorio da lista. Lista vazia da erro.
@@ -49,10 +48,11 @@ func builtinEscolheUm(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("escolhe_um: lista esperada, veio %s", args[0].Type())
 	}
-	if len(lst.Elements) == 0 {
+	elems := lst.Visao()
+	if len(elems) == 0 {
 		return erroBuiltin("escolhe_um: lista vazia, nao tem de onde escolher")
 	}
-	return lst.Elements[rngIntn(len(lst.Elements))]
+	return elems[rngIntn(len(elems))]
 }
 
 // builtinUuid devolve um UUID versao 4 em texto. Usa o gerador compartilhado

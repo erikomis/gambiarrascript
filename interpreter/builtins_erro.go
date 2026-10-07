@@ -93,7 +93,7 @@ func builtinErroPilha(args []object.Object) object.Object {
 		dic.Bota(k2.ChaveHash(), object.ParDic{Chave: k2, Valor: &object.Numero{Value: float64(f.Line)}})
 		elems = append(elems, dic)
 	}
-	return &object.Lista{Elements: elems}
+	return object.NovaLista(elems)
 }
 
 func builtinErroCausa(args []object.Object) object.Object {

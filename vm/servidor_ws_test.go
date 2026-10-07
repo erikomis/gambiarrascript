@@ -25,18 +25,9 @@ import (
 
 // chat de broadcast igual ao examples/chat_ws.gs (sem a pagina).
 const fonteChat = `bota conexoes = []
-bota trava = cano(1)
-gambiarra com_trava(f)
-    envia(trava, deu_bom)
-    arruma
-        funciona f()
-    finalmente
-        recebe(trava)
-    acabou_finalmente
-acabou_finalmente
+bota sala = trava()
 gambiarra espalha(msg)
-    bota alvos = com_trava(gambiarra() funciona conexoes[0:] acabou_finalmente)
-    pra_cada c em alvos
+    pra_cada c em conexoes[0:]
         envia(c, msg)
     acabou_finalmente
 acabou_finalmente
@@ -47,7 +38,10 @@ antes(gambiarra(pedido)
 acabou_finalmente)
 rota_ws("/chat/:sala", gambiarra(ws, pedido)
     bota nome = pedido.query["nome"] ?? "anonimo"
-    com_trava(gambiarra() adiciona(conexoes, ws) acabou_finalmente)
+    bota na_sala = com_trava(sala, gambiarra()
+        adiciona(conexoes, ws)
+        funciona tamanho(conexoes)
+    acabou_finalmente)
     espalha({"tipo": "entrou", "nome": nome, "sala": pedido.params.sala})
     enquanto deu_bom
         bota m = recebe(ws)
@@ -56,7 +50,7 @@ rota_ws("/chat/:sala", gambiarra(ws, pedido)
         acabou_finalmente
         espalha({"tipo": "msg", "nome": nome, "texto": m})
     acabou_finalmente
-    com_trava(gambiarra() remove(conexoes, ws) acabou_finalmente)
+    com_trava(sala, gambiarra() remove(conexoes, ws) acabou_finalmente)
     espalha({"tipo": "saiu", "nome": nome})
 acabou_finalmente)
 rota_ws("/eco", gambiarra(ws)

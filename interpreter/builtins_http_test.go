@@ -13,7 +13,7 @@ import (
 // leChave extrai o valor de uma chave-texto de um dicionario de resposta.
 func leChave(t *testing.T, d *object.Dicionario, chave string) object.Object {
 	t.Helper()
-	par, ok := d.Pares[(&object.Texto{Value: chave}).ChaveHash()]
+	par, ok := d.Pega((&object.Texto{Value: chave}).ChaveHash())
 	if !ok {
 		t.Fatalf("resposta nao tem a chave %q", chave)
 	}
@@ -69,16 +69,16 @@ func TestBuscaPostComCorpoEHeader(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	opcoes := &object.Dicionario{Pares: map[object.HashKey]object.ParDic{}}
+	opcoes := object.NovoDicionario()
 	porChave := func(k string, v object.Object) {
 		key := &object.Texto{Value: k}
-		opcoes.Pares[key.ChaveHash()] = object.ParDic{Chave: key, Valor: v}
+		opcoes.Bota(key.ChaveHash(), object.ParDic{Chave: key, Valor: v})
 	}
 	porChave("metodo", &object.Texto{Value: "POST"})
 	porChave("corpo", &object.Texto{Value: "oi servidor"})
-	cab := &object.Dicionario{Pares: map[object.HashKey]object.ParDic{}}
+	cab := object.NovoDicionario()
 	hk := &object.Texto{Value: "Authorization"}
-	cab.Pares[hk.ChaveHash()] = object.ParDic{Chave: hk, Valor: &object.Texto{Value: "Bearer 123"}}
+	cab.Bota(hk.ChaveHash(), object.ParDic{Chave: hk, Valor: &object.Texto{Value: "Bearer 123"}})
 	porChave("cabecalhos", cab)
 
 	res := builtinBusca([]object.Object{&object.Texto{Value: srv.URL}, opcoes})
@@ -104,10 +104,10 @@ func TestBuscaTimeout(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	opcoes := &object.Dicionario{Pares: map[object.HashKey]object.ParDic{}}
+	opcoes := object.NovoDicionario()
 	porChave := func(k string, v object.Object) {
 		key := &object.Texto{Value: k}
-		opcoes.Pares[key.ChaveHash()] = object.ParDic{Chave: key, Valor: v}
+		opcoes.Bota(key.ChaveHash(), object.ParDic{Chave: key, Valor: v})
 	}
 	porChave("timeout", &object.Numero{Value: 0.05})
 
@@ -159,9 +159,9 @@ func TestBuscaValidacao(t *testing.T) {
 		t.Fatalf("url numerica deveria dar erro, got %s", res.Type())
 	}
 	// metodo invalido
-	opcoes := &object.Dicionario{Pares: map[object.HashKey]object.ParDic{}}
+	opcoes := object.NovoDicionario()
 	k := &object.Texto{Value: "metodo"}
-	opcoes.Pares[k.ChaveHash()] = object.ParDic{Chave: k, Valor: &object.Texto{Value: "VOA"}}
+	opcoes.Bota(k.ChaveHash(), object.ParDic{Chave: k, Valor: &object.Texto{Value: "VOA"}})
 	if res := builtinBusca([]object.Object{&object.Texto{Value: "http://x"}, opcoes}); res.Type() != object.ERRO_OBJ {
 		t.Fatalf("metodo invalido deveria dar erro, got %s", res.Type())
 	}

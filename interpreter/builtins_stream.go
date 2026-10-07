@@ -40,7 +40,7 @@ func (i *Interpreter) builtinLeLinhas(args []object.Object) object.Object {
 	if elems == nil {
 		elems = []object.Object{}
 	}
-	return &object.Lista{Elements: elems}
+	return object.NovaLista(elems)
 }
 
 // builtinEscreve escreve texto no stdout (sem quebra de linha automática).
@@ -118,10 +118,15 @@ func (i *Interpreter) builtinParalelo(args []object.Object) object.Object {
 	}
 	fn := args[1]
 
-	n := len(l.Elements)
+	// retrato: a lista pode mudar enquanto as goroutines rodam
+	elems := l.Copia()
+	n := len(elems)
 	if n == 0 {
-		return &object.Lista{Elements: []object.Object{}}
+		return object.NovaLista([]object.Object{})
 	}
+
+	// liga o modo concorrente ANTES do `go` (ver object/concorrencia.go)
+	object.AtivaConcorrencia()
 
 	const limiteGoroutines = 256
 	janelas := (n + limiteGoroutines - 1) / limiteGoroutines
@@ -143,7 +148,7 @@ func (i *Interpreter) builtinParalelo(args []object.Object) object.Object {
 				// dispõem do mesmo contrato.
 				res := i.applyFunction(fn, []object.Object{elem}, 0, "<paralelo>")
 				out[pos] = res
-			}(idx, l.Elements[idx])
+			}(idx, elems[idx])
 		}
 		wg.Wait()
 		_ = janelas
@@ -155,7 +160,7 @@ func (i *Interpreter) builtinParalelo(args []object.Object) object.Object {
 			return r
 		}
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 // builtinEspera tem dois papeis, desambiguados por arity:
@@ -182,9 +187,10 @@ func (i *Interpreter) esperaFuturo(arg object.Object) object.Object {
 	}
 	// caso lista: espera todos em paralelo
 	if l, ok := arg.(*object.Lista); ok {
-		out := make([]object.Object, len(l.Elements))
+		elems := l.Copia()
+		out := make([]object.Object, len(elems))
 		var wg sync.WaitGroup
-		for idx, el := range l.Elements {
+		for idx, el := range elems {
 			f, ok := el.(*object.Futuro)
 			if !ok {
 				return erroBuiltin("espera(lista): elemento %d nao e futuro, e %s", idx, el.Type())
@@ -196,7 +202,7 @@ func (i *Interpreter) esperaFuturo(arg object.Object) object.Object {
 			}(idx, f)
 		}
 		wg.Wait()
-		return &object.Lista{Elements: out}
+		return object.NovaLista(out)
 	}
 	return erroBuiltin("espera(futuro) espera um Futuro ou lista de Futuros, veio %s", arg.Type())
 }

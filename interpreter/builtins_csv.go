@@ -41,7 +41,7 @@ func builtinLeCsv(args []object.Object) object.Object {
 		return erroBuiltinKind(KindIO, "le_csv %q: %v", caminho.Value, err)
 	}
 	if len(records) == 0 {
-		return &object.Lista{}
+		return object.NovaLista(nil)
 	}
 	cabecalho := records[0]
 	linhas := make([]object.Object, 0, len(records)-1)
@@ -59,7 +59,7 @@ func builtinLeCsv(args []object.Object) object.Object {
 		}
 		linhas = append(linhas, d)
 	}
-	return &object.Lista{Elements: linhas}
+	return object.NovaLista(linhas)
 }
 
 // builtinEscreveCsv escreve uma lista de dicionarios num arquivo CSV. O
@@ -84,7 +84,7 @@ func builtinEscreveCsv(args []object.Object) object.Object {
 		if !ok {
 			return erroBuiltin("escreve_csv: 3o arg (cabecalhos) tem que ser lista de textos, veio %s", args[2].Type())
 		}
-		for _, c := range cab.Elements {
+		for _, c := range cab.Visao() {
 			t, ok := c.(*object.Texto)
 			if !ok {
 				return erroBuiltin("escreve_csv: cabecalhos tem que ser lista de textos, veio %s", c.Type())
@@ -92,8 +92,9 @@ func builtinEscreveCsv(args []object.Object) object.Object {
 			cabecalhos = append(cabecalhos, t.Value)
 		}
 	}
-	if cabecalhos == nil && len(lista.Elements) > 0 {
-		if primeiro, ok := lista.Elements[0].(*object.Dicionario); ok {
+	elems := lista.Visao()
+	if cabecalhos == nil && len(elems) > 0 {
+		if primeiro, ok := elems[0].(*object.Dicionario); ok {
 			primeiro.Itera(func(par object.ParDic) {
 				if t, ok := par.Chave.(*object.Texto); ok {
 					cabecalhos = append(cabecalhos, t.Value)
@@ -111,7 +112,7 @@ func builtinEscreveCsv(args []object.Object) object.Object {
 	if cabecalhos != nil {
 		w.Write(cabecalhos)
 	}
-	for _, elem := range lista.Elements {
+	for _, elem := range elems {
 		d, ok := elem.(*object.Dicionario)
 		if !ok {
 			w.Flush()
@@ -120,7 +121,7 @@ func builtinEscreveCsv(args []object.Object) object.Object {
 		linha := make([]string, len(cabecalhos))
 		for i, col := range cabecalhos {
 			chave := &object.Texto{Value: col}
-			if par, existe := d.Pares[chave.ChaveHash()]; existe {
+			if par, existe := d.Pega(chave.ChaveHash()); existe {
 				linha[i] = par.Valor.Inspect()
 			}
 		}

@@ -44,11 +44,11 @@ func TestCriaDirDeletaLeDir(t *testing.T) {
 	if !ok {
 		t.Fatalf("esperava lista")
 	}
-	if len(l.Elements) != 2 {
-		t.Fatalf("tamanho %d, esperado 2", len(l.Elements))
+	if l.Tamanho() != 2 {
+		t.Fatalf("tamanho %d, esperado 2", l.Tamanho())
 	}
 	// ordem alfabetica
-	if l.Elements[0].Inspect() != "y.gs" || l.Elements[1].Inspect() != "z.txt" {
+	if el := l.Visao(); el[0].Inspect() != "y.gs" || el[1].Inspect() != "z.txt" {
 		t.Fatalf("ordem: %v", l)
 	}
 	// deleta

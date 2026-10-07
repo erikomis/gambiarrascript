@@ -198,12 +198,66 @@ mostra espera(bora tenta())   # 1
 mostra contador               # 0 — o de fora nao mudou
 ```
 
-**Listas** e **dicionarios** sao passados por referencia, entao mutar o
-conteudo deles e visivel por todo mundo — mas **nao tem lock nenhum**. Duas
-goroutines escrevendo no mesmo dicionario ao mesmo tempo podem **derrubar o
-processo inteiro** (erro fatal do Go, nem `arruma` pega).
+**Listas**, **dicionarios** e **conjuntos** sao passados por referencia, entao
+mutar o conteudo deles e visivel por todo mundo. E pode mutar de varias
+goroutines ao mesmo tempo (`bora`, `paralelo`, handlers do servidor): igual o
+GIL do Python, **cada operacao e atomica** — ler, escrever, `adiciona`,
+`remove`, `tamanho`, `pra_cada` — e nunca derruba o processo nem perde
+escrita. `pra_cada` numa colecao que outra goroutine esta mexendo percorre um
+retrato tirado no comeco do laco.
 
-Pra estado mutavel entre goroutines, prefira:
+```gambiarrascript
+bota visitas = []
+gambiarra visita(id)
+    pra_cada i de 1 ate 1000
+        adiciona(visitas, id)
+    acabou_finalmente
+acabou_finalmente
+
+espera([bora visita("a"), bora visita("b"), bora visita("c")])
+mostra tamanho(visitas)    # 3000, sempre
+```
+
+O que **nao** e atomico e a operacao **composta**: `bota d["n"] = d["n"] + 1`
+sao duas operacoes (le, depois escreve), e duas goroutines podem ler o mesmo
+valor e uma escrita sumir. Pra isso tem `trava`.
+
+## trava e com_trava
+
+`trava()` cria um lock; `com_trava(t, gambiarra)` roda a gambiarra (sem
+argumentos) segurando a trava e devolve o que ela devolver:
+
+```gambiarrascript
+bota t = trava()
+bota placar = {"n": 0}
+
+gambiarra soma_muito()
+    pra_cada i de 1 ate 1000
+        com_trava(t, gambiarra()
+            bota placar["n"] = placar["n"] + 1
+        acabou_finalmente)
+    acabou_finalmente
+acabou_finalmente
+
+bota fs = []
+pra_cada i de 1 ate 10
+    adiciona(fs, bora soma_muito())
+acabou_finalmente
+espera(fs)
+mostra placar["n"]         # 10000, sempre
+```
+
+- A trava e solta **sempre**: se a gambiarra der erro, o erro sobe normal pra
+  quem chamou o `com_trava` (da pra pegar com `arruma`) e a trava ja esta
+  livre.
+- **Nao e reentrante**: chamar `com_trava` na mesma trava de dentro da propria
+  gambiarra da erro (`essa trava ja ta com voce`) em vez de travar pra sempre.
+  Outra goroutine pedindo a mesma trava so espera a vez.
+- Segure a trava o minimo possivel: nada de `busca`, `espera_ms` ou `envia`
+  pra rede la dentro — todo mundo que quer a trava fica parado esperando.
+- `tipo(trava())` e `"trava"`.
+
+Outras saidas, quando cabem:
 
 1. Cada goroutine calcula o seu e devolve com `funciona`; junte tudo com
    `espera(lista_de_futuros)` ou use `paralelo`.
@@ -308,7 +362,6 @@ acabou_finalmente
 ## O que **nao** existe ainda
 
 - `select` pra esperar em varios canos ao mesmo tempo.
-- Locks/mutexes (improvise com um `cano(1)`).
 - Atomicos / compare-and-swap.
 - Cancelar um futuro que ja foi disparado.
 

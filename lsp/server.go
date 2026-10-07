@@ -105,6 +105,8 @@ var builtinsCompletion = []string{
 	"token_aleatorio", "jwt_assina", "jwt_confere",
 	// logging, flags e .env
 	"log_debug", "log_info", "log_aviso", "log_erro", "opcoes", "carrega_env",
+	// concorrencia
+	"trava", "com_trava",
 }
 
 // builtinsSet espelha builtinsCompletion num map pra lookup rapido.
@@ -196,6 +198,8 @@ var docsBuiltin = map[string]string{
 	"env":           "env(nome, [padrao]) -> texto: valor da variavel de ambiente; se nao existir, o padrao (ou nada).",
 	// concorrencia
 	"cano":   "cano([capacidade]) -> cano: cria um canal (channel). Sem args = sincrono.",
+	"trava":  "trava() -> trava: cria um lock pra usar com com_trava. Cada operacao de lista/dicionario/conjunto ja e atomica; a trava junta VARIAS numa so.",
+	"com_trava": "com_trava(trava, gambiarra) -> valor: roda a gambiarra segurando a trava e devolve o resultado. Solta sempre (erro sobe normal). Nao e reentrante: pedir a mesma trava de dentro e erro.",
 	"envia":  "envia(cano_ou_conexao, valor): manda um valor pro cano (bloqueia se cheio/sem receptor) ou um texto pela conexao de rede (modo linha poe \\n no fim).",
 	"recebe": "recebe(cano_ou_conexao) -> valor: pega o proximo valor do cano ou a proxima mensagem da conexao. Bloqueia; nada quando fechou.",
 	"fecha":  "fecha(cano_ou_conexao): fecha um cano (channel), uma conexao de rede ou de banco. Idempotente.",
@@ -213,7 +217,7 @@ var docsBuiltin = map[string]string{
 	"escreve_csv":   "escreve_csv(caminho, lista, [cabecalhos]): escreve uma lista de dicts num CSV. 3o arg opcional reordena/seleciona colunas.",
 	"gzip_comprime":    "gzip_comprime(texto) -> texto (base64): comprime o texto com gzip e devolve em base64.",
 	"gzip_descomprime": "gzip_descomprime(texto) -> texto: recebe um base64 de gzip_comprime e devolve o texto original.",
-	"tipo": "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"nativo\"). Gambiarra, lambda e builtin sao todas \"funcao\".",
+	"tipo": "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"trava\", \"nativo\"). Gambiarra, lambda e builtin sao todas \"funcao\".",
 	// rede baixo nivel
 	"conecta_tcp": "conecta_tcp(host_porta, [opcoes]) -> conexao: abre um socket TCP (host_porta = \"127.0.0.1:9000\"). opcoes: {\"modo\": \"linha\"|\"bruto\", \"timeout\": segundos}. Usa com envia/recebe/fecha.",
 	"escuta_tcp":  "escuta_tcp(porta, handler, [opcoes]): servidor TCP; cada conexao roda handler(conexao) na propria goroutine. Bloqueia ate ctrl+c ou o cano opcoes.para. opcoes: modo, timeout, pronto, para.",

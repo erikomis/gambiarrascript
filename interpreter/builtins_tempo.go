@@ -112,7 +112,7 @@ func builtinDuracao(args []object.Object) object.Object {
 
 func tempoCampo(d *object.Dicionario, nome string, unidade time.Duration) time.Duration {
 	chave := &object.Texto{Value: nome}
-	par, existe := d.Pares[chave.ChaveHash()]
+	par, existe := d.Pega(chave.ChaveHash())
 	if !existe {
 		return 0
 	}

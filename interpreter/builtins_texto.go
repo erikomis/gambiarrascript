@@ -99,7 +99,7 @@ func builtinSepara(args []object.Object) object.Object {
 	for i, p := range partes {
 		elems[i] = &object.Texto{Value: p}
 	}
-	return &object.Lista{Elements: elems}
+	return object.NovaLista(elems)
 }
 
 func builtinJunta(args []object.Object) object.Object {
@@ -114,8 +114,9 @@ func builtinJunta(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("junta() espera texto no separador, veio %s", args[1].Type())
 	}
-	parts := make([]string, len(l.Elements))
-	for i, e := range l.Elements {
+	elems := l.Visao()
+	parts := make([]string, len(elems))
+	for i, e := range elems {
 		parts[i] = e.Inspect()
 	}
 	return &object.Texto{Value: strings.Join(parts, sep.Value)}

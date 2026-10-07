@@ -78,10 +78,11 @@ func New(out io.Writer) *Interpreter {
 		"espera":       {Nome: "espera", Fn: i.builtinEspera},
 		"afirma":       {Nome: "afirma", Fn: i.builtinAfirma},
 		// concorrencia: canais (cano) e wait de Futuro
-		"cano":   {Nome: "cano", Fn: i.builtinCano},
-		"envia":  {Nome: "envia", Fn: i.builtinEnvia},
-		"recebe": {Nome: "recebe", Fn: i.builtinRecebe},
-		"fecha":  {Nome: "fecha", Fn: i.builtinFecha},
+		"cano":      {Nome: "cano", Fn: i.builtinCano},
+		"com_trava": {Nome: "com_trava", Fn: i.builtinComTrava},
+		"envia":     {Nome: "envia", Fn: i.builtinEnvia},
+		"recebe":    {Nome: "recebe", Fn: i.builtinRecebe},
+		"fecha":     {Nome: "fecha", Fn: i.builtinFecha},
 		// rede baixo nivel (builtins_rede.go; stub no wasm): as conexoes
 		// usam o envia/recebe/fecha de cima via object.Conexao
 		"conecta_tcp": {Nome: "conecta_tcp", Fn: i.builtinConectaTcp},
@@ -190,7 +191,7 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		if len(elems) == 1 && isError(elems[0]) {
 			return elems[0]
 		}
-		return &object.Lista{Elements: elems}
+		return object.NovaLista(elems)
 	case *ast.DicionarioLiteral:
 		return i.evalDicionario(node, env)
 
@@ -337,6 +338,8 @@ func (i *Interpreter) evalBora(node *ast.BoraExpression, env *object.Environment
 	linha := call.Token.Line
 	nome := nomeDaChamada(call)
 
+	// liga o modo concorrente ANTES do `go` (ver object/concorrencia.go)
+	object.AtivaConcorrencia()
 	fut := object.NovoFuturo()
 	go func(f *object.Futuro, fnv object.Object, argv []object.Object, lh int, nm string) {
 		defer func() {
@@ -402,7 +405,7 @@ func (i *Interpreter) evalArgumentos(call *ast.CallExpression, env *object.Envir
 		if !ok {
 			return []object.Object{newError(call.Token.Line, "so da pra espalhar lista, veio %s", object.NomeTipo(ev))}
 		}
-		result = append(result, l.Elements...)
+		result = append(result, l.Visao()...)
 	}
 	return result
 }
@@ -463,7 +466,7 @@ func (i *Interpreter) evalDesestrutura(node *ast.DesestruturaStatement, env *obj
 		}
 		for _, n := range node.Names {
 			chave := (&object.Texto{Value: n.Value}).ChaveHash()
-			if par, ok := d.Pares[chave]; ok {
+			if par, ok := d.Pega(chave); ok {
 				env.Set(n.Value, par.Valor)
 			} else {
 				env.Set(n.Value, NADA)
@@ -475,9 +478,10 @@ func (i *Interpreter) evalDesestrutura(node *ast.DesestruturaStatement, env *obj
 	if !ok {
 		return newError(node.Token.Line, "pra desestruturar com [] eu quero uma lista, veio %s", val.Type())
 	}
+	elems := l.Visao()
 	for idx, n := range node.Names {
-		if idx < len(l.Elements) {
-			env.Set(n.Value, l.Elements[idx])
+		if idx < len(elems) {
+			env.Set(n.Value, elems[idx])
 		} else {
 			env.Set(n.Value, NADA)
 		}
@@ -500,7 +504,7 @@ func evalRange(start, end object.Object, linha int) object.Object {
 	if !ok {
 		return newError(linha, "range .. de %d..%d e gigante demais, vai estourar a memoria", lo.Int, hi.Int)
 	}
-	return &object.Lista{Elements: elems}
+	return object.NovaLista(elems)
 }
 
 func (i *Interpreter) evalPrefix(op string, right object.Object, linha int) object.Object {
@@ -707,11 +711,9 @@ func (i *Interpreter) evalAtribuiIndice(alvo *ast.IndexExpression, val object.Ob
 		if !ok {
 			return newError(linha, "indice de lista tem que ser numero, veio %s", idx.Type())
 		}
-		pos, dentro := object.IndiceNormalizado(int(n.Value), len(c.Elements))
-		if !dentro {
+		if !c.Poe(int(n.Value), val) {
 			return newError(linha, "esse indice (%d) ta fora da lista, o", int(n.Value))
 		}
-		c.Elements[pos] = val
 		return NADA
 	case *object.Dicionario:
 		chave, ok := idx.(object.Chaveavel)
@@ -752,11 +754,11 @@ func (i *Interpreter) evalIndex(left, index object.Object, linha int) object.Obj
 		if !ok {
 			return newError(linha, "indice de lista tem que ser numero, veio %s", index.Type())
 		}
-		pos, dentro := object.IndiceNormalizado(int(idx.Value), len(c.Elements))
+		v, dentro := c.Indice(int(idx.Value))
 		if !dentro {
 			return newError(linha, "esse indice (%d) ta fora da lista, o", int(idx.Value))
 		}
-		return c.Elements[pos]
+		return v
 	case *object.Texto:
 		idx, ok := index.(*object.Numero)
 		if !ok {
@@ -773,7 +775,7 @@ func (i *Interpreter) evalIndex(left, index object.Object, linha int) object.Obj
 		if !ok {
 			return newError(linha, "essa chave (%s) nao da pra usar num dicionario", index.Type())
 		}
-		par, existe := c.Pares[chave.ChaveHash()]
+		par, existe := c.Pega(chave.ChaveHash())
 		if !existe {
 			return NADA
 		}
@@ -820,22 +822,29 @@ func iguais(a, b object.Object) bool {
 		return true
 	case *object.Lista:
 		bl, ok := b.(*object.Lista)
-		if !ok || len(av.Elements) != len(bl.Elements) {
+		if !ok {
 			return false
 		}
-		for j, e := range av.Elements {
-			if !iguais(e, bl.Elements[j]) {
+		// retratos: nunca seguramos a trava de uma lista enquanto comparamos
+		// colecoes aninhadas (que travam as delas)
+		ae, be := av.Visao(), bl.Visao()
+		if len(ae) != len(be) {
+			return false
+		}
+		for j, e := range ae {
+			if !iguais(e, be[j]) {
 				return false
 			}
 		}
 		return true
 	case *object.Dicionario:
 		bd := b.(*object.Dicionario)
-		if len(av.Pares) != len(bd.Pares) {
+		pares := av.Pares()
+		if len(pares) != bd.Tamanho() {
 			return false
 		}
-		for k, pa := range av.Pares {
-			pb, ok := bd.Pares[k]
+		for _, pa := range pares {
+			pb, ok := bd.Pega(pa.Chave.(object.Chaveavel).ChaveHash())
 			if !ok || !iguais(pa.Valor, pb.Valor) {
 				return false
 			}
@@ -961,7 +970,15 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 
 	switch c := it.(type) {
 	case *object.Lista:
-		for idx, item := range c.Elements {
+		// com concorrencia percorre um retrato tirado agora (ParaIterar); sem,
+		// le elemento a elemento, com o tamanho do inicio (igual a VM)
+		seq := c.ParaIterar()
+		n := seq.Tamanho()
+		for idx := 0; idx < n; idx++ {
+			item, ok := seq.Pega(idx)
+			if !ok {
+				break // o corpo do laco encolheu a lista
+			}
 			if doisNomes {
 				env.Set(node.Vars[0].Value, object.NumInt(int64(idx)))
 				env.Set(node.Vars[1].Value, item)
@@ -981,8 +998,14 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 			}
 		}
 	case *object.Dicionario:
-		for _, ch := range c.Chaves() {
-			par := c.Pares[ch]
+		// chaves de um retrato; valor lido na hora (igual o OpIterPar da VM:
+		// chave removida no meio do laco vale nada)
+		for _, par := range c.Pares() {
+			if atual, ok := c.Pega(par.Chave.(object.Chaveavel).ChaveHash()); ok {
+				par = atual
+			} else {
+				par.Valor = NADA
+			}
 			if doisNomes {
 				env.Set(node.Vars[0].Value, par.Chave)
 				env.Set(node.Vars[1].Value, par.Valor)
@@ -1241,7 +1264,7 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 			if idx < len(args) {
 				resto = args[idx:]
 			}
-			escopo.Set(p.Nome.Value, &object.Lista{Elements: resto})
+			escopo.Set(p.Nome.Value, object.NovaLista(resto))
 		} else if idx < len(args) {
 			escopo.Set(p.Nome.Value, args[idx])
 		} else if p.Padrao != nil {

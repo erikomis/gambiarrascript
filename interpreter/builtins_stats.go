@@ -19,7 +19,7 @@ func builtinSoma(args []object.Object) object.Object {
 	var somaInt int64
 	var somaFloat float64
 	todosInt := true
-	for idx, e := range lst.Elements {
+	for idx, e := range lst.Visao() {
 		n, ok := e.(*object.Numero)
 		if !ok {
 			return erroBuiltin("soma: elemento %d nao e numero, veio %s", idx, e.Type())
@@ -47,18 +47,19 @@ func builtinMedia(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("media: lista esperada, veio %s", args[0].Type())
 	}
-	if len(lst.Elements) == 0 {
+	elems := lst.Visao()
+	if len(elems) == 0 {
 		return erroBuiltin("media: lista vazia, nao da pra tirar media de nada")
 	}
 	var total float64
-	for idx, e := range lst.Elements {
+	for idx, e := range elems {
 		n, ok := e.(*object.Numero)
 		if !ok {
 			return erroBuiltin("media: elemento %d nao e numero, veio %s", idx, e.Type())
 		}
 		total += n.Value
 	}
-	return object.NumFloat(total / float64(len(lst.Elements)))
+	return object.NumFloat(total / float64(len(elems)))
 }
 
 // builtinZip casa duas listas em pares [a[i], b[i]], parando no tamanho da
@@ -75,16 +76,17 @@ func builtinZip(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("zip: 2o arg tem que ser lista, veio %s", args[1].Type())
 	}
-	n := len(a.Elements)
-	if len(b.Elements) < n {
-		n = len(b.Elements)
+	ae, be := a.Visao(), b.Visao()
+	n := len(ae)
+	if len(be) < n {
+		n = len(be)
 	}
 	out := make([]object.Object, 0, n)
 	for i := 0; i < n; i++ {
-		par := &object.Lista{Elements: []object.Object{a.Elements[i], b.Elements[i]}}
+		par := object.NovaLista([]object.Object{ae[i], be[i]})
 		out = append(out, par)
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 // builtinEnumera devolve pares [indice, valor] pra cada elemento da lista.
@@ -97,12 +99,13 @@ func builtinEnumera(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("enumera: lista esperada, veio %s", args[0].Type())
 	}
-	out := make([]object.Object, 0, len(lst.Elements))
-	for i, e := range lst.Elements {
-		par := &object.Lista{Elements: []object.Object{object.NumInt(int64(i)), e}}
+	elems := lst.Visao()
+	out := make([]object.Object, 0, len(elems))
+	for i, e := range elems {
+		par := object.NovaLista([]object.Object{object.NumInt(int64(i)), e})
 		out = append(out, par)
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 // builtinOrdenaPor ordena uma lista de dicionarios por um campo (crescente) e
@@ -128,13 +131,14 @@ func builtinOrdenaPor(args []object.Object) object.Object {
 		elem     object.Object
 		valChave object.Object
 	}
-	pares := make([]parOrd, len(lst.Elements))
-	for idx, e := range lst.Elements {
+	elems := lst.Visao()
+	pares := make([]parOrd, len(elems))
+	for idx, e := range elems {
 		d, ok := e.(*object.Dicionario)
 		if !ok {
 			return erroBuiltin("ordena_por: elemento %d nao e dicionario, veio %s", idx, e.Type())
 		}
-		par, existe := d.Pares[chave]
+		par, existe := d.Pega(chave)
 		if !existe {
 			return erroBuiltin("ordena_por: dicionario nao tem o campo %q", campo.Value)
 		}
@@ -160,7 +164,7 @@ func builtinOrdenaPor(args []object.Object) object.Object {
 	for i, p := range pares {
 		out[i] = p.elem
 	}
-	return &object.Lista{Elements: out}
+	return object.NovaLista(out)
 }
 
 // builtinAgrupaPor agrupa os elementos num dicionario {chave: [elementos]},
@@ -177,24 +181,29 @@ func (i *Interpreter) builtinAgrupaPor(args []object.Object) object.Object {
 	}
 	fn := args[1]
 	dic := object.NovoDicionario()
-	for _, e := range lst.Elements {
+	var erro object.Object
+	percorre(lst, func(_ int, e object.Object) bool {
 		chaveObj := i.applyFunction(fn, []object.Object{e}, 0, "<agrupa_por>")
 		if isError(chaveObj) {
-			return chaveObj
+			erro = chaveObj
+			return false
 		}
 		chaveavel, ok := chaveObj.(object.Chaveavel)
 		if !ok {
-			return erroBuiltin("agrupa_por: a gambiarra devolveu %s, que nao serve de chave (use texto, numero ou booleano)", chaveObj.Type())
+			erro = erroBuiltin("agrupa_por: a gambiarra devolveu %s, que nao serve de chave (use texto, numero ou booleano)", chaveObj.Type())
+			return false
 		}
 		hk := chaveavel.ChaveHash()
-		par, existe := dic.Pares[hk]
+		par, existe := dic.Pega(hk)
 		if !existe {
-			par = object.ParDic{Chave: chaveObj, Valor: &object.Lista{Elements: []object.Object{}}}
+			par = object.ParDic{Chave: chaveObj, Valor: object.NovaLista([]object.Object{})}
+			dic.Bota(hk, par)
 		}
-		grupo := par.Valor.(*object.Lista)
-		grupo.Elements = append(grupo.Elements, e)
-		par.Valor = grupo
-		dic.Bota(hk, par)
+		par.Valor.(*object.Lista).Adiciona(e)
+		return true
+	})
+	if erro != nil {
+		return erro
 	}
 	return dic
 }
