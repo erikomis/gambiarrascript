@@ -687,8 +687,11 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
 - [x] **Botão "rodar no playground"** em todo bloco de código da doc — link
       `#c=` gerado no build (transformer do shiki + zlib), zero JS, funciona
       com clique do meio. ```` ```gambiarrascript sem-playground ```` desliga.
-- [ ] **`pergunta()` no playground** — stdin via `prompt` ou campo de
-      entrada; hoje exemplos com entrada não rodam no navegador.
+- [x] **`pergunta()` no playground** — caixa "Entrada (stdin)" preenchida
+      antes de rodar (funciona no GitHub Pages, sem COOP/COEP): vira o stdin
+      do programa, cada `pergunta` consome uma linha (ecoada na saída) e o
+      fim devolve texto vazio como no nativo. Vai junto no link (`&e=`);
+      exemplo "Quiz" no playground.
 - [ ] **Testar Firefox e Safari** — só o Chromium foi exercitado (worker,
       `DecompressionStream`, compartilhar).
 - [x] **Doc em inglês completa** — todas as 21 páginas em `docs/en/`.

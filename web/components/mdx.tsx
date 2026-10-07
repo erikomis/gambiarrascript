@@ -13,10 +13,14 @@ import { decodificarNode } from "@/lib/compartilhar-node";
 // le o codigo do hash no mount.
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
-// builtins que dependem de rede/arquivo/banco/stdin: o botao aparece igual
-// (da pra estudar/editar o codigo), mas a dica avisa que no navegador nao roda
+// builtins que dependem de rede/arquivo/banco: o botao aparece igual (da pra
+// estudar/editar o codigo), mas a dica avisa que no navegador nao roda
 const SO_NO_NATIVO =
-  /\b(escuta|rota|busca|conecta|consulta|executa|pergunta|le_arquivo|escreve_arquivo)\s*\(/;
+  /\b(escuta|rota|busca|conecta|consulta|executa|le_arquivo|escreve_arquivo)\s*\(/;
+
+// builtins que leem stdin: rodam no playground, a entrada vem da caixa
+// "Entrada (stdin)" de la
+const LE_ENTRADA = /\b(pergunta|le_linhas|le_tudo)\s*\(/;
 
 type PreProps = ComponentProps<"pre"> & {
   "data-playground"?: string;
@@ -58,10 +62,16 @@ export function getMDXComponents(opcoes: { ingles?: boolean } = {}) {
 }
 
 function dicaPara(hash: string, ingles?: boolean): string {
-  if (SO_NO_NATIVO.test(decodificarNode(hash) ?? "")) {
+  const codigo = decodificarNode(hash) ?? "";
+  if (SO_NO_NATIVO.test(codigo)) {
     return ingles
       ? "Open in the playground (network/file/db builtins don't run in the browser)"
       : "Abre no playground (rede/arquivo/banco nao rodam no navegador)";
+  }
+  if (LE_ENTRADA.test(codigo)) {
+    return ingles
+      ? "Open in the playground (type the input in the Entrada (stdin) box)"
+      : "Abre no playground (a entrada vai na caixa Entrada (stdin))";
   }
   return ingles ? "Open this code in the playground" : "Abre esse codigo no playground";
 }

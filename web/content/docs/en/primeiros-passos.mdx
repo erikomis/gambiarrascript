@@ -10,9 +10,13 @@ The fastest way to get a feel for the language is opening the
 [playground](/playground) in the browser. Nothing to install: `Ctrl/Cmd+Enter`
 runs, output shows up live, the **Parar** ("stop") button interrupts (and a
 script that goes past 10s is stopped on its own), and the share link carries
-your code along in the URL. Anything that depends on the machine (databases,
-files, system commands, the server, stdin) doesn't work there — for that,
-install `gs`.
+your code along in the URL. Programs that read input (`pergunta`, `le_linhas`,
+`le_tudo`) read from the **Entrada (stdin)** box under the editor: type the
+answers before running, one per line — each `pergunta` consumes one (echoed
+into the output as if typed), and once it runs out it returns an empty string,
+like a closed stdin. The input also travels in the share link. Anything that
+depends on the machine (databases, files, system commands, the server) doesn't
+work there — for that, install `gs`.
 
 ## Hello world
 

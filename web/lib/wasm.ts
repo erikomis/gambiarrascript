@@ -107,10 +107,15 @@ export class RuntimeGS {
     return this.execucao !== null;
   }
 
-  // roda o codigo; `onSaida` recebe a saida em pedacos, ao vivo
+  // roda o codigo; `onSaida` recebe a saida em pedacos, ao vivo; `entrada`
+  // vira o stdin do programa (pergunta, le_linhas, le_tudo)
   rodar(
     codigo: string,
-    opts: { onSaida?: (texto: string) => void; timeoutMs?: number } = {}
+    opts: {
+      onSaida?: (texto: string) => void;
+      timeoutMs?: number;
+      entrada?: string;
+    } = {}
   ): Promise<EvalResult> {
     if (this.destruido || !this.worker) {
       return Promise.resolve({ saida: "", erros: "runtime encerrado" });
@@ -123,7 +128,12 @@ export class RuntimeGS {
         opts.timeoutMs ?? TIMEOUT_PADRAO_MS
       );
       this.execucao = { id, resolver, onSaida: opts.onSaida, timer };
-      this.worker!.postMessage({ tipo: "rodar", id, codigo });
+      this.worker!.postMessage({
+        tipo: "rodar",
+        id,
+        codigo,
+        entrada: opts.entrada ?? "",
+      });
     });
   }
 

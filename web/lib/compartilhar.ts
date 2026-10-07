@@ -2,6 +2,10 @@
 // (nada sai do navegador). Formatos:
 //   #c=<base64url(deflate-raw(utf8))>  quando tem CompressionStream
 //   #t=<base64url(utf8)>               fallback sem compressao
+// A entrada (stdin) vai junto, opcional, separada por `&` (base64url nunca tem
+// `&`), com a mesma codificacao:
+//   #c=...&e=<base64url(deflate-raw(utf8))>   ou   &u=<base64url(utf8)>
+// Link so com `c=`/`t=` (ex.: os botoes da doc) continua valendo: entrada vazia.
 
 function paraBase64Url(bytes: Uint8Array): string {
   let bin = "";
@@ -28,37 +32,74 @@ async function passaPor(
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-// devolve o hash (sem o `#`) que representa o codigo
-export async function codificar(codigo: string): Promise<string> {
-  const bytes = new TextEncoder().encode(codigo);
+// comprime (ou nao, se o navegador nao deixar) e devolve o valor em base64url
+async function empacota(
+  texto: string
+): Promise<{ comprimido: boolean; valor: string }> {
+  const bytes = new TextEncoder().encode(texto);
   if (typeof CompressionStream !== "undefined") {
     try {
       const comp = await passaPor(bytes, new CompressionStream("deflate-raw"));
-      return "c=" + paraBase64Url(comp);
+      return { comprimido: true, valor: paraBase64Url(comp) };
     } catch {
       // navegador sem deflate-raw: cai no texto puro
     }
   }
-  return "t=" + paraBase64Url(bytes);
+  return { comprimido: false, valor: paraBase64Url(bytes) };
 }
 
-// le o codigo de um hash (com ou sem `#`); null se nao for um link do playground
-export async function decodificar(hash: string): Promise<string | null> {
-  const h = hash.replace(/^#/, "");
+async function desempacota(valor: string, comprimido: boolean): Promise<string> {
+  const bytes = deBase64Url(valor);
+  if (!comprimido) return new TextDecoder().decode(bytes);
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("navegador sem DecompressionStream");
+  }
+  return new TextDecoder().decode(
+    await passaPor(bytes, new DecompressionStream("deflate-raw"))
+  );
+}
+
+// devolve o hash (sem o `#`) que representa o codigo e, se tiver, a entrada
+export async function codificar(codigo: string, entrada = ""): Promise<string> {
+  const c = await empacota(codigo);
+  let hash = (c.comprimido ? "c=" : "t=") + c.valor;
+  if (entrada) {
+    const e = await empacota(entrada);
+    hash += (e.comprimido ? "&e=" : "&u=") + e.valor;
+  }
+  return hash;
+}
+
+export interface LinkPlayground {
+  codigo: string;
+  entrada: string;
+}
+
+// le codigo + entrada de um hash (com ou sem `#`); null se nao for um link do
+// playground
+export async function decodificarLink(hash: string): Promise<LinkPlayground | null> {
+  const partes = new Map<string, string>();
+  for (const parte of hash.replace(/^#/, "").split("&")) {
+    const i = parte.indexOf("=");
+    if (i > 0) partes.set(parte.slice(0, i), parte.slice(i + 1));
+  }
   try {
-    if (h.startsWith("c=")) {
-      if (typeof DecompressionStream === "undefined") return null;
-      const bytes = await passaPor(
-        deBase64Url(h.slice(2)),
-        new DecompressionStream("deflate-raw")
-      );
-      return new TextDecoder().decode(bytes);
-    }
-    if (h.startsWith("t=")) {
-      return new TextDecoder().decode(deBase64Url(h.slice(2)));
-    }
+    let codigo: string;
+    if (partes.has("c")) codigo = await desempacota(partes.get("c")!, true);
+    else if (partes.has("t")) codigo = await desempacota(partes.get("t")!, false);
+    else return null;
+
+    let entrada = "";
+    if (partes.has("e")) entrada = await desempacota(partes.get("e")!, true);
+    else if (partes.has("u")) entrada = await desempacota(partes.get("u")!, false);
+    return { codigo, entrada };
   } catch {
     // link quebrado/truncado
   }
   return null;
+}
+
+// so o codigo do hash (compat); null se nao for um link do playground
+export async function decodificar(hash: string): Promise<string | null> {
+  return (await decodificarLink(hash))?.codigo ?? null;
 }

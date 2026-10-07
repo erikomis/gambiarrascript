@@ -9,7 +9,7 @@
 //
 // Protocolo (postMessage):
 //   pagina -> worker: {tipo: "init", modulo?}     modulo = WebAssembly.Module ja compilado
-//                     {tipo: "rodar", id, codigo}
+//                     {tipo: "rodar", id, codigo, entrada?}  entrada = stdin do programa
 //   worker -> pagina: {tipo: "modulo", modulo}    pra pagina reaproveitar no proximo worker
 //                     {tipo: "pronto"}
 //                     {tipo: "erro-carga", mensagem}
@@ -79,7 +79,7 @@ async function carregar(moduloPronto) {
 const INTERVALO_MS = 50;
 const LIMITE_PEDACO = 64 * 1024;
 
-function rodar(id, codigo) {
+function rodar(id, codigo, entrada) {
   let pendente = "";
   let ultimoEnvio = performance.now();
   const despeja = () => {
@@ -102,7 +102,7 @@ function rodar(id, codigo) {
   let saida = "";
   let erros = "";
   try {
-    const res = self.GambiarraScript.evaluate(codigo, onSaida);
+    const res = self.GambiarraScript.evaluate(codigo, onSaida, entrada ?? "");
     saida = res.saida ?? "";
     erros = res.erros ?? "";
   } catch (e) {
@@ -136,7 +136,7 @@ self.onmessage = (ev) => {
       return;
     }
     pronto.then(
-      () => rodar(msg.id, msg.codigo),
+      () => rodar(msg.id, msg.codigo, msg.entrada),
       (e) =>
         self.postMessage({
           tipo: "fim",

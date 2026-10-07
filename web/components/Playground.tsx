@@ -7,7 +7,7 @@ import { keymap } from "@codemirror/view";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import { RuntimeGS, TIMEOUT_PADRAO_MS, type EstadoRuntime } from "@/lib/wasm";
 import { gambiarraScript } from "@/lib/gs-language";
-import { codificar, decodificar } from "@/lib/compartilhar";
+import { codificar, decodificarLink } from "@/lib/compartilhar";
 
 
 const defaultCode = `# o classico, do jeito gambiarra
@@ -31,7 +31,8 @@ pra_cada i de 1 ate 3
 acabou_finalmente
 `;
 
-const examples: { nome: string; codigo: string }[] = [
+// `entrada` opcional preenche a caixa "Entrada (stdin)"
+const examples: { nome: string; codigo: string; entrada?: string }[] = [
   { nome: "Salve, tropa", codigo: defaultCode },
   {
     nome: "FizzBuzz",
@@ -138,6 +139,41 @@ acabou_finalmente
 mostra "soma: " + soma
 `,
   },
+  {
+    nome: "Quiz (pergunta)",
+    codigo: `# cada linha da caixa "Entrada (stdin)" responde um pergunta()
+bota nome = tira_espaco(pergunta("teu nome: "))
+mostra "salve, " + nome + "! bora pro quiz"
+
+bota perguntas = [
+    ["quanto e 2 ** 10? ", "1024"],
+    ["que palavra declara funcao? ", "gambiarra"],
+    ["e qual fecha o bloco? ", "acabou_finalmente"]
+]
+
+bota pontos = 0
+pra_cada p em perguntas
+    bota resposta = minusculo(tira_espaco(pergunta(p[0])))
+    se_colar resposta == p[1]
+        mostra "boa!"
+        pontos += 1
+    se_nao_colar
+        mostra "errou, era " + p[1]
+    acabou_finalmente
+acabou_finalmente
+
+mostra nome + " fez " + pontos + " de " + tamanho(perguntas)
+
+# acabou a entrada? pergunta() devolve texto vazio, igual stdin fechado
+bota bonus = pergunta("bonus, tua linguagem favorita: ")
+se_colar bonus == ""
+    mostra "(acabou a entrada, sem bonus)"
+se_nao_colar
+    mostra "boa escolha: " + bonus
+acabou_finalmente
+`,
+    entrada: "Erik\n1024\nGambiarra\nfim\n",
+  },
 ];
 
 
@@ -152,8 +188,17 @@ const CodeMirror = dynamic(
 // derrubar a aba de tanto texto
 const LIMITE_SAIDA = 200_000;
 
+// quantas linhas a entrada tem (a ultima pode vir sem \n)
+function linhasDe(texto: string): number {
+  if (!texto) return 0;
+  const n = texto.split("\n").length;
+  return texto.endsWith("\n") ? n - 1 : n;
+}
+
 export default function Playground() {
   const [code, setCode] = useState(defaultCode);
+  const [entrada, setEntrada] = useState("");
+  const [entradaAberta, setEntradaAberta] = useState(false);
   const [output, setOutput] = useState("");
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
@@ -177,12 +222,16 @@ export default function Playground() {
     };
   }, []);
 
-  // link compartilhado: #c=... no hash vira o codigo do editor
+  // link compartilhado: #c=... no hash vira o codigo do editor, e o &e=...
+  // (se tiver) a entrada
   useEffect(() => {
     const carregaDoHash = () => {
       if (!window.location.hash) return;
-      decodificar(window.location.hash).then((c) => {
-        if (c !== null) setCode(c);
+      decodificarLink(window.location.hash).then((link) => {
+        if (link === null) return;
+        setCode(link.codigo);
+        setEntrada(link.entrada);
+        if (link.entrada) setEntradaAberta(true);
       });
     };
     carregaDoHash();
@@ -210,7 +259,7 @@ export default function Playground() {
     setAviso("");
     setRodando(true);
     try {
-      const res = await rt.rodar(code, { onSaida: anexaSaida });
+      const res = await rt.rodar(code, { onSaida: anexaSaida, entrada });
       if (res.saida) anexaSaida(res.saida);
       setErro(res.erros);
       if (res.interrompido === "timeout") {
@@ -223,14 +272,14 @@ export default function Playground() {
     } finally {
       setRodando(false);
     }
-  }, [code, pronto, rodando, anexaSaida]);
+  }, [code, entrada, pronto, rodando, anexaSaida]);
 
   const parar = useCallback(() => {
     runtimeRef.current?.parar();
   }, []);
 
   const compartilhar = useCallback(async () => {
-    const hash = await codificar(code);
+    const hash = await codificar(code, entrada);
     // replaceState nao dispara hashchange, entao o editor nao recarrega
     window.history.replaceState(null, "", `#${hash}`);
     const link = window.location.href;
@@ -241,7 +290,7 @@ export default function Playground() {
       setFeedback("link pronto na barra de endereco");
     }
     setTimeout(() => setFeedback(""), 2500);
-  }, [code]);
+  }, [code, entrada]);
 
   // Ctrl/Cmd+Enter roda — dentro do editor (keymap com prioridade maxima,
   // senao o CodeMirror insere linha) e fora dele (listener na janela)
@@ -316,6 +365,7 @@ export default function Playground() {
         <button
           onClick={() => {
             setCode("");
+            setEntrada("");
             saidaRef.current = "";
             setOutput("");
             setErro("");
@@ -342,7 +392,11 @@ export default function Playground() {
         {examples.map((ex) => (
           <button
             key={ex.nome}
-            onClick={() => setCode(ex.codigo)}
+            onClick={() => {
+              setCode(ex.codigo);
+              setEntrada(ex.entrada ?? "");
+              if (ex.entrada) setEntradaAberta(true);
+            }}
             className="rounded-md border border-fd-foreground/15 px-2 py-1 text-sm hover:bg-fd-muted"
           >
             {ex.nome}
@@ -351,19 +405,61 @@ export default function Playground() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="overflow-hidden rounded-lg border border-fd-foreground/15">
-          <CodeMirror
-            value={code}
-            height="480px"
-            onChange={(v) => setCode(v)}
-            theme="dark"
-            extensions={extensoes}
-            basicSetup={{
-              lineNumbers: true,
-              highlightActiveLine: true,
-              foldGutter: false,
-            }}
-          />
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="overflow-hidden rounded-lg border border-fd-foreground/15">
+            <CodeMirror
+              value={code}
+              height="480px"
+              onChange={(v) => setCode(v)}
+              theme="dark"
+              extensions={extensoes}
+              basicSetup={{
+                lineNumbers: true,
+                highlightActiveLine: true,
+                foldGutter: false,
+              }}
+            />
+          </div>
+  
+          <div className="rounded-lg border border-fd-foreground/15">
+            <button
+              type="button"
+              onClick={() => setEntradaAberta((a) => !a)}
+              aria-expanded={entradaAberta}
+              aria-controls="gs-entrada"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs uppercase tracking-wide text-fd-muted-foreground hover:bg-fd-muted/50"
+            >
+              <span aria-hidden>{entradaAberta ? "▾" : "▸"}</span>
+              Entrada (stdin)
+              {!entradaAberta && entrada && (
+                <span className="normal-case tracking-normal">
+                  — {linhasDe(entrada)}{" "}
+                  {linhasDe(entrada) === 1 ? "linha" : "linhas"}
+                </span>
+              )}
+            </button>
+            <div
+              id="gs-entrada"
+              hidden={!entradaAberta}
+              className="border-t border-fd-foreground/15 p-2"
+            >
+              <textarea
+                aria-label="Entrada (stdin)"
+                value={entrada}
+                onChange={(e) => setEntrada(e.target.value)}
+                rows={4}
+                spellCheck={false}
+                placeholder={"uma linha por pergunta(), ex.:\nErik\n42"}
+                className="block w-full resize-y rounded-md bg-fd-muted/30 p-2 font-mono text-sm outline-none focus:ring-1 focus:ring-fd-primary"
+              />
+              <p className="mt-1 text-xs text-fd-muted-foreground">
+                Vira o stdin do programa: cada <code>pergunta()</code> consome
+                uma linha (e ela aparece na saida, como se fosse digitada);{" "}
+                <code>le_linhas()</code>/<code>le_tudo()</code> pegam o resto.
+                Acabou a entrada, <code>pergunta()</code> devolve texto vazio.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="min-h-[480px] rounded-lg border border-fd-foreground/15 bg-fd-muted/30 p-3">
@@ -412,7 +508,10 @@ export default function Playground() {
       <p className="mt-6 text-sm text-fd-muted-foreground">
         O codigo roda num Web Worker: se travar num laco infinito, aperta{" "}
         <strong>Parar</strong> (ou espera {TIMEOUT_PADRAO_MS / 1000}s que ele
-        para sozinho). Atencao: builtins de rede/servidor/arquivo (
+        para sozinho). Programa que le do teclado (<code>pergunta</code>,{" "}
+        <code>le_linhas</code>, <code>le_tudo</code>) le da caixa{" "}
+        <strong>Entrada (stdin)</strong>, que vai junto no link de
+        compartilhar. Atencao: builtins de rede/servidor/arquivo (
         <code>busca</code>, <code>escuta</code>, <code>rota</code>,{" "}
         <code>le_arquivo</code>) nao funcionam no WASM do navegador por design.
         O resto da linguagem roda normal.
