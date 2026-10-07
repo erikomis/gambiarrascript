@@ -18,17 +18,10 @@ crava TOKEN = env("API_TOKEN") ?? "segredo"
 bota tarefas = []
 bota contador = {"proximo": 1}
 
-# os handlers rodam em paralelo (um por pedido): um cano de 1 lugar vira
-# trava — envia tranca, recebe destranca — pra dois POST nao pegarem o mesmo id
-bota trava = cano(1)
-gambiarra com_trava(f)
-    envia(trava, deu_bom)
-    arruma
-        funciona f()
-    finalmente
-        recebe(trava)
-    acabou_finalmente
-acabou_finalmente
+# os handlers rodam em paralelo (um por pedido): cada operacao na lista e
+# atomica, mas "le o proximo id e soma 1" e conta composta — com_trava garante
+# que dois POST nao peguem o mesmo id
+bota trava_ids = trava()
 
 gambiarra erro_json(status, msg)
     funciona responde_json({"erro": msg}, status)
@@ -81,7 +74,7 @@ rota("POST", "/tarefas", gambiarra(pedido)
     se_colar tipo(dados) != "dicionario" ou tipo(dados["titulo"]) != "texto"
         funciona erro_json(422, "manda um json tipo {\"titulo\": \"...\"}")
     acabou_finalmente
-    bota t = com_trava(gambiarra()
+    bota t = com_trava(trava_ids, gambiarra()
         bota nova = {"id": contador["proximo"], "titulo": dados["titulo"], "feita": deu_ruim, "dono": pedido.usuario}
         bota contador["proximo"] = contador["proximo"] + 1
         adiciona(tarefas, nova)
@@ -112,7 +105,7 @@ rota("DELETE", "/tarefas/:id", gambiarra(pedido)
     se_colar t == nada
         funciona erro_json(404, "tarefa ${pedido.params.id} nao existe")
     acabou_finalmente
-    com_trava(gambiarra() remove(tarefas, t) acabou_finalmente)
+    com_trava(trava_ids, gambiarra() remove(tarefas, t) acabou_finalmente)
     funciona {"status": 204}
 acabou_finalmente)
 

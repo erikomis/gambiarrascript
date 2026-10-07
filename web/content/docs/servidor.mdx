@@ -218,10 +218,11 @@ servidor de pe em http://localhost:8080 (ctrl+c pra parar)
 
 Cada requisicao roda **em paralelo** (uma goroutine por pedido). Por isso,
 cuidado ao mexer em lista/dicionario compartilhado entre handlers (veja
-[Concorrencia](/docs/concorrencia#estado-compartilhado)) — o
-`examples/api_rest.gs` usa um `cano(1)` como trava.
+[Concorrencia](/docs/concorrencia#estado-compartilhado)): cada operacao
+numa colecao e atomica, mas conta composta (`bota d["n"] = d["n"] + 1`) pede
+`com_trava(trava, gambiarra() ... acabou_finalmente)`.
 
-## HTTPS: escuta(porta, {"tls": ...})
+## HTTPS: `escuta(porta, {"tls": ...})`
 
 ```gambiarrascript
 rota("GET", "/", gambiarra() funciona "salve, seguro" acabou_finalmente)

@@ -30,3 +30,25 @@ jobs:
 
       - name: go test
         run: go test ./...
+
+  # O pages.yml so roda na main e falha DEPOIS do push; aqui a doc quebrada
+  # (MDX com {chaves} fora de codigo, link morto...) e pega no PR.
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: wasm + site estatico
+        env:
+          NEXT_PUBLIC_BASE_PATH: /gambiarrascript
+        run: ./scripts/build-web --site
