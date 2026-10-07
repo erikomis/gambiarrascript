@@ -112,12 +112,15 @@ func TestSessaoSobreviveAErro(t *testing.T) {
 		t.Fatalf("sessao quebrou depois do erro de runtime: %q", v)
 	}
 
-	// global declarada numa entrada que quebrou vale `nada`, nao nil
+	// global declarada numa entrada que quebrou nunca foi botada: ler da o
+	// mesmo "cade o `y`?" do tree-walker (antes valia `nada`), sem derrubar a
+	// sessao.
 	entrada(t, s, &buf, "bota y = 1 / 0")
-	// vale `nada` (nao nil, que derrubaria a VM): o filtro do REPL faz o valor
-	// sair vazio, e o importante e nao quebrar.
-	if v, err, _ := entrada(t, s, &buf, "y"); err != "" || v != "" {
-		t.Fatalf("y depois de entrada que quebrou deu (%q, %q), queria vazio sem erro", v, err)
+	if _, err, _ := entrada(t, s, &buf, "y"); !strings.Contains(err, "cade o `y`? voce nao botou isso ainda") {
+		t.Fatalf("y depois de entrada que quebrou deu erro %q", err)
+	}
+	if v, _, _ := entrada(t, s, &buf, "x"); v != "3" {
+		t.Fatalf("sessao quebrou depois de ler y: %q", v)
 	}
 }
 

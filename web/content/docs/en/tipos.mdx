@@ -73,6 +73,10 @@ mostra 0xFF + 0b11    # 258
 ```
 
 - `/` and `%` by zero are a **runtime error** (not `Inf`/`NaN`).
+- An integer that **overflows 64 bits** (`+`, `-`, `*`, unary minus, `/`)
+  becomes a float — it never wraps: `9223372036854775807 + 1` is
+  `9223372036854776000`. Bit operations on a float are an error. See
+  [Gotchas](/docs/en/pegadinhas#an-integer-that-overflows-becomes-a-float).
 - Literals in other bases: `0x` (hex), `0o` (octal), `0b` (binary).
 - Math builtins: `raiz`, `abs`, `arredonda`, `teto`, `chao`, `min`,
   `max`, `seno`, `cosseno`, `tangente`, `log`, `log10`, `exp`, `aleatorio`, and

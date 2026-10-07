@@ -177,11 +177,19 @@ bota triplica = multiplicador(3)
 mostra triplica(5)          # 15
 ```
 
+A closure enxerga a **variavel** de fora, nao uma copia do valor: se ela mudar
+depois que a closure nasceu, a closure ve o valor novo (e closures criadas num
+laco veem o ultimo valor da variavel do laco — veja
+[Pegadinhas](/docs/pegadinhas#closure-enxerga-a-variavel-nao-uma-copia)). Isso
+tambem deixa gambiarra aninhada chamar ela mesma ou uma irma declarada depois.
+
 <Callout type="warn" title="Atribuir dentro da funcao cria variavel local">
   Ler variavel de fora funciona; **atribuir** (`bota x = ...` ou `x += ...`)
-  dentro de uma gambiarra cria uma variavel **local**, igual Python sem
-  `nonlocal`. A de fora nao muda. Pra estado compartilhado, guarde num
-  dicionario ou lista (eles sao passados por referencia) e mude o conteudo:
+  dentro de uma gambiarra cria uma variavel **local** — na funcao inteira,
+  igual Python sem `nonlocal`. A de fora nao muda (ler antes de botar ainda ve
+  a de fora; veja [Pegadinhas](/docs/pegadinhas)). Pra estado compartilhado,
+  guarde num dicionario ou lista (eles sao passados por referencia) e mude o
+  conteudo:
 </Callout>
 
 ```gambiarrascript

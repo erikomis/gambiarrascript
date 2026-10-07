@@ -177,7 +177,7 @@ func cmdBench(args []string) {
 			interp := interpreter.New(io.Discard)
 			interp.DefinirArquivo(arquivo)
 			res := interp.Eval(prog, object.NewEnvironment())
-			if res != nil && res.Type() == object.ERRO_OBJ {
+			if object.EhErroLevantado(res) {
 				fmt.Println("deu ruim: " + res.Inspect())
 				os.Exit(1)
 			}
@@ -324,7 +324,7 @@ func rodarEmbedado() bool {
 	}
 
 	res := interp.Eval(prog, object.NewEnvironment())
-	if res != nil && res.Type() == object.ERRO_OBJ {
+	if object.EhErroLevantado(res) {
 		fmt.Println(res.Inspect())
 		os.Exit(1)
 	}

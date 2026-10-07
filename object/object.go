@@ -296,6 +296,14 @@ type Erro struct {
 
 func (e *Erro) Type() ObjectType { return ERRO_OBJ }
 
+// EhErroLevantado diz se o resultado e um erro levantado que ninguem pegou.
+// O erro que o `quebrou` pegou (Handled) e so um valor: um programa que
+// termina num `mostra e` nao terminou com erro.
+func EhErroLevantado(o Object) bool {
+	e, ok := o.(*Erro)
+	return ok && e != nil && !e.Handled
+}
+
 // Inspect devolve so Message — assim `erro + "x"` continua funcionando como
 // antes e a saida nao muda retroativamente.
 func (e *Erro) Inspect() string { return e.Message }

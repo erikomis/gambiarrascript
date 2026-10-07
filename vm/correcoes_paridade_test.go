@@ -698,3 +698,14 @@ quebrou err
 acabou_finalmente`
 	esperaNosDois(t, src, "rede\n", "")
 }
+
+// atribuir indice no que nao e lista/dicionario: a VM tinha mensagens
+// proprias ("nao da pra atribuir indice em NADA")
+func TestAtribuiIndiceMesmaMensagem(t *testing.T) {
+	esperaNosDois(t, `bota c = {}
+bota c["novos"]["x"] = 1`, "", "deu ruim na linha 2: so da pra atribuir indice em lista ou dicionario, e isso ai e NADA")
+	esperaNosDois(t, `bota xs = [1]
+bota xs["a"] = 1`, "", "deu ruim na linha 2: indice de lista tem que ser numero, veio TEXTO")
+	esperaNosDois(t, `bota d = {}
+bota d[[1]] = 1`, "", "deu ruim na linha 2: essa chave (LISTA) nao da pra usar num dicionario")
+}

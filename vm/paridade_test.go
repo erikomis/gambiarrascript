@@ -234,6 +234,132 @@ f()`
 		t.Errorf("tracos divergem:\n  TW: %q\n  VM: %q", eTW.Traco(), eVM.Traco())
 	}
 }
+
+// TestParidadePilhaErrosDeBuiltin: erro de builtin nao pego tem o mesmo
+// traco nos dois engines — a VM nao punha o frame do builtin (`em tamanho
+// (linha N)`) e, no topo, nem imprimia traco nenhum.
+func TestParidadePilhaErrosDeBuiltin(t *testing.T) {
+	casos := []string{
+		// builtin no topo
+		`tamanho(42)`,
+		`mostra pra_json(tamanho)`,
+		// builtin dentro de funcao
+		`gambiarra f()
+    funciona tamanho(42)
+acabou_finalmente
+f()`,
+		// quebra() e builtin tambem, duas funcoes acima
+		`gambiarra g()
+    funciona quebra("feio")
+acabou_finalmente
+gambiarra f()
+    funciona g() + 1
+acabou_finalmente
+f()`,
+		// chamada em cauda pra builtin
+		`gambiarra f(x)
+    funciona tamanho(x)
+acabou_finalmente
+mostra f([1])
+f(42)`,
+		// builtin chamado com ...lista
+		`gambiarra f(xs)
+    funciona tamanho(...xs)
+acabou_finalmente
+f([42])`,
+		// builtin pego e relancado pelo finalmente
+		`gambiarra f()
+    arruma
+        tamanho(42)
+    finalmente
+        mostra "fin"
+    acabou_finalmente
+acabou_finalmente
+f()`,
+		// erro de runtime puro (sem builtin) continua igual
+		`gambiarra f()
+    funciona 1 / 0
+acabou_finalmente
+f()`,
+		// erro dentro da gambiarra que o mapeia chama
+		`gambiarra dobra(x)
+    funciona tamanho(x)
+acabou_finalmente
+gambiarra f(xs)
+    funciona mapeia(xs, dobra)
+acabou_finalmente
+f([1])`,
+		`gambiarra f(xs)
+    funciona mapeia(xs, gambiarra(x) funciona x / 0 acabou_finalmente)
+acabou_finalmente
+f([1])`,
+		// erro que volta do bora pelo espera
+		`gambiarra g()
+    funciona tamanho(1)
+acabou_finalmente
+gambiarra f()
+    funciona espera(bora g())
+acabou_finalmente
+f()`,
+		// erro pego, guardado e relancado como causa
+		`gambiarra f()
+    arruma
+        tamanho(1)
+    quebrou e1
+        quebra("embrulho", e1)
+    acabou_finalmente
+acabou_finalmente
+f()`,
+		// erro de builtin pego: erro_pilha e erro_tipo batem
+		`gambiarra f()
+    funciona tamanho(42)
+acabou_finalmente
+arruma
+    f()
+quebrou e1
+    mostra erro_tipo(e1)
+    mostra erro_pilha(e1)
+acabou_finalmente`,
+	}
+	for _, src := range casos {
+		prog := parser.New(lexer.New(src)).ParseProgram()
+		var bufTW bytes.Buffer
+		resTW := interpreter.New(&bufTW).Eval(prog, object.NewEnvironment())
+
+		comp := compiler.New()
+		if err := comp.Compile(prog); err != nil {
+			t.Fatalf("compile %q: %v", src, err)
+		}
+		var bufVM bytes.Buffer
+		errVM := New(comp.Bytecode(), &bufVM).Run()
+
+		if bufTW.String() != bufVM.String() {
+			t.Errorf("saida diverge em %q:\n  TW: %q\n  VM: %q", src, bufTW.String(), bufVM.String())
+		}
+		eTW, _ := resTW.(*object.Erro)
+		if eTW != nil && eTW.Handled {
+			eTW = nil
+		}
+		var eVM *object.Erro
+		if errVM != nil {
+			eVM = ErroDoRun(errVM)
+		}
+		if (eTW == nil) != (eVM == nil) {
+			t.Errorf("so um engine deu erro em %q:\n  TW: %v\n  VM: %v", src, eTW, errVM)
+			continue
+		}
+		if eTW == nil {
+			continue
+		}
+		if eTW.Message != eVM.Message || eTW.Kind != eVM.Kind {
+			t.Errorf("erro diverge em %q:\n  TW: %q (%s)\n  VM: %q (%s)", src, eTW.Message, eTW.Kind, eVM.Message, eVM.Kind)
+		}
+		if eTW.Traco() != eVM.Traco() {
+			t.Errorf("traco diverge em %q:\n  TW: %q\n  VM: %q", src, eTW.Traco(), eVM.Traco())
+		}
+	}
+}
+
 // TestParidadeStats garante que soma/media/zip/enumera rodam identico no
 // tree-walker e na VM (builtins puros compartilhados via BuiltinsVisiveis).
 func TestParidadeStats(t *testing.T) {

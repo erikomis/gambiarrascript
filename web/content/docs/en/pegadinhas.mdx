@@ -24,6 +24,61 @@ mostra total             # 0
 For shared state, use a dict/list (passed by reference) and mutate its
 contents: `estado.total += x`. Or return the value with `funciona`.
 
+The name becomes local in the **whole function**, not just from the `bota`
+line down. Reading before assigning sees the outer value — the innermost scope
+where the name **already has a value** wins (local, then the enclosing
+function, then the global, then the builtin). In a loop, the first pass reads
+the global and the next ones already read the local:
+
+```gambiarrascript
+bota x = 1
+gambiarra f()
+    pra_cada i em [1, 2]
+        mostra x          # 1, then 11
+        bota x = 10 + i
+    acabou_finalmente
+acabou_finalmente
+f()
+mostra x                  # 1
+```
+
+A name with no value anywhere (the `bota` sat in a branch that didn't run)
+gives the error ``cade o `y`? voce nao botou isso ainda``. And a gambiarra sees
+globals declared **after** it — what counts is the value at call time.
+
+## A closure sees the variable, not a copy
+
+A gambiarra created inside another one reads the outer variable **when it
+runs**: if the outer one changes later, the closure sees the new value.
+Closures created in a loop share the same `pra_cada` variable — they all see
+the last value:
+
+```gambiarrascript
+gambiarra f()
+    bota fs = []
+    pra_cada i em [1, 2, 3]
+        adiciona(fs, gambiarra() funciona i acabou_finalmente)
+    acabou_finalmente
+    funciona mapeia(fs, gambiarra(g) funciona g() acabou_finalmente)
+acabou_finalmente
+mostra f()                # [3, 3, 3]
+```
+
+Want to keep each pass's value? Build the closure in a separate gambiarra that
+takes the value as a parameter — every call gets its own variable:
+
+```gambiarrascript
+gambiarra fixa(v)
+    funciona gambiarra() funciona v acabou_finalmente
+acabou_finalmente
+
+bota fs = []
+pra_cada i em [1, 2, 3]
+    adiciona(fs, fixa(i))
+acabou_finalmente
+mostra mapeia(fs, gambiarra(g) funciona g() acabou_finalmente)   # [1, 2, 3]
+```
+
 ## Scope of `pra_cada` and `quebrou` (Python style)
 
 The `pra_cada` variable and the `quebrou` clause variable **keep existing**
@@ -116,6 +171,22 @@ Only `nada` and `deu_ruim` are falsy. **Everything else** is truthy: `0`, `""`,
 
 Like in C, `&`, `|` and `^` have **lower** precedence than `==`: `x & 1 == 1`
 becomes `x & (1 == 1)` and errors. Write `(x & 1) == 1`.
+
+## An integer that overflows becomes a float
+
+Integers are exact up to 64 bits. Arithmetic that goes past that (`+`, `-`,
+`*`, unary minus, `/`) **becomes a float** — it never wraps around to negative
+nor sticks at the maximum:
+
+```gambiarrascript
+bota grande = 9223372036854775807   # largest 64-bit integer
+mostra grande + 1                     # 9223372036854776000 (float)
+mostra grande * 2                     # 18446744073709552000
+```
+
+A float doesn't keep the last digits exact, and bit operations (`&`, `|`, `^`,
+`~`, `<<`, `>>`) on a float are an error. `<<` between integers just shifts the
+bits (`1 << 64` is `0`), it doesn't turn into a float.
 
 ## Integer division can give a float
 

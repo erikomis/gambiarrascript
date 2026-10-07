@@ -235,7 +235,7 @@ func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []stri
 	if s, ok := resultado.(*object.Sair); ok {
 		os.Exit(s.Codigo) // sai(codigo) no tree-walker
 	}
-	if resultado != nil && resultado.Type() == object.ERRO_OBJ {
+	if object.EhErroLevantado(resultado) {
 		fmt.Println(resultado.Inspect())
 		if err, ok := resultado.(*object.Erro); ok && len(err.Stack) > 0 {
 			fmt.Fprint(os.Stderr, "Traço de pilha:\n"+err.Traco())

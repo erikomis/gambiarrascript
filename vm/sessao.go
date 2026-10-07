@@ -35,13 +35,10 @@ func NovaSessaoComInterp(out io.Writer, interp *interpreter.Interpreter) *Sessao
 	// saber o tamanho final (cada entrada pode declarar mais), e crescer
 	// depois seria furada: o slice e compartilhado com os clones do `bora`,
 	// que ficariam com o array velho. 1 MB numa sessao interativa nao pesa.
+	// Slot nil = global declarada (numa entrada que quebrou no meio, ou so
+	// num ramo que nao rodou) mas nunca botada: a leitura da o mesmo "cade o
+	// `x`?" do tree-walker.
 	globals := make([]object.Object, MaxGlobals)
-	// nada em vez de nil: uma global declarada numa entrada que quebrou no meio
-	// existe na tabela de simbolos mas nunca foi escrita. Lida como nil ela
-	// derrubaria a VM; como `nada` ela se comporta igual ao tree-walker.
-	for i := range globals {
-		globals[i] = NADA
-	}
 	return &Sessao{
 		comp:    compiler.New(),
 		globals: globals,

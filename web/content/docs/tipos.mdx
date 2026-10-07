@@ -70,6 +70,9 @@ mostra 0xFF + 0b11    # 258
 ```
 
 - `/` e `%` por zero dao **erro de runtime** (nao `Inf`/`NaN`).
+- Inteiro que **estoura 64 bits** (`+`, `-`, `*`, o menos da frente, `/`) vira
+  real — nunca da a volta: `9223372036854775807 + 1` e `9223372036854776000`.
+  Operacao de bit em real da erro. Veja [Pegadinhas](/docs/pegadinhas#inteiro-que-estoura-vira-real).
 - Literais em outras bases: `0x` (hex), `0o` (octal), `0b` (binario).
 - Builtins matematicos: `raiz`, `abs`, `arredonda`, `teto`, `chao`, `min`,
   `max`, `seno`, `cosseno`, `tangente`, `log`, `log10`, `exp`, `aleatorio`, e o

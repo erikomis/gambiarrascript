@@ -39,7 +39,9 @@ func init() {
 // 9 = gera_certificado no fim da lista.
 // 10 = OpImporta: modulo compilado a parte (descritor object.Modulo), roda uma
 // vez so; o .gsc guarda o hash de cada modulo importado.
-const formatoGSC = 10
+// 11 = escopo de funcao (OpGet*Ou/OpGet*Chk, celulas), estouro de inteiro
+// vira real no folding, traco com frame de builtin.
+const formatoGSC = 11
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

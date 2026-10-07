@@ -86,7 +86,7 @@ func rodaUmTeste(arq string, usarVM bool) (total, ok int, nota string) {
 		}
 	} else {
 		res := interp.Eval(prog, object.NewEnvironment())
-		if res != nil && res.Type() == object.ERRO_OBJ {
+		if object.EhErroLevantado(res) {
 			runErro = res
 		}
 	}

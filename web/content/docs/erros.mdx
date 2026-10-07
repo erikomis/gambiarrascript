@@ -23,6 +23,30 @@ gambiarra chamada la dentro (em qualquer profundidade).
 valor do tipo **erro**. Concatenar com texto ou passar pra `texto()` da a
 mensagem; os builtins `erro_*` abrem o resto.
 
+## Erro pego e um valor
+
+O que o `quebrou` pega e um valor como outro qualquer: da pra mostrar (sai a
+mensagem), guardar, passar pra gambiarra, devolver com `funciona`, por em
+lista e comparar (`==` so e `deu_bom` pro mesmo erro) — nada disso relanca.
+So `quebra(...)` levanta erro de novo (`quebra("contexto", erro)` guarda o
+pego como causa).
+
+```gambiarrascript
+arruma
+    bota r = 1 / 0
+quebrou erro
+    bota guardado = erro
+acabou_finalmente
+
+mostra guardado            # deu ruim na linha 2: nao da pra dividir por zero, parca — nem na gambiarra
+mostra tipo(guardado)      # erro
+mostra "log: ${guardado}"  # log: deu ruim na linha 2: ...
+mostra erro_causa(guardado) # nada
+```
+
+`pra_json(erro)` da erro (`nao da pra virar json: ERRO`): pra mandar pra fora,
+use `erro_msg(erro)`.
+
 ## Sem arruma
 
 Erro que ninguem pega derruba o script: imprime a mensagem e o traco de pilha
@@ -33,6 +57,9 @@ deu ruim na linha 2: nao da pra dividir por zero, parca — nem na gambiarra
 Traço de pilha:
   em a (linha 5)
 ```
+
+O traco vai de fora pra dentro: cada gambiarra que o erro atravessou, e por
+ultimo o builtin que reclamou, se foi um (`em tamanho (linha 3)`).
 
 ## finalmente
 

@@ -70,10 +70,10 @@ const (
 	// --- fase 6f: concorrencia ---
 	OpBoraCall // argc (1): dispara chamada em goroutine, push Futuro
 	// misc
-	OpFatia  // pop fim, pop inicio, pop left; push fatia left[inicio:fim]
-	OpIterPar // pop __it, pop __seq, pop __orig; push (key, value) pra pra_cada 2-nomes
-	OpDup    // duplica topo da pilha
-	OpIsNada // pop x; push (x == nada)
+	OpFatia    // pop fim, pop inicio, pop left; push fatia left[inicio:fim]
+	OpIterPar  // pop __it, pop __seq, pop __orig; push (key, value) pra pra_cada 2-nomes
+	OpDup      // duplica topo da pilha
+	OpIsNada   // pop x; push (x == nada)
 	OpTailCall // argc (1): tail call — reusa o frame atual (recursao em cauda)
 	// OpBinConst funde `OpConstant K` + operacao binaria numa instrucao so:
 	// aplica a operacao entre o topo da pilha e a constante, no lugar. Cobre o
@@ -91,7 +91,29 @@ const (
 	// e a constante texto com o arquivo onde o importa esta escrito (cadeia
 	// pra detectar import circular).
 	OpImporta // moduloIdx (2) + atualIdx (2)
-	OpHalt   // para execucao
+	// --- escopo de funcao (estilo Python, igual o tree-walker) ---
+	// Leitura de nome que pode ainda nao ter sido botado: se o slot tem
+	// valor, empilha e pula pro alvo (fim da cadeia); se nao, segue pra
+	// proxima instrucao, que le o escopo de fora (ou um OpGet*Chk). O alvo vem
+	// PRIMEIRO pra reusar o backpatch dos jumps.
+	OpGetLocalOu  // alvo (2) + idx (1)
+	OpGetGlobalOu // alvo (2) + idx (2)
+	OpGetFreeOu   // alvo (2) + idx (1): freevar (celula)
+	OpGetCelulaOu // alvo (2) + idx (1): local capturado por closure (celula)
+	// local capturado por closure mora numa celula (a closure enxerga a
+	// variavel, nao uma copia do valor).
+	OpCelula        // idx (1): embrulha o slot numa celula nova (prologo)
+	OpGetCelula     // idx (1): le o valor da celula do slot
+	OpSetCelula     // idx (1): pop -> valor da celula do slot
+	OpGetFreeCelula // idx (1): empilha a CELULA da freevar (repasse pra closure de dentro)
+	// ultimo lugar da cadeia: sem valor -> erro "cade o `nome`? voce nao
+	// botou isso ainda" (nome na constante). Caminho quente de toda leitura
+	// de variavel: um teste de nil a mais que o OpGet* cru.
+	OpGetLocalChk  // idx (1) + nomeIdx (2)
+	OpGetGlobalChk // idx (2) + nomeIdx (2)
+	OpGetFreeChk   // idx (1) + nomeIdx (2)
+	OpGetCelulaChk // idx (1) + nomeIdx (2)
+	OpHalt         // para execucao
 )
 
 type Definition struct {
@@ -160,15 +182,28 @@ var definitions = map[Opcode]*Definition{
 	// fase 6f
 	OpBoraCall: {"OpBoraCall", []int{1}},
 	// misc
-	OpFatia:  {"OpFatia", []int{}},
-	OpIterPar: {"OpIterPar", []int{}},
-	OpDup:    {"OpDup", []int{}},
-	OpIsNada: {"OpIsNada", []int{}},
-	OpPow:    {"OpPow", []int{}},
+	OpFatia:       {"OpFatia", []int{}},
+	OpIterPar:     {"OpIterPar", []int{}},
+	OpDup:         {"OpDup", []int{}},
+	OpIsNada:      {"OpIsNada", []int{}},
+	OpPow:         {"OpPow", []int{}},
 	OpCallEspalha: {"OpCallEspalha", []int{2}},
 	OpBoraEspalha: {"OpBoraEspalha", []int{2}},
 	OpImporta:     {"OpImporta", []int{2, 2}},
-	OpHalt:   {"OpHalt", []int{}},
+	// escopo de funcao
+	OpGetLocalOu:    {"OpGetLocalOu", []int{2, 1}},
+	OpGetGlobalOu:   {"OpGetGlobalOu", []int{2, 2}},
+	OpGetFreeOu:     {"OpGetFreeOu", []int{2, 1}},
+	OpGetCelulaOu:   {"OpGetCelulaOu", []int{2, 1}},
+	OpCelula:        {"OpCelula", []int{1}},
+	OpGetCelula:     {"OpGetCelula", []int{1}},
+	OpSetCelula:     {"OpSetCelula", []int{1}},
+	OpGetFreeCelula: {"OpGetFreeCelula", []int{1}},
+	OpGetLocalChk:   {"OpGetLocalChk", []int{1, 2}},
+	OpGetGlobalChk:  {"OpGetGlobalChk", []int{2, 2}},
+	OpGetFreeChk:    {"OpGetFreeChk", []int{1, 2}},
+	OpGetCelulaChk:  {"OpGetCelulaChk", []int{1, 2}},
+	OpHalt:          {"OpHalt", []int{}},
 }
 
 func Lookup(op byte) (*Definition, error) {

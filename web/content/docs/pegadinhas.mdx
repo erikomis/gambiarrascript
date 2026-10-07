@@ -24,6 +24,60 @@ mostra total             # 0
 Pra estado compartilhado, use um dicionario/lista (passados por referencia) e
 mude o conteudo: `estado.total += x`. Ou devolva o valor com `funciona`.
 
+O nome vira local na **funcao inteira**, nao so da linha do `bota` pra baixo.
+Ler antes de botar enxerga o valor de fora — o escopo mais de dentro em que o
+nome **ja tem valor** vale (local, depois a funcao de fora, depois a global,
+depois o builtin). Num laco, a primeira volta le a global e as seguintes ja
+leem o local:
+
+```gambiarrascript
+bota x = 1
+gambiarra f()
+    pra_cada i em [1, 2]
+        mostra x          # 1, depois 11
+        bota x = 10 + i
+    acabou_finalmente
+acabou_finalmente
+f()
+mostra x                  # 1
+```
+
+Nome que nao tem valor em lugar nenhum (o `bota` ficou num ramo que nao rodou)
+da o erro ``cade o `y`? voce nao botou isso ainda``. E a gambiarra enxerga global
+declarada **depois** dela — vale o que tiver na hora da chamada.
+
+## Closure enxerga a variavel, nao uma copia
+
+A gambiarra criada dentro de outra le a variavel de fora **na hora que roda**:
+se a de fora mudar depois, a closure ve o valor novo. Closures criadas num
+laco dividem a mesma variavel do `pra_cada` — todas veem o ultimo valor:
+
+```gambiarrascript
+gambiarra f()
+    bota fs = []
+    pra_cada i em [1, 2, 3]
+        adiciona(fs, gambiarra() funciona i acabou_finalmente)
+    acabou_finalmente
+    funciona mapeia(fs, gambiarra(g) funciona g() acabou_finalmente)
+acabou_finalmente
+mostra f()                # [3, 3, 3]
+```
+
+Quer guardar o valor de cada volta? Monte a closure numa gambiarra separada
+que recebe o valor como parametro — cada chamada tem a sua variavel:
+
+```gambiarrascript
+gambiarra fixa(v)
+    funciona gambiarra() funciona v acabou_finalmente
+acabou_finalmente
+
+bota fs = []
+pra_cada i em [1, 2, 3]
+    adiciona(fs, fixa(i))
+acabou_finalmente
+mostra mapeia(fs, gambiarra(g) funciona g() acabou_finalmente)   # [1, 2, 3]
+```
+
 ## Escopo do `pra_cada` e do `quebrou` (estilo Python)
 
 A variavel do `pra_cada` e a da clausula `quebrou` **continuam existindo**
@@ -112,6 +166,21 @@ inclusive. Se quiser checar vazio, faca explicitamente (`tamanho(x) == 0`,
 
 Como em C, `&`, `|` e `^` tem precedencia **menor** que `==`: `x & 1 == 1` vira
 `x & (1 == 1)` e da erro. Escreva `(x & 1) == 1`.
+
+## Inteiro que estoura vira real
+
+Inteiro e exato ate 64 bits. Conta que passa disso (`+`, `-`, `*`, o menos da
+frente, `/`) **vira real** — nunca da a volta pro negativo nem trava no maximo:
+
+```gambiarrascript
+bota grande = 9223372036854775807   # maior inteiro de 64 bits
+mostra grande + 1                     # 9223372036854776000 (real)
+mostra grande * 2                     # 18446744073709552000
+```
+
+Real nao tem os digitos finais exatos, e operacao de bit (`&`, `|`, `^`, `~`,
+`<<`, `>>`) em real da erro. Ja o `<<` entre inteiros so desloca os bits
+(`1 << 64` e `0`), sem virar real.
 
 ## Divisao entre inteiros pode dar real
 

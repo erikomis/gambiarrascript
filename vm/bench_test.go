@@ -94,6 +94,21 @@ mostra s`
 
 func BenchmarkLoop(b *testing.B) { rodaBench(b, compilaBench(b, fonteLoop)) }
 
+// fonteLoopLocal e o mesmo laco dentro de uma gambiarra: tudo vira local (o
+// caminho de OpGetLocal/OpSetLocal, que o fonteLoop nao toca).
+const fonteLoopLocal = `gambiarra laco()
+    bota s = 0
+    bota i = 0
+    enquanto i < 200000
+        bota s = s + i * 2
+        bota i = i + 1
+    acabou_finalmente
+    funciona s
+acabou_finalmente
+mostra laco()`
+
+func BenchmarkLoopLocal(b *testing.B) { rodaBench(b, compilaBench(b, fonteLoopLocal)) }
+
 // BenchmarkNovaVM isola o custo de CRIAR a VM (pilha, globais, frames, tabela
 // de builtins) sem rodar nada. Os benchmarks acima criam uma VM por iteracao —
 // como `gs roda` faz — entao o numero deles e setup + execucao. Pra cargas

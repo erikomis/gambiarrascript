@@ -374,6 +374,9 @@ func (i *Interpreter) evalProgram(prog *ast.Program, env *object.Environment) ob
 		case *object.Retorno:
 			return r.Value
 		case *object.Erro:
+			if r.Handled {
+				continue // erro pego e so valor (`mostra e`, `e` solto)
+			}
 			return r
 		case *object.Sair:
 			return r
@@ -530,7 +533,9 @@ func (i *Interpreter) evalPrefix(op string, right object.Object, linha int) obje
 			return newError(linha, "nao da pra colocar - na frente de %s", right.Type())
 		}
 		if num.EhInt {
-			return object.NumInt(-num.Int)
+			if v, ok := object.NegInt(num.Int); ok {
+				return object.NumInt(v)
+			}
 		}
 		return object.NumFloat(-num.Value)
 	case "~":
@@ -598,23 +603,31 @@ func (i *Interpreter) evalInfix(node *ast.InfixExpression, env *object.Environme
 
 func (i *Interpreter) evalInfixNumero(op string, lo, ro *object.Numero, linha int) object.Object {
 	// Caminho inteiro exato: so quando os dois lados sao inteiros. Mantem
-	// precisao acima de 2^53 (somas, contagens, multiplicacoes gigantes).
+	// precisao acima de 2^53 (somas, contagens, multiplicacoes gigantes). Se
+	// estourar o int64 a conta vai pro real (object.SomaInt & cia, a mesma
+	// regra da VM).
 	bothInt := lo.EhInt && ro.EhInt
 	l, r := lo.Value, ro.Value
 	switch op {
 	case "+":
 		if bothInt {
-			return object.NumInt(lo.Int + ro.Int)
+			if v, ok := object.SomaInt(lo.Int, ro.Int); ok {
+				return object.NumInt(v)
+			}
 		}
 		return object.NumFloat(l + r)
 	case "-":
 		if bothInt {
-			return object.NumInt(lo.Int - ro.Int)
+			if v, ok := object.SubInt(lo.Int, ro.Int); ok {
+				return object.NumInt(v)
+			}
 		}
 		return object.NumFloat(l - r)
 	case "*":
 		if bothInt {
-			return object.NumInt(lo.Int * ro.Int)
+			if v, ok := object.MulInt(lo.Int, ro.Int); ok {
+				return object.NumInt(v)
+			}
 		}
 		return object.NumFloat(l * r)
 	case "/":
@@ -622,8 +635,10 @@ func (i *Interpreter) evalInfixNumero(op string, lo, ro *object.Numero, linha in
 			return newError(linha, "nao da pra dividir por zero, parca — nem na gambiarra")
 		}
 		// divisao exata entre inteiros continua inteiro; senao vira float.
-		if bothInt && lo.Int%ro.Int == 0 {
-			return object.NumInt(lo.Int / ro.Int)
+		if bothInt {
+			if v, ok := object.DivInt(lo.Int, ro.Int); ok {
+				return object.NumInt(v)
+			}
 		}
 		return object.NumFloat(l / r)
 	case "%":
@@ -903,12 +918,15 @@ func (i *Interpreter) evalBlock(block *ast.BlockStatement, env *object.Environme
 	var result object.Object = NADA
 	for _, stmt := range block.Statements {
 		result = i.Eval(stmt, env)
-		if result != nil {
-			switch result.Type() {
-			case object.RETORNO_OBJ, object.ERRO_OBJ, object.VAZA_OBJ, object.CONTINUA_OBJ, object.SAIR_OBJ:
-				return result
-			}
+		if ehDesvio(result) {
+			return result
 		}
+	}
+	// erro pego (Handled) no fim do bloco e so o valor do ultimo statement
+	// (`mostra e`): nao pode subir como se fosse erro levantado — o laco/
+	// arruma/funcao de fora olham o tipo do resultado do bloco.
+	if e, ok := result.(*object.Erro); ok && e.Handled {
+		return NADA
 	}
 	return result
 }
@@ -1237,14 +1255,19 @@ func (i *Interpreter) evalArruma(node *ast.ArrumaStatement, env *object.Environm
 	return res
 }
 
-// ehDesvio diz se o resultado de um bloco e desvio de fluxo (nao valor).
+// ehDesvio diz se o resultado de um statement e desvio de fluxo (nao valor).
+// Erro so e desvio se foi levantado e ninguem pegou: o erro que o `quebrou`
+// pegou (Handled) e um valor como outro qualquer.
 func ehDesvio(o object.Object) bool {
 	if o == nil {
 		return false
 	}
 	switch o.Type() {
-	case object.ERRO_OBJ, object.RETORNO_OBJ, object.VAZA_OBJ, object.CONTINUA_OBJ, object.SAIR_OBJ:
+	case object.RETORNO_OBJ, object.VAZA_OBJ, object.CONTINUA_OBJ, object.SAIR_OBJ:
 		return true
+	case object.ERRO_OBJ:
+		e, ok := o.(*object.Erro)
+		return !ok || !e.Handled
 	}
 	return false
 }
@@ -1254,7 +1277,9 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 		res := b.Fn(args)
 		// Builtins nao tem call-site no AST; registra so o nome da builtin
 		// como frame, na linha onde foi chamada.
-		if err, ok := res.(*object.Erro); ok && err != nil {
+		// erro pego (Handled) devolvido como valor (erro_causa, primeiro...)
+		// nao e falha do builtin: nao ganha frame nem tipo.
+		if err, ok := res.(*object.Erro); ok && err != nil && !err.Handled {
 			empilhaFrame(err, b.Nome, linha)
 			kind := err.Kind
 			if kind == "" {
@@ -1270,7 +1295,13 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 	// walker puro) e erro mesmo.
 	if cf, ok := fn.(*object.CompiledFunction); ok {
 		if i.ChamaCompilada != nil {
-			return i.ChamaCompilada(cf, args)
+			res := i.ChamaCompilada(cf, args)
+			// mesmo frame que a gambiarra do tree-walker ganha la embaixo
+			// (`em <mapeia> (linha 0)`): o traco sai igual nos dois engines
+			if err, ok := res.(*object.Erro); ok && isError(err) {
+				empilhaFrame(err, nome, linha)
+			}
+			return res
 		}
 		return newError(linha, "essa gambiarra e compilada (VM) e o engine atual nao sabe rodar ela")
 	}

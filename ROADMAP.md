@@ -288,8 +288,23 @@ Achados rodando todo exemplo da doc nos 2 engines; testes em
 
 Ainda abertos (pedem decisão de semântica):
 
-- [ ] Overflow de inteiro: VM satura, tree-walker dá a volta; `de_json`
-      corta inteiro gigante em silêncio.
+- [x] Overflow de inteiro: a VM caía no real em parte das contas e dava a
+      volta em outras (`-min`, `min / -1`), o tree-walker dava a volta em todas
+      (`max + 1` virava o mínimo negativo). **Decisão:** conta inteira que
+      estoura o int64 (`+`, `-`, `*`, `-x`, `/` exata) vira **real**
+      (float64), nos dois engines e no constant folding — helpers
+      compartilhados `object.SomaInt/SubInt/MulInt/NegInt/DivInt/RestoInt`
+      (testes de sinal clássicos + `math/bits.Mul64`, sem divisão; conferidos
+      contra `math/big`). Bit (`& | ^ ~ << >>`) em real continua erro
+      (`& bitwise so faz sentido com inteiros`); `<<` desloca os bits sem
+      checar estouro (é operação de bit, não de conta). `de_json` já lia
+      inteiro gigante como real. De brinde: a VM fazia `%` e `/` exata entre
+      inteiros em float (`(7 % 3) & 1` dava erro só na VM) e comparava
+      inteiro com inteiro pelo float64 (`9007199254740993 == 9007199254740992`
+      dava `deu_bom` só na VM). Bench (mediana de 7, main x novo intercalados):
+      fib 1,512 → 1,511 ms, laço global 9,14 → 8,90 ms, laço local (novo
+      `BenchmarkLoopLocal`) 8,35 → 8,59 ms (+3%: a checagem de "já botou?"
+      da leitura de variável, abaixo).
 - [x] `importa` com semântica de módulo de verdade, igual nos dois engines:
       cada módulo roda **uma vez por processo** (cache pelo caminho absoluto,
       `object.Modulos`); `como m` amarra só o `m` (namespace = dicionário em
@@ -300,8 +315,46 @@ Ainda abertos (pedem decisão de semântica):
       juntas esperam a mesma execução. Na VM o módulo compila à parte
       (`OpImporta` + descritor `object.Modulo`); o `.gsc` confere o hash dos
       módulos e o `gs build` embute os módulos importados.
-- [ ] Valor de erro difere entre engines (`erro_causa`, `mostra erro`).
-- [ ] VM não imprime traço de pilha em erro de builtin não pego no top-level.
+- [x] Valor de erro diferia entre engines: o tree-walker relançava o erro
+      num `mostra erro`/`mostra e1` (o valor de um statement era confundido
+      com desvio de fluxo no `evalBlock`/`evalProgram`), a VM relançava o que
+      `erro_causa(e)` devolvia (erro pego não ficava marcado `Handled`).
+      **Decisão:** erro pego pelo `quebrou` é só um valor — mostrar (imprime
+      a mensagem, como a VM já fazia), guardar, passar, devolver de gambiarra,
+      pôr em lista, comparar (`==` é identidade) e interpolar nunca relançam;
+      só `quebra(...)` (ou um erro de runtime não pego) levanta erro.
+      `erro_causa(e)` devolve a causa (valor) ou `nada`; `tipo(e)` é
+      `"erro"`; `texto(e)`/`"${e}"` dão a mensagem; `pra_json(e)` é erro
+      ("nao da pra virar json: ERRO" — use `erro_msg`). Erro relançado pelo
+      `finalmente` volta a ser levantado.
+- [x] VM não imprimia traço de pilha em erro de builtin (nem no topo nem
+      dentro de função). Agora o builtin entra como frame mais de dentro
+      (`em tamanho (linha N)`), o erro relançado pelo `finalmente` ganha os
+      frames de fora, a gambiarra chamada por `mapeia` & cia ganha o
+      `em <mapeia> (linha 0)` e a goroutine o `em <bora:g> (linha N)` — byte
+      a byte igual o tree-walker (`TestParidadePilhaErrosDeBuiltin`).
+- [x] Escopo de função divergia (o caso simples batia, o resto não): na VM o
+      nome era resolvido pela ordem do texto. `n += i` num laço dentro de
+      gambiarra lia sempre a global (somava errado), `enquanto x < 3 / x += 1`
+      virava laço infinito, ramo de `se_colar` que não rodou deixava o slot
+      com lixo da pilha (`gambiarra<f>` no lugar do valor), global declarada
+      depois da função era erro de compilação, closure guardava cópia do
+      valor (reatribuição depois de criar a closure não aparecia, e
+      gambiarra aninhada recursiva/mútua quebrava). **Decisão (a regra do
+      tree-walker, estilo Python sem `global`):** todo nome botado numa
+      gambiarra/lambda (`bota`, `+=`, `crava`, desestruturação, variável do
+      `pra_cada`, nome do `quebrou`, gambiarra aninhada) é local na função
+      inteira; ler enxerga o escopo mais de dentro em que o nome **já tem
+      valor** (local → função de fora → global → builtin), senão
+      ``cade o `x`? voce nao botou isso ainda``; closure enxerga a
+      variável (célula), não uma cópia — closures criadas num laço veem o
+      último valor. Mexer pelo índice/ponto (`bota xs[0] = ...`, `d.n += 1`)
+      continua mudando o objeto compartilhado. Na VM: varredura do corpo
+      antes de compilar (`compiler/escopo.go`), globais de topo declaradas
+      antes de rodar, slots de local zerados em toda chamada, leitura em
+      cadeia (`OpGet*Ou` / `OpGet*Chk`) e células pros locais capturados.
+      Nenhum exemplo nem bloco de código da doc dependia do comportamento
+      velho da VM (rodei todos nos dois engines, antes/depois).
 - [x] Interpolação engolia lixo calado (`"${3.14159:.2f}"` imprimia
       `3.14159`): um laço "se sobrou algo, ignora" no `parser.interpolar`.
       Agora sobra vira erro de parse — e o `:.2f` virou formato de verdade.

@@ -30,31 +30,16 @@ func potenciaInt(b, e int64) (int64, bool) {
 	for e > 0 {
 		var ok bool
 		if e&1 == 1 {
-			if r, ok = mulInt(r, b); !ok {
+			if r, ok = MulInt(r, b); !ok {
 				return 0, false
 			}
 		}
 		e >>= 1
 		if e > 0 {
-			if b, ok = mulInt(b, b); !ok {
+			if b, ok = MulInt(b, b); !ok {
 				return 0, false
 			}
 		}
-	}
-	return r, true
-}
-
-// mulInt multiplica detectando estouro do int64.
-func mulInt(a, b int64) (int64, bool) {
-	if a == 0 || b == 0 {
-		return 0, true
-	}
-	if (a == -1 && b == math.MinInt64) || (b == -1 && a == math.MinInt64) {
-		return 0, false
-	}
-	r := a * b
-	if r/b != a {
-		return 0, false
 	}
 	return r, true
 }

@@ -22,12 +22,12 @@ func TestCompilaPotencia(t *testing.T) {
 		{
 			// resultado float nao dobra: fica pro runtime
 			input:      "bota x = 2\n2 ** x",
-			constantes: []interface{}{2.0},
+			constantes: []interface{}{2.0, "x"},
 			instrucoes: []code.Instructions{
 				code.Make(code.OpConstant, 0),
 				code.Make(code.OpSetGlobal, 0),
 				code.Make(code.OpConstant, 0),
-				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpGetGlobalChk, 0, 1),
 				code.Make(code.OpPow),
 				code.Make(code.OpPop),
 			},
@@ -45,12 +45,12 @@ func TestCompilaPotencia(t *testing.T) {
 		{
 			// direita literal: OpBinConst com OpPow
 			input:      "bota x = 3\nx ** 2",
-			constantes: []interface{}{3.0, 2.0},
+			constantes: []interface{}{3.0, "x", 2.0},
 			instrucoes: []code.Instructions{
 				code.Make(code.OpConstant, 0),
 				code.Make(code.OpSetGlobal, 0),
-				code.Make(code.OpGetGlobal, 0),
-				code.Make(code.OpBinConst, 1, int(code.OpPow)),
+				code.Make(code.OpGetGlobalChk, 0, 1),
+				code.Make(code.OpBinConst, 2, int(code.OpPow)),
 				code.Make(code.OpPop),
 			},
 		},

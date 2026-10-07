@@ -24,6 +24,30 @@ inside a gambiarra called from in there (at any depth).
 value of type **erro** (error). Concatenating it with a string or passing it
 to `texto()` gives you the message; the `erro_*` builtins open up the rest.
 
+## A caught error is a value
+
+What `quebrou` catches is a value like any other: you can print it (you get the
+message), store it, pass it to a gambiarra, return it with `funciona`, put it
+in a list and compare it (`==` is only `deu_bom` for the same error) — none of
+that re-raises. Only `quebra(...)` raises again (`quebra("context", erro)`
+keeps the caught one as the cause).
+
+```gambiarrascript
+arruma
+    bota r = 1 / 0
+quebrou erro
+    bota guardado = erro
+acabou_finalmente
+
+mostra guardado            # deu ruim na linha 2: nao da pra dividir por zero, parca — nem na gambiarra
+mostra tipo(guardado)      # erro
+mostra "log: ${guardado}"  # log: deu ruim na linha 2: ...
+mostra erro_causa(guardado) # nada
+```
+
+`pra_json(erro)` is an error (`nao da pra virar json: ERRO`): to send it out,
+use `erro_msg(erro)`.
+
 ## Without arruma
 
 An error nobody catches takes the script down: it prints the message and the
@@ -34,6 +58,9 @@ deu ruim na linha 2: nao da pra dividir por zero, parca — nem na gambiarra
 Traço de pilha:
   em a (linha 5)
 ```
+
+The trace goes from the outside in: every gambiarra the error went through,
+and last the builtin that complained, if it was one (`em tamanho (linha 3)`).
 
 ## finalmente
 

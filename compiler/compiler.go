@@ -32,13 +32,32 @@ type Symbol struct {
 	Name  string
 	Index int
 	Scope SymbolScope
+	// Param: parametro da funcao (sempre tem valor, a leitura dispensa a
+	// checagem). Celula: local capturado por closure, mora numa celula.
+	Param  bool
+	Celula bool
 }
+
+// livreRef e uma freevar: o nome `Name` do escopo de funcao `dono`.
+type livreRef struct {
+	Name string
+	dono *SymbolTable
+}
+
+// posBuiltin: nome do builtin -> indice (o mesmo de nomesBuiltins).
+var posBuiltin = func() map[string]int {
+	m := make(map[string]int, len(nomesBuiltins))
+	for i, n := range nomesBuiltins {
+		m[n] = i
+	}
+	return m
+}()
 
 type SymbolTable struct {
 	symbols map[string]Symbol
 	count   int
 	outer   *SymbolTable
-	free    []Symbol // freeVars coletadas
+	free    []livreRef // freeVars coletadas (na ordem do OpClosure)
 	// globais: contador de slots globais COMPARTILHADO entre a tabela do
 	// principal e as tabelas dos modulos (cada modulo tem nomes proprios, mas
 	// os slots moram no mesmo array de globais da VM). nil = usa count.
@@ -100,42 +119,6 @@ func (s *SymbolTable) DefineBuiltin(nome string, idx int) Symbol {
 	s.symbols[nome] = sym
 	return sym
 }
-
-// Resolve caminha pela cadeia de escopos. Quando um nome existe num escopo
-// externo (nao global/builtin), marcamos como "free" no escopo atual — uma
-// variavel capturada que vira freevar na closure. FreeScope de niveis acima
-// tambem precisa ser re-exportado como freevar em cada nivel intermediario,
-// senao a OpGetFree num nivel interno nao encontra o slot populado (a OpClosure
-// so popula o Free do frame que ela cria — cada nivel tem que repassar).
-func (s *SymbolTable) Resolve(nome string) (Symbol, bool) {
-	sym, ok := s.symbols[nome]
-	if ok {
-		return sym, true
-	}
-	if s.outer == nil {
-		return Symbol{}, false
-	}
-	outer, ok := s.outer.Resolve(nome)
-	if !ok {
-		return Symbol{}, false
-	}
-	switch outer.Scope {
-	case GlobalScope, BuiltinScope, PredefinidaScope:
-		// globals/builtins nao precisam ser freevars: alcançamos elas direto
-		// via OpGetGlobal/OpGetBuiltin no escopo interno.
-		return outer, true
-	default:
-		// Local ou Free de nivel acima -> vira freevar AQUI tambem, pra poder
-		// repassar pra dentro. Cada nivel cria seu proprio freevar e repassa
-		// o valor na hora de empilhar antes de OpClosure.
-		free := Symbol{Name: nome, Index: len(s.free), Scope: FreeScope}
-		s.free = append(s.free, free)
-		s.symbols[nome] = free
-		return free, true
-	}
-}
-
-func (s *SymbolTable) Free() []Symbol { return s.free }
 
 // --- Compiler ---
 
@@ -205,7 +188,7 @@ type compiledFn struct {
 	minArgs   int // argumentos requeridos (sem default e sem varargs)
 	numLocals int
 	bytecode  []byte
-	free      []Symbol
+	free      []livreRef
 	variadic  bool
 }
 
@@ -425,6 +408,7 @@ func (c *Compiler) compile(node ast.Node) error {
 		if c.moduloAtual == "" {
 			c.progPrincipal = node
 		}
+		c.declaraNoTopo(node.Statements)
 		for _, s := range node.Statements {
 			if err := c.compile(s); err != nil {
 				c.cravadas = antes
@@ -699,25 +683,7 @@ func (c *Compiler) compile(node ast.Node) error {
 }
 
 func (c *Compiler) compileIdent(node *ast.Identifier) error {
-	sym, ok := c.scope.Resolve(node.Value)
-	if !ok {
-		// erro do PROGRAMA, nao da VM: quem le tem que saber a linha e o que
-		// fazer, nao que existe um compilador por baixo.
-		return fmt.Errorf("linha %d: nao existe nenhum `%s` por aqui — confere o nome ou declara com `bota %s = ...`", node.Token.Line, node.Value, node.Value)
-	}
-	switch sym.Scope {
-	case GlobalScope:
-		c.emit(code.OpGetGlobal, sym.Index)
-	case LocalScope:
-		c.emit(code.OpGetLocal, sym.Index)
-	case FreeScope:
-		c.emit(code.OpGetFree, sym.Index)
-	case BuiltinScope:
-		c.emit(code.OpGetBuiltin, sym.Index)
-	case PredefinidaScope:
-		c.emit(code.OpConstant, c.addConstant(object.Predefinidas[sym.Name]))
-	}
-	return nil
+	return c.emitLeitura(node.Value, node.Token.Line)
 }
 
 func (c *Compiler) emitVarSet(sym Symbol) {
@@ -725,16 +691,14 @@ func (c *Compiler) emitVarSet(sym Symbol) {
 	case GlobalScope:
 		c.emit(code.OpSetGlobal, sym.Index)
 	case LocalScope:
-		c.emit(code.OpSetLocal, sym.Index)
-	case FreeScope:
-		// assignment pra freevar: nao suportado naturalmente (closures
-		// capturam valores, nao enderecos aqui). empurra via op especial;
-		// por enquanto trata como SetLocal do frame atual (comum: shadow).
-		// Se realmente quisermos mutar outer, precisariamos de boxes. Hoje
-		// mantemos simples e consistente: escreve no local atual (pq a
-		// Resolve/Define garante que se a var existe neste escopo e local).
-		c.emit(code.OpSetLocal, sym.Index)
+		if sym.Celula {
+			c.emit(code.OpSetCelula, sym.Index)
+		} else {
+			c.emit(code.OpSetLocal, sym.Index)
+		}
 	}
+	// FreeScope nunca e escrito: todo nome botado numa funcao e local dela
+	// (escopo de funcao, ver escopo.go).
 }
 
 // defineVar registra um novo simbolo no escopo atual usando Define (cresce
@@ -1079,8 +1043,7 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 	itSym := c.defineVar(itNome)
 	c.emitVarSet(itSym)
 	c.emitVarGet(seqSym)
-	tamanhoSym, _ := c.scope.Resolve("tamanho")
-	c.emit(code.OpCallBuiltin, tamanhoSym.Index, 1)
+	c.emit(code.OpCallBuiltin, indiceBuiltin("tamanho"), 1)
 	lenSym := c.defineVar(lenNome)
 	c.emitVarSet(lenSym)
 
@@ -1238,11 +1201,18 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body
 	outer := c.scope
 	newScope := NewEnclosedSymbolTable(outer)
 	c.scope = newScope
+	// escopo de funcao (escopo.go): params e todo nome botado no corpo ja
+	// nascem locais; o que alguma funcao de dentro le vira celula.
+	info := varreFuncao(params, body)
 	paramSyms := make([]Symbol, len(params))
 	minArgs := 0
 	temVariadic := false
 	for i, p := range params {
-		paramSyms[i] = newScope.Define(p.Nome.Value)
+		sym := newScope.Define(p.Nome.Value)
+		sym.Param = true
+		sym.Celula = info.capturadas[p.Nome.Value]
+		newScope.symbols[p.Nome.Value] = sym
+		paramSyms[i] = sym
 		if p.Variadico {
 			temVariadic = true
 		} else if p.Padrao == nil {
@@ -1257,7 +1227,21 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body
 	c.instructions = code.Instructions{}
 	c.linhas = nil
 
-	// Prologo: pra cada param com valor padrao, se o slot veio NADA (nao
+	for _, nome := range info.declaradas {
+		sym := newScope.Define(nome)
+		sym.Celula = info.capturadas[nome]
+		newScope.symbols[nome] = sym
+	}
+	// Prologo 1: local capturado por closure vira celula (param embrulha o
+	// argumento; o resto nasce celula vazia). O slot sem valor e nil: a VM
+	// limpa os locals em toda entrada de funcao.
+	for _, nome := range append(nomesParams(params), info.declaradas...) {
+		if sym := newScope.symbols[nome]; sym.Celula {
+			c.emit(code.OpCelula, sym.Index)
+		}
+	}
+
+	// Prologo 2: pra cada param com valor padrao, se o slot veio NADA (nao
 	// preenchido pela VM), substitui pelo default. A VM poe NADA nos slots
 	// nao fornecidos (ver OpCall: padding com NADA quando argc < NumArgs).
 	for i, p := range params {
@@ -1265,7 +1249,7 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body
 			continue
 		}
 		// if param[i] == nada then param[i] = default
-		c.emit(code.OpGetLocal, paramSyms[i].Index)
+		c.emitVarGet(paramSyms[i])
 		c.emit(code.OpNada)
 		c.emit(code.OpEqual)
 		jmpSkip := c.emit(code.OpJumpIfFalse, 9999)
@@ -1276,7 +1260,7 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body
 			c.scope = outer
 			return err
 		}
-		c.emit(code.OpSetLocal, paramSyms[i].Index)
+		c.emitVarSet(paramSyms[i])
 		c.backpatch(jmpSkip, len(c.instructions))
 	}
 
@@ -1292,7 +1276,7 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body
 	fnLinhas := c.linhas       // tabela pc->linha do corpo
 	c.instructions = savedInst // restaura fluxo principal
 	c.linhas = savedLinhas
-	free := newScope.Free()
+	free := newScope.free
 	c.scope = outer
 
 	cf := compiledFn{
@@ -1318,22 +1302,32 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body
 		Linhas:    fnLinhas,
 		Variadic:  cf.variadic,
 	})
-	// pra cada freevar, empilhamos o valor capturado ANTES do OpClosure.
-	// o `free[i]` e um Symbol com scope=FreeScope que Resolve devolveu
-	// pra esse escopo-filho; precisamos achar o simbolo "original" do
-	// outer pega o valor agora. Cada free guarda o .Name original —
-	// pedimos pro escopo atual (c.scope, que e o outer) resolver de novo.
+	// pra cada freevar, empilha a CELULA dela antes do OpClosure: o local do
+	// escopo dono (se e quem esta criando a closure) ou a freevar que este
+	// escopo ja recebeu de fora (repasse). Local que nao e celula (nome que
+	// so o importa sem alias criou) vai por valor, como antes.
 	for _, fv := range free {
-		// refaz o lookup no escopo externo: o freevar veio daqui (ou de
-		// cima). Resolve deve devolver o mesmo Symbol do escopo externo.
-		orig, ok := outer.Resolve(fv.Name)
-		if !ok {
-			return fmt.Errorf("freevar %q sumiu do escopo externo", fv.Name)
+		if fv.dono == outer {
+			sym, ok := outer.symbols[fv.Name]
+			if !ok || sym.Scope != LocalScope {
+				return fmt.Errorf("freevar %q sumiu do escopo externo", fv.Name)
+			}
+			c.emit(code.OpGetLocal, sym.Index)
+			continue
 		}
-		c.emitVarGet(orig)
+		c.emit(code.OpGetFreeCelula, outer.livre(fv.Name, fv.dono).Index)
 	}
 	c.emit(code.OpClosure, fnIdx, len(free))
 	return nil
+}
+
+// nomesParams lista os nomes dos parametros, na ordem.
+func nomesParams(params []*ast.Parametro) []string {
+	out := make([]string, len(params))
+	for i, p := range params {
+		out[i] = p.Nome.Value
+	}
+	return out
 }
 
 // compileCall: gambiarra(...) -> OpCall argc
@@ -1525,7 +1519,11 @@ func (c *Compiler) emitVarGet(sym Symbol) {
 	case GlobalScope:
 		c.emit(code.OpGetGlobal, sym.Index)
 	case LocalScope:
-		c.emit(code.OpGetLocal, sym.Index)
+		if sym.Celula {
+			c.emit(code.OpGetCelula, sym.Index)
+		} else {
+			c.emit(code.OpGetLocal, sym.Index)
+		}
 	case FreeScope:
 		c.emit(code.OpGetFree, sym.Index)
 	case BuiltinScope:
@@ -1636,8 +1634,8 @@ func dobraConstante(expr ast.Expression) (object.Object, bool) {
 }
 
 // dobraInfixo computa uma op binaria de constantes so nos casos garantidamente
-// iguais ao runtime: texto+texto e inteiro exato +/-/* sem overflow (mesma
-// deteccao do vmExecBinarioIntShort). Divisao, modulo, float, comparacao,
+// iguais ao runtime: texto+texto e inteiro exato +/-/* (estouro vira real,
+// object.SomaInt & cia, igual o runtime). Divisao, modulo, float, comparacao,
 // bitwise e logico NAO sao dobrados (ficam pro runtime).
 func dobraInfixo(op string, l, r object.Object) (object.Object, bool) {
 	if lt, ok := l.(*object.Texto); ok {
@@ -1652,28 +1650,16 @@ func dobraInfixo(op string, l, r object.Object) (object.Object, bool) {
 	if !lok || !rok || !ln.EhInt || !rn.EhInt {
 		return nil, false
 	}
+	// mesma conta do runtime: inteiro que estoura o int64 vira real
+	var conta func(a, b int64) (int64, bool)
+	var emReal func(a, b float64) float64
 	switch op {
 	case "+":
-		res := ln.Int + rn.Int
-		if (ln.Int > 0 && rn.Int > 0 && res < 0) || (ln.Int < 0 && rn.Int < 0 && res > 0) {
-			return nil, false // overflow: deixa a VM cair no float
-		}
-		return object.NumInt(res), true
+		conta, emReal = object.SomaInt, func(a, b float64) float64 { return a + b }
 	case "-":
-		res := ln.Int - rn.Int
-		if (ln.Int > 0 && rn.Int < 0 && res < 0) || (ln.Int < 0 && rn.Int > 0 && res > 0) {
-			return nil, false
-		}
-		return object.NumInt(res), true
+		conta, emReal = object.SubInt, func(a, b float64) float64 { return a - b }
 	case "*":
-		if ln.Int == 0 || rn.Int == 0 {
-			return object.NumInt(0), true
-		}
-		res := ln.Int * rn.Int
-		if res/rn.Int != ln.Int {
-			return nil, false
-		}
-		return object.NumInt(res), true
+		conta, emReal = object.MulInt, func(a, b float64) float64 { return a * b }
 	case "**":
 		// mesma conta do runtime (object.Potencia); so dobra resultado inteiro
 		iv, _, ehInt, err := object.Potencia(ln, rn)
@@ -1681,8 +1667,13 @@ func dobraInfixo(op string, l, r object.Object) (object.Object, bool) {
 			return nil, false
 		}
 		return object.NumInt(iv), true
+	default:
+		return nil, false
 	}
-	return nil, false
+	if v, ok := conta(ln.Int, rn.Int); ok {
+		return object.NumInt(v), true
+	}
+	return object.NumFloat(emReal(ln.Value, rn.Value)), true
 }
 
 func (c *Compiler) emit(op code.Opcode, operands ...int) int {
@@ -1857,6 +1848,7 @@ func (c *Compiler) compilaCorpoModulo(info *moduloInfo, prog *ast.Program) error
 	c.loopStack, c.arrumas, c.funcAtual = nil, nil, ""
 	c.cravadas = map[string]bool{}
 	c.DirBase, c.moduloAtual = filepath.Dir(abs), abs
+	c.declaraNoTopo(prog.Statements)
 
 	for _, s := range prog.Statements {
 		if err := c.compile(s); err != nil {

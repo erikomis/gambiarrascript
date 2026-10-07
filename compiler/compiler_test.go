@@ -112,25 +112,26 @@ func TestCompilaBinConst(t *testing.T) {
 	roda(t, []casoComp{
 		{
 			// direita literal: funde
+			// (a leitura da global confere se ela ja tem valor: "cade o `i`?")
 			input:      "bota i = 0\ni + 1",
-			constantes: []interface{}{0.0, 1.0},
+			constantes: []interface{}{0.0, "i", 1.0},
 			instrucoes: []code.Instructions{
 				code.Make(code.OpConstant, 0),
 				code.Make(code.OpSetGlobal, 0),
-				code.Make(code.OpGetGlobal, 0),
-				code.Make(code.OpBinConst, 1, int(code.OpAdd)),
+				code.Make(code.OpGetGlobalChk, 0, 1),
+				code.Make(code.OpBinConst, 2, int(code.OpAdd)),
 				code.Make(code.OpPop),
 			},
 		},
 		{
 			// esquerda literal: NAO funde, segue o caminho normal
 			input:      "bota i = 0\n1 + i",
-			constantes: []interface{}{0.0, 1.0},
+			constantes: []interface{}{0.0, 1.0, "i"},
 			instrucoes: []code.Instructions{
 				code.Make(code.OpConstant, 0),
 				code.Make(code.OpSetGlobal, 0),
 				code.Make(code.OpConstant, 1),
-				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpGetGlobalChk, 0, 2),
 				code.Make(code.OpAdd),
 				code.Make(code.OpPop),
 			},

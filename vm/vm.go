@@ -140,6 +140,7 @@ func (vm *VM) chamaCompilada(cf *object.CompiledFunction, args []object.Object) 
 		sub.stack[i] = a
 	}
 	// reserva os slots de locals (igual OpCall)
+	sub.limpaLocais(0, cf)
 	sub.sp = topo
 	fr0 := sub.frameEm(0)
 	fr0.fn = cf
@@ -376,10 +377,17 @@ func (vm *VM) execBoraCall(argc int) {
 		}
 		// reserva os slots de locals (igual OpCall) pra pilha de trabalho nao
 		// pisar em cima de local do corpo.
+		clone.limpaLocais(0, fn)
 		clone.sp = fn.NumLocals
 		frame := &Frame{fn: fn, ip: 0, basePointer: 0}
 		clone.frames[0] = frame
 		clone.framesIdx = 1
+		// frame da goroutine no traco (`em <bora:g> (linha N)`), igual o
+		// tree-walker
+		quadroBora := object.StackFrame{Funcao: "<bora:" + fn.Name + ">"}
+		if fr := vm.currentFrame(); fr != nil {
+			quadroBora.Line = fr.fn.LinhaDoPC(fr.ip)
+		}
 		go func(c *VM, f *object.Futuro) {
 			defer func() {
 				if r := recover(); r != nil {
@@ -392,7 +400,9 @@ func (vm *VM) execBoraCall(argc int) {
 			}()
 			if err := c.execFrame(c.currentFrame()); err != nil {
 				if enc, ok := err.(erroNaoCapturado); ok {
-					f.Resolve(enc.err) // preserva Line/Kind do erro original
+					// preserva Line/Kind do erro original
+					enc.err.Stack = append([]object.StackFrame{quadroBora}, enc.err.Stack...)
+					f.Resolve(enc.err)
 					return
 				}
 				f.Resolve(&object.Erro{Message: err.Error(), Kind: "runtime"})
@@ -574,7 +584,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 						vme.err.Message = fmt.Sprintf("deu ruim na linha %d: %s", l, vme.err.Message)
 					}
 				}
-				vm.handleVMError(vme.err)
+				vm.handleVMError(vme.err, vme.quadro)
 				// apos handle: ou temos handler (continua) ou propaga
 				errRet = nil
 				// se ainda ha erro pendente (sem handler), sinalizamos
@@ -809,6 +819,108 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			if idx >= len(fn.Free) {
 				panic(VMError{err: &object.Erro{Message: "freevar fora do range", Kind: "runtime"}})
 			}
+			vm.push(valorLivre(fn.Free[idx]))
+		case code.OpGetLocalOu:
+			// cadeia de leitura (escopo.go no compilador): achou valor, pula
+			// pro fim da cadeia; senao a proxima instrucao le o escopo de fora
+			if v := vm.stack[frame.basePointer+int(fn.Bytecode[ip+3])]; v != nil {
+				vm.push(v)
+				ip = int(code.ReadUint16(fn.Bytecode[ip+1:]))
+			} else {
+				ip += 4
+			}
+		case code.OpGetCelulaOu:
+			if v := vm.stack[frame.basePointer+int(fn.Bytecode[ip+3])].(*celula).pega(); v != nil {
+				vm.push(v)
+				ip = int(code.ReadUint16(fn.Bytecode[ip+1:]))
+			} else {
+				ip += 4
+			}
+		case code.OpGetFreeOu:
+			idx := int(fn.Bytecode[ip+3])
+			if idx >= len(fn.Free) {
+				panic(VMError{err: &object.Erro{Message: "freevar fora do range", Kind: "runtime"}})
+			}
+			if v := valorLivre(fn.Free[idx]); v != nil {
+				vm.push(v)
+				ip = int(code.ReadUint16(fn.Bytecode[ip+1:]))
+			} else {
+				ip += 4
+			}
+		case code.OpGetGlobalOu:
+			idx := int(code.ReadUint16(fn.Bytecode[ip+3:]))
+			var v object.Object
+			if idx < len(vm.globals) {
+				if object.ConcorrenciaAtiva() {
+					v = pegaGlobalTravado(vm.globals, idx)
+				} else {
+					v = vm.globals[idx]
+				}
+			}
+			if v != nil {
+				vm.push(v)
+				ip = int(code.ReadUint16(fn.Bytecode[ip+1:]))
+			} else {
+				ip += 5
+			}
+		case code.OpGetLocalChk:
+			v := vm.stack[frame.basePointer+int(fn.Bytecode[ip+1])]
+			if v == nil {
+				panic(vm.erroNaoBotou(fn.Bytecode[ip+2:]))
+			}
+			ip += 4
+			vm.push(v)
+		case code.OpGetGlobalChk:
+			idx := int(code.ReadUint16(fn.Bytecode[ip+1:]))
+			var v object.Object
+			if idx < len(vm.globals) {
+				if object.ConcorrenciaAtiva() {
+					v = pegaGlobalTravado(vm.globals, idx)
+				} else {
+					v = vm.globals[idx]
+				}
+			}
+			if v == nil {
+				panic(vm.erroNaoBotou(fn.Bytecode[ip+3:]))
+			}
+			ip += 5
+			vm.push(v)
+		case code.OpGetCelulaChk:
+			v := vm.stack[frame.basePointer+int(fn.Bytecode[ip+1])].(*celula).pega()
+			if v == nil {
+				panic(vm.erroNaoBotou(fn.Bytecode[ip+2:]))
+			}
+			ip += 4
+			vm.push(v)
+		case code.OpGetFreeChk:
+			idx := int(fn.Bytecode[ip+1])
+			if idx >= len(fn.Free) {
+				panic(VMError{err: &object.Erro{Message: "freevar fora do range", Kind: "runtime"}})
+			}
+			v := valorLivre(fn.Free[idx])
+			if v == nil {
+				panic(vm.erroNaoBotou(fn.Bytecode[ip+2:]))
+			}
+			ip += 4
+			vm.push(v)
+		case code.OpCelula:
+			idx := frame.basePointer + int(fn.Bytecode[ip+1])
+			ip += 2
+			vm.stack[idx] = &celula{v: vm.stack[idx]}
+		case code.OpGetCelula:
+			idx := int(fn.Bytecode[ip+1])
+			ip += 2
+			vm.push(vm.stack[frame.basePointer+idx].(*celula).pega())
+		case code.OpSetCelula:
+			idx := int(fn.Bytecode[ip+1])
+			ip += 2
+			vm.stack[frame.basePointer+idx].(*celula).poe(vm.pop())
+		case code.OpGetFreeCelula:
+			idx := int(fn.Bytecode[ip+1])
+			ip += 2
+			if idx >= len(fn.Free) {
+				panic(VMError{err: &object.Erro{Message: "freevar fora do range", Kind: "runtime"}})
+			}
 			vm.push(fn.Free[idx])
 		case code.OpClosure:
 			constIdx := int(code.ReadUint16(fn.Bytecode[ip+1:]))
@@ -879,6 +991,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					}
 					argc = cf.NumArgs
 				}
+				vm.limpaLocais(bp, cf)
 				vm.sp = bp + cf.NumLocals
 				frame.ip = ip
 				frame = vm.empurraFrame(cf, bp, opPos)
@@ -896,7 +1009,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					panic(VMError{sai: s}) // sai(codigo): desenrola tudo ate o Run
 				}
 				if e, ok := res.(*object.Erro); ok && e != nil && !e.Handled {
-					panic(VMError{err: e})
+					panic(VMError{err: e, quadro: quadroBuiltin(b.Nome, fn, opPos)})
 				}
 				vm.push(res)
 				continue
@@ -950,6 +1063,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				bp := frame.basePointer
 				vm.garanteEspaco(bp + cf.NumLocals)
 				copy(vm.stack[bp:bp+cf.NumArgs], vm.stack[bpCall:bpCall+cf.NumArgs])
+				vm.limpaLocais(bp, cf)
 				vm.sp = bp + cf.NumLocals
 				frame.fn = cf
 				frame.ip = 0
@@ -966,7 +1080,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					panic(VMError{sai: sr})
 				}
 				if e, ok := res.(*object.Erro); ok && e != nil && !e.Handled {
-					panic(VMError{err: e})
+					panic(VMError{err: e, quadro: quadroBuiltin(b.Nome, fn, ip-2)})
 				}
 				returnedFn := vm.popFrame()
 				vm.sp = returnedFn.basePointer
@@ -1104,6 +1218,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				if e := vm.ajustaArgs(cf, bp, argc); e != nil {
 					panic(VMError{err: e})
 				}
+				vm.limpaLocais(bp, cf)
 				vm.sp = bp + cf.NumLocals
 				frame.ip = ip
 				frame = vm.empurraFrame(cf, bp, opPos)
@@ -1120,7 +1235,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					panic(VMError{sai: s})
 				}
 				if e, ok := res.(*object.Erro); ok && e != nil && !e.Handled {
-					panic(VMError{err: e})
+					panic(VMError{err: e, quadro: quadroBuiltin(b.Nome, fn, opPos)})
 				}
 				vm.push(res)
 				continue
@@ -1163,6 +1278,8 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			if !ok {
 				panic(VMError{err: &object.Erro{Message: "so da pra jogar Erro, veio " + string(val.Type()), Kind: "runtime"}})
 			}
+			// relancado (finalmente sem quebrou): volta a ser erro levantado
+			e.Handled = false
 			panic(VMError{err: e})
 		case code.OpTry:
 			catchAddr := int(code.ReadUint16(fn.Bytecode[ip+1:]))
@@ -1186,7 +1303,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 // desempilha frames ate o dono do try (unwinding real — o erro pode ter
 // estourado em funcao chamada dentro do bloco arruma). Sem handler:
 // desempilha tudo e marca framesIdx=0 (erro nao capturado).
-func (vm *VM) handleVMError(e *object.Erro) {
+func (vm *VM) handleVMError(e *object.Erro, quadro *object.StackFrame) {
 	// profundidade do try mais interno (1 = frame raiz, quando nao ha try:
 	// traço cobre todos os frames alem do raiz)
 	inicio := 1
@@ -1194,15 +1311,23 @@ func (vm *VM) handleVMError(e *object.Erro) {
 		inicio = vm.errStack[len(vm.errStack)-1].frameIdx
 	}
 	// traço externo->interno (igual o tree-walker): frames[j] foi chamado de
-	// frames[j-1] no offset callPos — a linha vem da tabela do PAI. So
-	// preenche uma vez (o erro pode re-propagar depois de capturado).
-	if len(e.Stack) == 0 {
-		for j := inicio; j < vm.framesIdx; j++ {
-			e.Stack = append(e.Stack, object.StackFrame{
-				Funcao: vm.frames[j].fn.Name,
-				Line:   vm.frames[j-1].fn.LinhaDoPC(vm.frames[j].callPos),
-			})
-		}
+	// frames[j-1] no offset callPos — a linha vem da tabela do PAI. Entram so
+	// os frames entre o try (ou a raiz) e onde estourou, NA FRENTE do que o
+	// erro ja trazia: igual o tree-walker, que empilha um frame a cada funcao
+	// que o erro atravessa. Relancado pelo finalmente, ganha os frames de
+	// fora; o builtin que falhou (quadro) e o mais de dentro.
+	var novos []object.StackFrame
+	for j := inicio; j < vm.framesIdx; j++ {
+		novos = append(novos, object.StackFrame{
+			Funcao: vm.frames[j].fn.Name,
+			Line:   vm.frames[j-1].fn.LinhaDoPC(vm.frames[j].callPos),
+		})
+	}
+	if quadro != nil {
+		novos = append(novos, *quadro)
+	}
+	if len(novos) > 0 {
+		e.Stack = append(novos, e.Stack...)
 	}
 
 	if len(vm.errStack) == 0 {
@@ -1220,6 +1345,9 @@ func (vm *VM) handleVMError(e *object.Erro) {
 	// descarta operandos pendentes e restabelece o espaco de locals
 	vm.garanteEspaco(alvo.basePointer + alvo.fn.NumLocals)
 	vm.sp = alvo.basePointer + alvo.fn.NumLocals
+	// pego: dali pra frente e so um valor (igual o tree-walker) — passar pra
+	// builtin, devolver de gambiarra ou o erro_causa nao relancam.
+	e.Handled = true
 	vm.push(e)
 	alvo.ip = h.catchAddr
 }
@@ -1237,6 +1365,15 @@ func (vm *VM) limpaTriesOrfaos() {
 type VMError struct {
 	err *object.Erro
 	sai *object.Sair // preenchido quando o panic e um sai(codigo), nao um erro
+	// quadro: o erro veio de um builtin chamado pelo programa — entra no
+	// traco como o frame mais de dentro (`em tamanho (linha N)`), igual o
+	// tree-walker.
+	quadro *object.StackFrame
+}
+
+// quadroBuiltin monta o frame do traco pra um builtin chamado no offset pc.
+func quadroBuiltin(nome string, fn *object.CompiledFunction, pc int) *object.StackFrame {
+	return &object.StackFrame{Funcao: nome, Line: fn.LinhaDoPC(pc)}
 }
 
 func (v VMError) Error() string {
@@ -1384,40 +1521,32 @@ func (vm *VM) execBinarioNumero(op code.Opcode, l, r float64) object.Object {
 	return vm.num.Float(res)
 }
 
-// vmExecBinarioIntShort usa aritmetica int64 exata quando AMBOS operandos
-// sao inteiros exatos (EhInt=true) e o operador e inteiro-aware (+,-,*,%).
-// Divisao continua float (pois pode dar nao-inteiro). Cresce pra int128
-// apenas no limite via overflow detection: se passa int64, cai pra float64.
+// execBinarioIntShort usa aritmetica int64 exata quando AMBOS operandos sao
+// inteiros exatos (EhInt=true): +, -, *, % e a divisao exata (6 / 3). Conta
+// que estoura o int64 (ou divisao com resto, ou por zero) devolve false e o
+// chamador refaz em float64 — a mesma regra do tree-walker (object.SomaInt).
 func (vm *VM) execBinarioIntShort(op code.Opcode, lo, ro *object.Numero) (object.Object, bool) {
 	if !lo.EhInt || !ro.EhInt {
 		return nil, false
 	}
+	var r int64
+	var ok bool
 	switch op {
 	case code.OpAdd:
-		// deteccao de overflow simples: se sinais iguais e resultado estoura
-		r := lo.Int + ro.Int
-		if (lo.Int > 0 && ro.Int > 0 && r < 0) || (lo.Int < 0 && ro.Int < 0 && r > 0) {
-			return nil, false
-		}
-		return vm.num.Int(r), true
+		r, ok = object.SomaInt(lo.Int, ro.Int)
 	case code.OpSub:
-		r := lo.Int - ro.Int
-		if (lo.Int > 0 && ro.Int < 0 && r < 0) || (lo.Int < 0 && ro.Int > 0 && r > 0) {
-			return nil, false
-		}
-		return vm.num.Int(r), true
+		r, ok = object.SubInt(lo.Int, ro.Int)
 	case code.OpMul:
-		// deteccao simples: se |lo|*|ro| > max int64
-		if lo.Int == 0 || ro.Int == 0 {
-			return vm.num.Int(0), true
-		}
-		r := lo.Int * ro.Int
-		if r/ro.Int != lo.Int {
-			return nil, false
-		}
-		return vm.num.Int(r), true
+		r, ok = object.MulInt(lo.Int, ro.Int)
+	case code.OpDiv:
+		r, ok = object.DivInt(lo.Int, ro.Int)
+	case code.OpMod:
+		r, ok = object.RestoInt(lo.Int, ro.Int)
 	}
-	return nil, false
+	if !ok {
+		return nil, false
+	}
+	return vm.num.Int(r), true
 }
 
 func (vm *VM) execComparacao(op code.Opcode) {
@@ -1432,6 +1561,11 @@ func (vm *VM) comparacao(op code.Opcode, left, right object.Object) object.Objec
 	ln, lok := left.(*object.Numero)
 	rn, rok := right.(*object.Numero)
 	if lok && rok {
+		if ln.EhInt && rn.EhInt {
+			// inteiro com inteiro compara exato (o float64 erra acima de
+			// 2^53), igual o tree-walker
+			return boolNativo(comparaInt(op, ln.Int, rn.Int))
+		}
 		switch op {
 		case code.OpGreaterThan:
 			return boolNativo(ln.Value > rn.Value)
@@ -1457,6 +1591,23 @@ func (vm *VM) comparacao(op code.Opcode, left, right object.Object) object.Objec
 	panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra fazer %s %s %s", left.Type(), simboloBinario(op), right.Type()), Kind: "runtime"}})
 }
 
+// comparaInt compara dois inteiros exatos.
+func comparaInt(op code.Opcode, a, b int64) bool {
+	switch op {
+	case code.OpGreaterThan:
+		return a > b
+	case code.OpGreaterEqual:
+		return a >= b
+	case code.OpMenor:
+		return a < b
+	case code.OpMenorEqual:
+		return a <= b
+	case code.OpEqual:
+		return a == b
+	}
+	return a != b // OpNotEqual
+}
+
 // ehComparacao diz se o opcode e de comparacao (vai pra vm.comparacao) em vez
 // de aritmetica/bitwise (vm.binario).
 func ehComparacao(op code.Opcode) bool {
@@ -1474,10 +1625,12 @@ func (vm *VM) execMinus() {
 		// preserva a inteireza exata: -1 tem que continuar EhInt, senao vira
 		// float e escapa de checagens como o shift por valor negativo.
 		if n.EhInt {
-			vm.push(vm.num.Int(-n.Int))
-		} else {
-			vm.push(vm.num.Float(-n.Value))
+			if v, ok := object.NegInt(n.Int); ok {
+				vm.push(vm.num.Int(v))
+				return
+			}
 		}
+		vm.push(vm.num.Float(-n.Value)) // inteiro que estoura vira real
 		return
 	}
 	panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra colocar - na frente de %s", o.Type()), Kind: "runtime"}})
@@ -1550,7 +1703,7 @@ func vmIndexSet(cont, idx, val object.Object) error {
 	case *object.Lista:
 		n, ok := idx.(*object.Numero)
 		if !ok {
-			return fmt.Errorf("indice de lista tem que ser numero")
+			return fmt.Errorf("indice de lista tem que ser numero, veio %s", idx.Type())
 		}
 		if !c.Poe(int(n.Value), val) {
 			return fmt.Errorf("esse indice (%d) ta fora da lista, o", int(n.Value))
@@ -1558,11 +1711,12 @@ func vmIndexSet(cont, idx, val object.Object) error {
 	case *object.Dicionario:
 		chave, ok := idx.(object.Chaveavel)
 		if !ok {
-			return fmt.Errorf("chave de dicionario invalida")
+			return fmt.Errorf("essa chave (%s) nao da pra usar num dicionario", idx.Type())
 		}
 		c.Bota(chave.ChaveHash(), object.ParDic{Chave: idx, Valor: val})
 	default:
-		return fmt.Errorf("nao da pra atribuir indice em %s", cont.Type())
+		// mesmas mensagens do tree-walker (evalAtribuiIndice)
+		return fmt.Errorf("so da pra atribuir indice em lista ou dicionario, e isso ai e %s", cont.Type())
 	}
 	return nil
 }

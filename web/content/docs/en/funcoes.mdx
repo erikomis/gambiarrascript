@@ -179,11 +179,19 @@ bota triplica = multiplicador(3)
 mostra triplica(5)          # 15
 ```
 
+The closure sees the outer **variable**, not a copy of its value: if it changes
+after the closure was created, the closure sees the new value (and closures
+created in a loop see the last value of the loop variable — see
+[Gotchas](/docs/en/pegadinhas#a-closure-sees-the-variable-not-a-copy)). That
+also lets a nested gambiarra call itself or a sibling declared after it.
+
 <Callout type="warn" title="Assigning inside the function creates a local variable">
   Reading an outer variable works; **assigning** (`bota x = ...` or
-  `x += ...`) inside a gambiarra creates a **local** variable, just like Python
-  without `nonlocal`. The outer one doesn't change. For shared state, keep it
-  in a dict or a list (they're passed by reference) and change the contents:
+  `x += ...`) inside a gambiarra creates a **local** variable — in the whole
+  function, just like Python without `nonlocal`. The outer one doesn't change
+  (reading before assigning still sees the outer one; see
+  [Gotchas](/docs/en/pegadinhas)). For shared state, keep it in a dict or a
+  list (they're passed by reference) and change the contents:
 </Callout>
 
 ```gambiarrascript

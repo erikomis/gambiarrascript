@@ -143,7 +143,7 @@ func avaliar(code string, onSaida js.Value, entrada string) map[string]any {
 	resultado := interp.Eval(prog, object.NewEnvironment())
 
 	erros := ""
-	if resultado != nil && resultado.Type() == object.ERRO_OBJ {
+	if object.EhErroLevantado(resultado) {
 		erros = resultado.Inspect()
 	}
 

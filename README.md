@@ -176,6 +176,9 @@ várias linhas. Pra escapes (`\n`, `\t`, `\"`) use aspas duplas `"..."`.
 ## Pegadinhas / Semântica
 
 - **Escopo de função no estilo Python**: a variável do `pra_cada` e a da cláusula `quebrou` continuam existindo depois que o bloco fecha — elas vazam pro escopo da função que as contém.
+- **Atribuir dentro de gambiarra cria local**: `bota x = ...`/`x += ...` dentro de uma função cria um `x` local (na função inteira) e a global fica igual — sem `global`/`nonlocal`. Ler antes de botar enxerga o valor de fora; closure enxerga a variável (não uma cópia). Estado compartilhado vai num dicionário/lista (`estado.total += 1`).
+- **Inteiro que estoura 64 bits vira real**: `9223372036854775807 + 1` dá `9223372036854776000`, nunca volta pro negativo.
+- **Erro pego é só um valor**: o que o `quebrou` pega dá pra mostrar, guardar e passar adiante sem relançar; só `quebra(...)` levanta de novo.
 - **`e` / `ou` sempre devolvem booleano**: ao contrário de JS ou Python, `deu_bom e deu_bom` retorna `deu_bom` (booleano normalizado), nunca o operando original.
 - **Escapes em textos**: as sequências `\"` (aspas), `\\` (barra invertida), `\n` (quebra de linha) e `\t` (tab) funcionam dentro das aspas — qualquer outro `\x` é mantido literal, barra e tudo.
 
