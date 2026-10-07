@@ -126,6 +126,25 @@ trava nao e reentrante: pedir a mesma trava de dentro do proprio `com_trava`
 da erro (em vez de travar pra sempre). `pra_cada` numa colecao que outra
 goroutine esta mexendo percorre um retrato tirado no comeco do laco.
 
+## Segurança e configuração
+
+```
+bota cfg = opcoes({"porta": 8080, "segredo": env("JWT_SEGREDO", "troca-isso")})
+bota hash = hash_senha("hunter2")               # bcrypt
+mostra confere_senha("hunter2", hash)          # deu_bom
+bota token = jwt_assina({"usuario": "erik"}, cfg["segredo"], {"expira_em": 3600})
+mostra jwt_confere(token, cfg["segredo"])["usuario"]   # erik
+bota chave = gera_chave()
+mostra decripta(encripta("cartao 1234", chave), chave) # AES-256-GCM
+log_info("subiu", {"porta": cfg["porta"]})     # stderr; GS_LOG_FORMATO=json
+```
+
+`opcoes` lê `--porta 9090` da linha de comando (com `--ajuda` gerado),
+`carrega_env()` lê um `.env`, e `jwt_confere` recusa token adulterado,
+expirado ou com `alg` diferente de HS256 com um erro do tipo `"jwt"` — dá pra
+responder 401 num `antes(...)`. Veja `examples/seguranca.gs`,
+`examples/config.gs` e `examples/api_rest.gs`.
+
 ## JSON
 
 ```

@@ -18,7 +18,7 @@ Tiers 1–5 estão entregues. O backlog vivo:
 |---|---|
 | Tier 2/3 | DAP (debug), multi-catch, FFI — itens grandes, levas próprias |
 | Tier 5b | libs: TLS no TCP cru (HTTP/API, WebSocket, TCP/UDP, senha/AES/JWT, log, flags e .env ✅) |
-| Bugs abertos | concorrência em dict, overflow, `importa`, erro entre engines |
+| Bugs abertos | overflow, `importa`, erro entre engines |
 | Tier 6 | `gs instala` + lock, `build --alvo`, Homebrew, cobertura, sombreamento |
 | Tier 7 | MaxStack por função |
 | Tier 8 | POO no estilo Go (`treta`/`combinado`) — tem decisões em aberto |
@@ -271,11 +271,18 @@ Achados rodando todo exemplo da doc nos 2 engines; testes em
       aninhado quebrava o laço de fora na VM.
 - [x] Linter: blocos agora dividem o escopo da função (fim dos falsos
       "nunca usada"/"pode estar indefinido" em reatribuição dentro de bloco).
+- [x] Escrita concorrente no mesmo dicionário (`bora`, handlers do `rota`/
+      `rota_ws`/`escuta_tcp`) matava o processo com o "concurrent map writes"
+      do Go. Lista/dicionário/conjunto agora têm trava própria (cada operação
+      atômica, igual o GIL do Python), ligada só depois que o programa cria a
+      primeira goroutine de usuário — programa de uma goroutine só paga uma
+      leitura atômica (0–2% nas cargas de coleção, +5% no laço só de global).
+      Operação composta usa `trava()` + `com_trava(t, fn)`. Testado com 300
+      pedidos paralelos num servidor com estado compartilhado: o binário
+      antigo morre, o novo fecha a conta exata.
 
 Ainda abertos (pedem decisão de semântica):
 
-- [ ] Escrita concorrente no mesmo dicionário (`bora` / handlers do `rota`)
-      mata o processo com "concurrent map writes" do Go.
 - [ ] Overflow de inteiro: VM satura, tree-walker dá a volta; `de_json`
       corta inteiro gigante em silêncio.
 - [ ] `importa`: na VM o `como` também vaza nomes pro global; import repetido
