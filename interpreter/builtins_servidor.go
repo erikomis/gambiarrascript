@@ -117,17 +117,46 @@ func (s *servidorEstado) builtinRota(args []object.Object) object.Object {
 	if !ehChamavel(handler) {
 		return erroBuiltin("rota(): o handler tem que ser uma gambiarra, veio %s", handler.Type())
 	}
-	if err := s.registraRota(strings.ToUpper(metodo.Value), caminho.Value, handler, false); err != nil {
+	if err := s.registraRota(strings.ToUpper(metodo.Value), caminho.Value, handler, false, nil); err != nil {
 		return erroBuiltin("rota(): %v", err)
 	}
 	return NADA
 }
 
-// builtinRotaWs registra um endpoint WebSocket: rota_ws(caminho, handler).
-// O handler roda uma vez por conexao, na goroutine dela, e recebe (ws, pedido).
+// builtinRotaWs registra um endpoint WebSocket: rota_ws(caminho, handler,
+// [{"origens": [...]}]). O handler roda uma vez por conexao, na goroutine
+// dela, e recebe (ws, pedido).
+//
+// Origem: por padrao so a mesma origem abre o socket. O navegador manda o
+// cookie no handshake de qualquer site, entao liberar origem aqui e liberar
+// o login do usuario pra esse site (cross-site WebSocket hijacking) — por
+// isso o cors() aberto NAO vale pro websocket: tem que listar as origens na
+// propria rota_ws, e "*" so com todas as letras.
 func (s *servidorEstado) builtinRotaWs(args []object.Object) object.Object {
-	if len(args) != 2 {
-		return erroBuiltin("rota_ws() quer 2 argumentos (caminho, handler), veio %d", len(args))
+	if len(args) != 2 && len(args) != 3 {
+		return erroBuiltin("rota_ws() quer 2 ou 3 argumentos (caminho, handler, [opcoes]), veio %d", len(args))
+	}
+	var origens []string
+	if len(args) == 3 {
+		opcoes, ok := args[2].(*object.Dicionario)
+		if !ok {
+			return erroBuiltin("rota_ws(): as opcoes tem que ser dicionario, tipo {\"origens\": [\"https://app.com\"]}, veio %s", args[2].Type())
+		}
+		var erro *object.Erro
+		opcoes.Itera(func(par object.ParDic) {
+			if erro != nil {
+				return
+			}
+			chave, ok := par.Chave.(*object.Texto)
+			if !ok || chave.Value != "origens" {
+				erro = erroBuiltin("rota_ws(): opcao desconhecida %s (a que existe: origens)", par.Chave.Inspect())
+				return
+			}
+			origens, erro = listaDeTextos("origens", par.Valor)
+		})
+		if erro != nil {
+			return erro
+		}
 	}
 	caminho, ok := args[0].(*object.Texto)
 	if !ok {
@@ -136,7 +165,7 @@ func (s *servidorEstado) builtinRotaWs(args []object.Object) object.Object {
 	if !ehChamavel(args[1]) {
 		return erroBuiltin("rota_ws(): o handler tem que ser uma gambiarra, veio %s", args[1].Type())
 	}
-	if err := s.registraRota("GET", caminho.Value, args[1], true); err != nil {
+	if err := s.registraRota("GET", caminho.Value, args[1], true, origens); err != nil {
 		return erroBuiltin("rota_ws(): %v", err)
 	}
 	return NADA

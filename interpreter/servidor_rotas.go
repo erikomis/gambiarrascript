@@ -35,6 +35,9 @@ type rotaHTTP struct {
 	pedacos []pedacoRota // nil = rota exata
 	handler object.Object
 	ws      bool // rota_ws: o handler recebe (ws, pedido)
+	// origens liberadas no handshake do rota_ws (nil = so a mesma origem;
+	// "*" = qualquer uma, so quando o script pede com todas as letras)
+	wsOrigens []string
 	ordem   int  // ordem de registro, desempata especificidade
 }
 
@@ -143,7 +146,7 @@ func maisEspecifica(a, b *rotaHTTP) bool {
 
 // registraRota guarda a rota. Mesmo metodo + mesmo padrao substitui (como era
 // com o mapa antigo).
-func (s *servidorEstado) registraRota(metodo, caminho string, handler object.Object, ws bool) error {
+func (s *servidorEstado) registraRota(metodo, caminho string, handler object.Object, ws bool, wsOrigens []string) error {
 	pedacos, err := compilaPadrao(caminho)
 	if err != nil {
 		return err
@@ -151,7 +154,7 @@ func (s *servidorEstado) registraRota(metodo, caminho string, handler object.Obj
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.contaRotas++
-	nova := &rotaHTTP{metodo: metodo, padrao: caminho, pedacos: pedacos, handler: handler, ws: ws, ordem: s.contaRotas}
+	nova := &rotaHTTP{metodo: metodo, padrao: caminho, pedacos: pedacos, handler: handler, ws: ws, wsOrigens: wsOrigens, ordem: s.contaRotas}
 	if pedacos == nil {
 		s.exatas[metodo+" "+caminho] = nova
 		return nil

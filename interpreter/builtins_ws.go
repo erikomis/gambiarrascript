@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -200,14 +201,16 @@ func (s *servidorEstado) atendeWS(w http.ResponseWriter, r *http.Request, rota *
 		return
 	}
 	opcoes := &websocket.AcceptOptions{}
-	// origem: sem cors() so a mesma origem (protege de CSRF); com cors() vale
-	// a mesma lista das rotas HTTP.
-	if cors != nil {
-		if cors.todas {
-			opcoes.InsecureSkipVerify = true
-		} else {
-			opcoes.OriginPatterns = cors.listaOrig
-		}
+	// origem: a lista da propria rota_ws manda; sem ela, uma lista explicita
+	// do cors() serve; o resto (inclusive cors() aberto) fica so na mesma
+	// origem. Ver builtinRotaWs: liberar origem aqui libera o cookie do usuario.
+	switch {
+	case len(rota.wsOrigens) == 1 && rota.wsOrigens[0] == "*":
+		opcoes.InsecureSkipVerify = true
+	case len(rota.wsOrigens) > 0:
+		opcoes.OriginPatterns = padroesDeOrigem(rota.wsOrigens)
+	case cors != nil && !cors.todas:
+		opcoes.OriginPatterns = cors.listaOrig
 	}
 	conn, err := websocket.Accept(w, r, opcoes)
 	if err != nil {
@@ -281,4 +284,14 @@ func builtinConectaWs(args []object.Object) object.Object {
 		return erroBuiltinKind(KindRede, "conecta_ws(): nao consegui conectar em %q%s: %v", url.Value, extra, err)
 	}
 	return &object.Nativo{Rotulo: "websocket", Valor: novaWsConexao(conn)}
+}
+
+// padroesDeOrigem normaliza a lista do rota_ws pro OriginPatterns da lib:
+// "https://app.com" compara esquema+host, "app.com" so o host.
+func padroesDeOrigem(origens []string) []string {
+	saida := make([]string, 0, len(origens))
+	for _, o := range origens {
+		saida = append(saida, strings.TrimSuffix(o, "/"))
+	}
+	return saida
 }

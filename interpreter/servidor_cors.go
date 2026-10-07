@@ -46,6 +46,11 @@ func (s *servidorEstado) builtinCors(args []object.Object) object.Object {
 			return erro
 		}
 	}
+	if c.todas && c.credenciais {
+		// ecoar qualquer origem com credenciais deixa qualquer site fazer
+		// pedido logado em nome do usuario (o cookie vai junto)
+		return erroBuiltin("cors(): \"credenciais\" com qualquer origem deixa qualquer site usar o login do usuario — lista as origens: cors({\"origens\": [\"https://app.com\"], \"credenciais\": deu_bom})")
+	}
 	s.mu.Lock()
 	s.cors = c
 	s.mu.Unlock()

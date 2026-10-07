@@ -243,7 +243,7 @@ var docsBuiltin = map[string]string{
 	"depois":        "depois(gambiarra(pedido, resposta)): middleware de saida (log, cabecalho). Devolveu nada → vale a resposta (mexida ou nao); outra coisa → troca.",
 	"cors":          "cors([opcoes]): libera CORS e responde o preflight OPTIONS. Opcoes: origens, metodos, cabecalhos (listas), credenciais, max_idade.",
 	"serve_pasta":   "serve_pasta(prefixo, pasta): serve arquivos estaticos (GET/HEAD), index.html em pasta, sem sair da pasta nem mostrar dotfile.",
-	"rota_ws":       "rota_ws(caminho, gambiarra(ws, pedido)): endpoint WebSocket. Use recebe(ws) (nada = cliente saiu), envia(ws, msg) e fecha(ws).",
+	"rota_ws":       "rota_ws(caminho, gambiarra(ws, pedido), [opcoes]): endpoint WebSocket. Use recebe(ws) (nada = cliente saiu), envia(ws, msg) e fecha(ws). So a mesma origem entra; {\"origens\": [\"https://app.com\"]} libera outras (\"*\" = qualquer uma).",
 	"conecta_ws":    "conecta_ws(url, [opcoes]) -> conexao: cliente WebSocket (ws:// ou wss://). Opcoes: cabecalhos, timeout. Usa com envia/recebe/fecha.",
 }
 

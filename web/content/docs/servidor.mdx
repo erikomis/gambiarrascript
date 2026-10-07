@@ -171,11 +171,16 @@ cors({
 | `origens` | `["*"]` | lista de origens exatas (`"https://x.com"`); `"*"` libera geral |
 | `metodos` | `GET, POST, PUT, PATCH, DELETE, OPTIONS` | |
 | `cabecalhos` | o que o navegador pediu | `Access-Control-Allow-Headers` |
-| `credenciais` | `deu_ruim` | com `deu_bom`, ecoa a origem (o navegador nao aceita `*` com cookie) |
+| `credenciais` | `deu_ruim` | com `deu_bom`, manda `Allow-Credentials` e ecoa a origem — **exige lista de `origens`** |
 | `max_idade` | `600` | segundos de cache do preflight |
 
 Preflight de origem nao liberada leva `403`. Chamar `cors()` de novo troca a
 configuracao. Opcao com nome errado da erro.
+
+`credenciais` com qualquer origem (`cors({"credenciais": deu_bom})`) e erro de
+proposito: o navegador manda o cookie junto, entao liberar geral com
+credenciais deixa **qualquer site** fazer pedido logado em nome do teu
+usuario. Lista as origens que podem.
 
 ## serve_pasta(prefixo, pasta)
 
@@ -216,7 +221,7 @@ cuidado ao mexer em lista/dicionario compartilhado entre handlers (veja
 [Concorrencia](/docs/concorrencia#estado-compartilhado)) — o
 `examples/api_rest.gs` usa um `cano(1)` como trava.
 
-## WebSocket: rota_ws(caminho, handler)
+## WebSocket: rota_ws(caminho, handler, [opcoes])
 
 ```gambiarrascript
 bota conexoes = []
@@ -257,9 +262,13 @@ escuta(8080)
   sozinha; se ele estourar erro, fecha com codigo 1011 e o erro vai pro stderr.
 - Keepalive: o servidor manda ping a cada 30s enquanto alguem esta no
   `recebe`; sem pong em 15s a conexao e derrubada e o `recebe` devolve `nada`.
-- Origem: sem `cors()`, so aceita navegador da mesma origem (protege de
-  CSRF); com `cors()`, valem as mesmas origens. Cliente fora do navegador
-  (sem `Origin`) sempre entra.
+- Origem: por padrao so aceita navegador da **mesma origem**. O handshake leva
+  o cookie de qualquer site, entao liberar origem no websocket e liberar o
+  login do usuario pra ela — por isso o `cors()` aberto **nao** vale aqui.
+  Pra liberar, lista na propria rota: `rota_ws("/chat", h, {"origens":
+  ["https://app.com"]})`; `["*"]` libera qualquer uma (so faz isso se o
+  socket nao depender de login). Um `cors()` com lista de origens tambem
+  vale. Cliente fora do navegador (sem `Origin`) sempre entra.
 - Mensagem de ate 1 MiB.
 
 `GET` normal (sem upgrade) numa `rota_ws` leva `426`.
