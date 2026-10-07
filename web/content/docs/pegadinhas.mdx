@@ -13,7 +13,7 @@ pra `bora` tambem.
 ```gambiarrascript
 bota total = 0
 gambiarra soma_no_total(x)
-    total += x           # cria um "total" local
+    total += x           # cria um "total" local (o gs check avisa)
     funciona total
 acabou_finalmente
 
@@ -22,7 +22,9 @@ mostra total             # 0
 ```
 
 Pra estado compartilhado, use um dicionario/lista (passados por referencia) e
-mude o conteudo: `estado.total += x`. Ou devolva o valor com `funciona`.
+mude o conteudo: `estado.total += x`. Ou devolva o valor com `funciona`. O
+`gs check` (e o editor) avisa quando uma gambiarra le um nome de fora antes de
+botar nele — `x += ...` ou `bota x = x + ...` sem um `bota x = ...` antes.
 
 O nome vira local na **funcao inteira**, nao so da linha do `bota` pra baixo.
 Ler antes de botar enxerga o valor de fora — o escopo mais de dentro em que o
@@ -34,7 +36,7 @@ leem o local:
 bota x = 1
 gambiarra f()
     pra_cada i em [1, 2]
-        mostra x          # 1, depois 11
+        mostra x          # 1, depois 11 (o gs check avisa)
         bota x = 10 + i
     acabou_finalmente
 acabou_finalmente

@@ -82,8 +82,10 @@ O servidor LSP usa stdin/stdout em JSON-RPC. Suporta:
 
 Os avisos do lint sao os mesmos do `gs check`: nome que nao existe (nao e
 builtin, palavra-chave, variavel, parametro nem `quebrou`), variavel `bota`
-declarada e nunca usada (fora do topo do arquivo) e codigo morto depois de
-`funciona`/`vaza`/`continua`. Reatribuir um nome cravado (`crava`) aparece como
+declarada e nunca usada (fora do topo do arquivo), codigo morto depois de
+`funciona`/`vaza`/`continua` e gambiarra que le um nome de fora antes de botar
+nele (`total += 1` querendo mexer na global — veja as
+[Pegadinhas](/docs/pegadinhas)). Reatribuir um nome cravado (`crava`) aparece como
 **erro**, igual no `gs roda`.
 
 ### Configurando o LSP em outros editores

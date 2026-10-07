@@ -190,7 +190,7 @@ Entao uma goroutine nao consegue mudar uma variavel de fora:
 ```gambiarrascript
 bota contador = 0
 gambiarra tenta()
-    contador += 1          # cria um "contador" local
+    contador += 1          # cria um "contador" local (o gs check avisa)
     funciona contador
 acabou_finalmente
 

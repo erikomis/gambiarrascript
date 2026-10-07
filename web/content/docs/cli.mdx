@@ -95,7 +95,8 @@ Parseia e passa o lint (o mesmo typechecker do LSP) sem rodar nada. Mostra
 `arquivo:linha:coluna: erro: ...` / `aviso: ...`. Mexer num nome cravado
 (`crava`) e erro. Avisos: nome que nao existe,
 variavel `bota` declarada e nunca usada, codigo morto depois de
-`funciona`/`vaza`/`continua`. Sai com `1` so quando tem erro de sintaxe.
+`funciona`/`vaza`/`continua`, gambiarra que le um nome de fora antes de botar
+nele (`total += 1` vira local, a global nao muda). Sai com `1` so quando tem erro de sintaxe.
 
 ```bash
 $ gs check exemplo.gs

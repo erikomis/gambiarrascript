@@ -193,11 +193,11 @@ var docsBuiltin = map[string]string{
 	"le_arquivo":      "le_arquivo(caminho) -> texto: le todo o conteudo de um arquivo.",
 	"escreve_arquivo": "escreve_arquivo(caminho, texto): escreve texto num arquivo.",
 	// fs
-	"existe":        "existe(caminho) -> booleano: devuelve deu_bom se o caminho existe (stat ok).",
-	"eh_dir":        "eh_dir(caminho) -> booleano: devolve deu_bom se o caminho e um diretorio.",
-	"deleta":        "deleta(caminho): apaga arquivo ou diretorio recursivo (idempotente).",
-	"cria_dir":      "cria_dir(caminho): mkdir -p (cria todos os pais).",
-	"le_dir":        "le_dir(dir) -> lista: lista os nomes do diretorio (1 nivel, ordem alfabetica).",
+	"existe":          "existe(caminho) -> booleano: devuelve deu_bom se o caminho existe (stat ok).",
+	"eh_dir":          "eh_dir(caminho) -> booleano: devolve deu_bom se o caminho e um diretorio.",
+	"deleta":          "deleta(caminho): apaga arquivo ou diretorio recursivo (idempotente).",
+	"cria_dir":        "cria_dir(caminho): mkdir -p (cria todos os pais).",
+	"le_dir":          "le_dir(dir) -> lista: lista os nomes do diretorio (1 nivel, ordem alfabetica).",
 	"copia":           "copia(de, pra): copia o arquivo de -> pra (preserva o modo).",
 	"move":            "move(de, pra): renomeia/move o arquivo de -> pra.",
 	"tamanho_arquivo": "tamanho_arquivo(caminho) -> numero: tamanho do arquivo em bytes.",
@@ -205,38 +205,38 @@ var docsBuiltin = map[string]string{
 	"glob":            "glob(padrao) -> lista: caminhos que casam com o padrao (*, ?, [...]). Sem match = lista vazia.",
 	"roda_comando":    "roda_comando(cmd, [args]) -> {saida, erro, codigo}: roda um comando externo (codigo != 0 nao e erro).",
 	"sai":             "sai([codigo]): encerra o script na hora com o codigo de saida (default 0).",
-	"caminho_junta": "caminho_junta(p1, p2, ...) -> texto: filepath.Join (caminho valido pro SO).",
-	"caminho_base":  "caminho_base(caminho) -> texto: ultimo componente do caminho.",
-	"caminho_dir":   "caminho_dir(caminho) -> texto: diretorio do caminho (sem o nome final).",
-	"caminho_ext":   "caminho_ext(caminho) -> texto: extensao com ponto (ex: .gs) ou \"\".",
-	"caminho_abs":   "caminho_abs(caminho) -> texto: caminho absoluto (limpa . e .. e prefixa o cwd).",
-	"pergunta":      "pergunta([prompt]) -> texto: le uma linha do stdin.",
-	"argumentos":    "argumentos() -> lista: argumentos de linha de comando passados ao script.",
-	"env":           "env(nome, [padrao]) -> texto: valor da variavel de ambiente; se nao existir, o padrao (ou nada).",
+	"caminho_junta":   "caminho_junta(p1, p2, ...) -> texto: filepath.Join (caminho valido pro SO).",
+	"caminho_base":    "caminho_base(caminho) -> texto: ultimo componente do caminho.",
+	"caminho_dir":     "caminho_dir(caminho) -> texto: diretorio do caminho (sem o nome final).",
+	"caminho_ext":     "caminho_ext(caminho) -> texto: extensao com ponto (ex: .gs) ou \"\".",
+	"caminho_abs":     "caminho_abs(caminho) -> texto: caminho absoluto (limpa . e .. e prefixa o cwd).",
+	"pergunta":        "pergunta([prompt]) -> texto: le uma linha do stdin.",
+	"argumentos":      "argumentos() -> lista: argumentos de linha de comando passados ao script.",
+	"env":             "env(nome, [padrao]) -> texto: valor da variavel de ambiente; se nao existir, o padrao (ou nada).",
 	// concorrencia
-	"cano":   "cano([capacidade]) -> cano: cria um canal (channel). Sem args = sincrono.",
-	"trava":  "trava() -> trava: cria um lock pra usar com com_trava. Cada operacao de lista/dicionario/conjunto ja e atomica; a trava junta VARIAS numa so.",
-	"com_trava": "com_trava(trava, gambiarra) -> valor: roda a gambiarra segurando a trava e devolve o resultado. Solta sempre (erro sobe normal). Nao e reentrante: pedir a mesma trava de dentro e erro.",
-	"envia":  "envia(cano_ou_conexao, valor): manda um valor pro cano (bloqueia se cheio/sem receptor) ou um texto pela conexao de rede (modo linha poe \\n no fim).",
-	"recebe": "recebe(cano_ou_conexao) -> valor: pega o proximo valor do cano ou a proxima mensagem da conexao. Bloqueia; nada quando fechou.",
-	"fecha":  "fecha(cano_ou_conexao): fecha um cano (channel), uma conexao de rede ou de banco. Idempotente.",
-	"espera":        "espera(futuro|lista_de_futuros) -> valor|lista: aguarda o(s) futuro(s) e devolve o(s) valor(es). Tambem: espera(a, b) = assert de teste.",
-	"afirma":        "afirma(cond, [msg]): assert de teste pra gs testa.",
-	"duracao":       "duracao(dicionario|inst1, inst2) -> numero (ns): constroi duracao de {h,m,s,ms,us,ns} ou devolve a diferenca (t2-t1) em nanossegundos.",
-	"espera_ms":     "espera_ms(ms): bloqueia a execucao por ms milissegundos.",
-	"soma_tempo":    "soma_tempo(instante, nanos) -> texto ISO 8601: soma uma duracao (em ns, de duracao()) ao instante.",
-	"sub_tempo":     "sub_tempo(instante, nanos) -> texto ISO 8601: subtrai uma duracao (em ns) do instante.",
-	"dia_da_semana": "dia_da_semana(instante) -> texto: nome do dia em portugues (domingo..sabado).",
-	"diferenca_dias":  "diferenca_dias(inst1, inst2) -> numero: dias entre os instantes (pode ser negativo).",
-	"diferenca_horas":"diferenca_horas(inst1, inst2) -> numero: horas entre os instantes (pode ser negativo).",
-	"converte_tz":   "converte_tz(instante, timezone) -> texto ISO 8601: representa o instante no timezone IANA (ex: \"America/Sao_Paulo\").",
-	"le_csv":        "le_csv(caminho) -> lista de dicts: le um CSV (1a linha = cabecalho, cada linha vira dict {coluna: valor}).",
-	"escreve_csv":   "escreve_csv(caminho, lista, [cabecalhos]): escreve uma lista de dicts num CSV. 3o arg opcional reordena/seleciona colunas.",
+	"cano":             "cano([capacidade]) -> cano: cria um canal (channel). Sem args = sincrono.",
+	"trava":            "trava() -> trava: cria um lock pra usar com com_trava. Cada operacao de lista/dicionario/conjunto ja e atomica; a trava junta VARIAS numa so.",
+	"com_trava":        "com_trava(trava, gambiarra) -> valor: roda a gambiarra segurando a trava e devolve o resultado. Solta sempre (erro sobe normal). Nao e reentrante: pedir a mesma trava de dentro e erro.",
+	"envia":            "envia(cano_ou_conexao, valor): manda um valor pro cano (bloqueia se cheio/sem receptor) ou um texto pela conexao de rede (modo linha poe \\n no fim).",
+	"recebe":           "recebe(cano_ou_conexao) -> valor: pega o proximo valor do cano ou a proxima mensagem da conexao. Bloqueia; nada quando fechou.",
+	"fecha":            "fecha(cano_ou_conexao): fecha um cano (channel), uma conexao de rede ou de banco. Idempotente.",
+	"espera":           "espera(futuro|lista_de_futuros) -> valor|lista: aguarda o(s) futuro(s) e devolve o(s) valor(es). Tambem: espera(a, b) = assert de teste.",
+	"afirma":           "afirma(cond, [msg]): assert de teste pra gs testa.",
+	"duracao":          "duracao(dicionario|inst1, inst2) -> numero (ns): constroi duracao de {h,m,s,ms,us,ns} ou devolve a diferenca (t2-t1) em nanossegundos.",
+	"espera_ms":        "espera_ms(ms): bloqueia a execucao por ms milissegundos.",
+	"soma_tempo":       "soma_tempo(instante, nanos) -> texto ISO 8601: soma uma duracao (em ns, de duracao()) ao instante.",
+	"sub_tempo":        "sub_tempo(instante, nanos) -> texto ISO 8601: subtrai uma duracao (em ns) do instante.",
+	"dia_da_semana":    "dia_da_semana(instante) -> texto: nome do dia em portugues (domingo..sabado).",
+	"diferenca_dias":   "diferenca_dias(inst1, inst2) -> numero: dias entre os instantes (pode ser negativo).",
+	"diferenca_horas":  "diferenca_horas(inst1, inst2) -> numero: horas entre os instantes (pode ser negativo).",
+	"converte_tz":      "converte_tz(instante, timezone) -> texto ISO 8601: representa o instante no timezone IANA (ex: \"America/Sao_Paulo\").",
+	"le_csv":           "le_csv(caminho) -> lista de dicts: le um CSV (1a linha = cabecalho, cada linha vira dict {coluna: valor}).",
+	"escreve_csv":      "escreve_csv(caminho, lista, [cabecalhos]): escreve uma lista de dicts num CSV. 3o arg opcional reordena/seleciona colunas.",
 	"gzip_comprime":    "gzip_comprime(texto) -> texto (base64): comprime o texto com gzip e devolve em base64.",
 	"gzip_descomprime": "gzip_descomprime(texto) -> texto: recebe um base64 de gzip_comprime e devolve o texto original.",
-	"tipo": "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"trava\", \"nativo\", \"treta\", \"combinado\"). Gambiarra, lambda, builtin e metodo sao todas \"funcao\". Instancia de treta da o nome dela (\"Ponto\") — e o type switch: `escolhe tipo(v)` / `caso \"Ponto\"`.",
-	"satisfaz":  "satisfaz(valor, Tipo) -> booleano: Tipo combinado = o valor tem todos os metodos (satisfacao implicita, igual Go; confere quantos parametros cada metodo aceita); Tipo treta = o valor e instancia dela. Combinado vazio aceita qualquer coisa.",
-	"como_tipo": "como_tipo(valor, Tipo) -> valor: o type assertion do Go (`v.(Ponto)`). Devolve o proprio valor se ele satisfaz o Tipo (treta ou combinado); senao quebra com o motivo (\"esperava Ponto, veio Circulo\" / \"falta o metodo area\").",
+	"tipo":             "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"trava\", \"nativo\", \"treta\", \"combinado\"). Gambiarra, lambda, builtin e metodo sao todas \"funcao\". Instancia de treta da o nome dela (\"Ponto\") — e o type switch: `escolhe tipo(v)` / `caso \"Ponto\"`.",
+	"satisfaz":         "satisfaz(valor, Tipo) -> booleano: Tipo combinado = o valor tem todos os metodos (satisfacao implicita, igual Go; confere quantos parametros cada metodo aceita); Tipo treta = o valor e instancia dela. Combinado vazio aceita qualquer coisa.",
+	"como_tipo":        "como_tipo(valor, Tipo) -> valor: o type assertion do Go (`v.(Ponto)`). Devolve o proprio valor se ele satisfaz o Tipo (treta ou combinado); senao quebra com o motivo (\"esperava Ponto, veio Circulo\" / \"falta o metodo area\").",
 	// rede baixo nivel
 	"conecta_tcp": "conecta_tcp(host_porta, [opcoes]) -> conexao: abre um socket TCP (host_porta = \"127.0.0.1:9000\"). opcoes: {\"modo\": \"linha\"|\"bruto\", \"timeout\": segundos, \"tls\": deu_bom | {\"servidor\", \"inseguro\", \"ca\"}}. Usa com envia/recebe/fecha.",
 	"escuta_tcp":  "escuta_tcp(porta, handler, [opcoes]): servidor TCP; cada conexao roda handler(conexao) na propria goroutine. Bloqueia ate ctrl+c ou o cano opcoes.para. opcoes: modo, timeout, pronto, para, tls ({\"cert\": \"cert.pem\", \"chave\": \"chave.pem\"}).",
@@ -259,15 +259,15 @@ var docsBuiltin = map[string]string{
 	"log_aviso": "log_aviso(mensagem, [campos]): log nivel AVISO no stderr.",
 	"log_erro":  "log_erro(mensagem, [campos]): log nivel ERRO no stderr.",
 	// config
-	"opcoes":      "opcoes(padroes, [ajudas]) -> dicionario: le --flags do argumentos() por cima dos padroes (tipo vem do padrao: numero/texto/booleano/lista). --ajuda imprime a ajuda e sai; posicionais ficam em \"_\".",
-	"carrega_env": "carrega_env([caminho], [opcoes]) -> dicionario: le um .env (CHAVE=valor, # comentario, export, aspas) pro ambiente. Nao sobrescreve variavel que ja existe, a nao ser com {\"sobrescreve\": deu_bom}. Sem arquivo = erro \"io\".",
-	"responde_json": "responde_json(valor, [status]) -> dicionario: resposta HTTP com o valor em JSON e Content-Type de JSON (status default 200).",
-	"antes":         "antes(gambiarra(pedido)): middleware que roda antes de toda rota, na ordem de registro. Devolveu nada → segue; devolveu resposta → corta (ex.: 401).",
-	"depois":        "depois(gambiarra(pedido, resposta)): middleware de saida (log, cabecalho). Devolveu nada → vale a resposta (mexida ou nao); outra coisa → troca.",
-	"cors":          "cors([opcoes]): libera CORS e responde o preflight OPTIONS. Opcoes: origens, metodos, cabecalhos (listas), credenciais, max_idade.",
-	"serve_pasta":   "serve_pasta(prefixo, pasta): serve arquivos estaticos (GET/HEAD), index.html em pasta, sem sair da pasta nem mostrar dotfile.",
-	"rota_ws":       "rota_ws(caminho, gambiarra(ws, pedido), [opcoes]): endpoint WebSocket. Use recebe(ws) (nada = cliente saiu), envia(ws, msg) e fecha(ws). So a mesma origem entra; {\"origens\": [\"https://app.com\"]} libera outras (\"*\" = qualquer uma).",
-	"conecta_ws":    "conecta_ws(url, [opcoes]) -> conexao: cliente WebSocket (ws:// ou wss://). Opcoes: cabecalhos, timeout, ca, inseguro. Usa com envia/recebe/fecha.",
+	"opcoes":           "opcoes(padroes, [ajudas]) -> dicionario: le --flags do argumentos() por cima dos padroes (tipo vem do padrao: numero/texto/booleano/lista). --ajuda imprime a ajuda e sai; posicionais ficam em \"_\".",
+	"carrega_env":      "carrega_env([caminho], [opcoes]) -> dicionario: le um .env (CHAVE=valor, # comentario, export, aspas) pro ambiente. Nao sobrescreve variavel que ja existe, a nao ser com {\"sobrescreve\": deu_bom}. Sem arquivo = erro \"io\".",
+	"responde_json":    "responde_json(valor, [status]) -> dicionario: resposta HTTP com o valor em JSON e Content-Type de JSON (status default 200).",
+	"antes":            "antes(gambiarra(pedido)): middleware que roda antes de toda rota, na ordem de registro. Devolveu nada → segue; devolveu resposta → corta (ex.: 401).",
+	"depois":           "depois(gambiarra(pedido, resposta)): middleware de saida (log, cabecalho). Devolveu nada → vale a resposta (mexida ou nao); outra coisa → troca.",
+	"cors":             "cors([opcoes]): libera CORS e responde o preflight OPTIONS. Opcoes: origens, metodos, cabecalhos (listas), credenciais, max_idade.",
+	"serve_pasta":      "serve_pasta(prefixo, pasta): serve arquivos estaticos (GET/HEAD), index.html em pasta, sem sair da pasta nem mostrar dotfile.",
+	"rota_ws":          "rota_ws(caminho, gambiarra(ws, pedido), [opcoes]): endpoint WebSocket. Use recebe(ws) (nada = cliente saiu), envia(ws, msg) e fecha(ws). So a mesma origem entra; {\"origens\": [\"https://app.com\"]} libera outras (\"*\" = qualquer uma).",
+	"conecta_ws":       "conecta_ws(url, [opcoes]) -> conexao: cliente WebSocket (ws:// ou wss://). Opcoes: cabecalhos, timeout, ca, inseguro. Usa com envia/recebe/fecha.",
 	"gera_certificado": "gera_certificado([hosts]) -> {\"cert\", \"chave\"}: certificado autoassinado (PEM) SO PRA DEV — hosts padrao localhost, 127.0.0.1, ::1. Passa direto no {\"tls\": ...} do escuta e o cert serve de {\"ca\": ...} no cliente.",
 }
 
@@ -545,6 +545,7 @@ func typecheck(prog *ast.Program) []Diagnostico {
 	tc := &typechecker{
 		scopes:     []map[string]bool{{}},
 		botaScopes: []map[string]*varUso{{}},
+		funcs:      []*escopoFunc{nil},
 	}
 	tc.walkProgram(prog)
 	// crava: mesma checagem que os engines fazem antes de rodar — aqui vira
@@ -576,11 +577,67 @@ type typechecker struct {
 	// gambiarra eles ja existem quando ela roda (os 2 engines resolvem global
 	// declarada depois da funcao). No topo, usar antes de botar continua aviso.
 	globaisDoTopo map[string]bool
+	// paralelo a scopes: o que se sabe da funcao dona do escopo (nil no topo)
+	funcs []*escopoFunc
+}
+
+// escopoFunc guarda, pra uma gambiarra/lambda/metodo, os nomes que viram
+// locais nela (escopo estilo Python: qualquer `bota`/`+=`/desestruturacao/
+// var do pra_cada/quebrou deixa o nome local na funcao INTEIRA) e os que ja
+// foram amarrados ate o ponto atual da varredura (ordem do texto).
+type escopoFunc struct {
+	locais    map[string]bool
+	amarrados map[string]bool
+	avisados  map[string]bool
 }
 
 func (tc *typechecker) pushScope() {
 	tc.scopes = append(tc.scopes, map[string]bool{})
 	tc.botaScopes = append(tc.botaScopes, map[string]*varUso{})
+	tc.funcs = append(tc.funcs, nil)
+}
+
+// entraFuncao abre o escopo de uma funcao ja sabendo quais nomes sao locais
+// nela, e define os params.
+func (tc *typechecker) entraFuncao(params []*ast.Parametro, corpo *ast.BlockStatement) {
+	tc.pushScope()
+	f := &escopoFunc{locais: map[string]bool{}, amarrados: map[string]bool{}, avisados: map[string]bool{}}
+	for _, nome := range compiler.NomesLocais(params, corpo) {
+		f.locais[nome] = true
+	}
+	tc.funcs[len(tc.funcs)-1] = f
+	for _, p := range params {
+		tc.define(p.Nome.Value)
+	}
+}
+
+// checaSombra avisa a leitura de um nome que e local na funcao (ela atribui
+// nele em algum lugar) antes do primeiro `bota` dele, quando o nome tambem
+// existe fora. E o bug classico do escopo estilo Python: `total += 1` querendo
+// mexer na global — a leitura pega o valor de fora, mas a escrita vai pro
+// local e o `total` de fora nunca muda. `bota x = ...` antes de ler deixa
+// claro que a intencao e um local: nao avisa.
+func (tc *typechecker) checaSombra(id *ast.Identifier) {
+	f := tc.funcs[len(tc.funcs)-1]
+	nome := id.Value
+	if f == nil || !f.locais[nome] || f.amarrados[nome] || f.avisados[nome] {
+		return
+	}
+	deFora := ""
+	for i := len(tc.scopes) - 2; i >= 1; i-- {
+		if tc.scopes[i][nome] {
+			deFora = "o `" + nome + "` da funcao de fora"
+			break
+		}
+	}
+	if deFora == "" && (tc.globaisDoTopo[nome] || tc.scopes[0][nome]) {
+		deFora = "a global `" + nome + "`"
+	}
+	if deFora == "" {
+		return
+	}
+	f.avisados[nome] = true
+	tc.warn(id.Token.Line, id.Token.Coluna, "`"+nome+"` aqui dentro e local (a gambiarra atribui nela) — essa leitura pega o valor de fora, mas "+deFora+" nao muda. Pra estado compartilhado usa dicionario/lista: `estado[\""+nome+"\"] += 1`; pra local, comeca com `bota "+nome+" = ...`")
 }
 func (tc *typechecker) popScope() {
 	if len(tc.scopes) > 1 {
@@ -592,6 +649,7 @@ func (tc *typechecker) popScope() {
 		}
 		tc.scopes = tc.scopes[:len(tc.scopes)-1]
 		tc.botaScopes = tc.botaScopes[:len(tc.botaScopes)-1]
+		tc.funcs = tc.funcs[:len(tc.funcs)-1]
 	}
 }
 
@@ -623,6 +681,9 @@ func (tc *typechecker) define(nome string) {
 		return
 	}
 	tc.scopes[len(tc.scopes)-1][nome] = true
+	if f := tc.funcs[len(tc.funcs)-1]; f != nil {
+		f.amarrados[nome] = true
+	}
 }
 func (tc *typechecker) resolvivel(nome string) bool {
 	for i := len(tc.scopes) - 1; i >= 0; i-- {
@@ -716,10 +777,7 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 		tc.walkExpr(n.Value)
 	case *ast.GambiarraStatement:
 		tc.define(n.Name.Value)
-		tc.pushScope()
-		for _, p := range n.Parameters {
-			tc.define(p.Nome.Value)
-		}
+		tc.entraFuncao(n.Parameters, n.Body)
 		tc.walkBlock(n.Body)
 		tc.popScope()
 	case *ast.SeColarStatement:
@@ -802,10 +860,7 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 		}
 	case *ast.MetodoDecl:
 		tc.walkExpr(n.Tipo)
-		tc.pushScope()
-		for _, p := range n.ParametrosComReceptor() {
-			tc.define(p.Nome.Value)
-		}
+		tc.entraFuncao(n.ParametrosComReceptor(), n.Body)
 		tc.walkBlock(n.Body)
 		tc.popScope()
 	}
@@ -890,6 +945,7 @@ func (tc *typechecker) walkExpr(e ast.Expression) {
 	switch n := e.(type) {
 	case *ast.Identifier:
 		nome := n.Value
+		tc.checaSombra(n)
 		tc.marcaUsado(nome)
 		_, predefinida := object.Predefinidas[nome]
 		dentroDeFuncao := len(tc.scopes) > 1
@@ -926,10 +982,7 @@ func (tc *typechecker) walkExpr(e ast.Expression) {
 			}
 		}
 	case *ast.FuncaoLiteral:
-		tc.pushScope()
-		for _, p := range n.Parameters {
-			tc.define(p.Nome.Value)
-		}
+		tc.entraFuncao(n.Parameters, n.Body)
 		tc.walkBlock(n.Body)
 		tc.popScope()
 	case *ast.RangeExpression:

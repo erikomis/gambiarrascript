@@ -16,12 +16,12 @@ Tiers 1–5, 5b e 8 (POO estilo Go) estão entregues. O backlog vivo:
 
 | Onde | O que sobra |
 |---|---|
-| Tier 2/3 | DAP (debug), multi-catch, FFI — itens grandes, levas próprias |
+| Tier 2/3 | DAP (debug), multi-catch — itens grandes, levas próprias (FFI decidido: não vai ter) |
 | Bugs abertos | overflow, `importa`, erro entre engines |
-| Tier 6 | Homebrew, cobertura, sombreamento (`gs instala` + lock e `build --alvo` ✅) |
+| Tier 6 | Homebrew, cobertura (`gs instala` + lock, `build --alvo` e lint de sombreamento ✅) |
 | Tier 7 | MaxStack por função |
 | Tier 8 | ✅ POO no estilo Go (`treta`/`combinado`) entregue — sobra método em tipo não-struct e visibilidade (fora de escopo) |
-| Tier 9 | sugestões novas: `//`, publicar a extensão no marketplace, playground com entrada |
+| Tier 9 | sugestões novas: publicar a extensão no marketplace (`//` decidido: não vai ter; playground com entrada ✅) |
 
 ---
 
@@ -150,7 +150,11 @@ Tiers 1–5, 5b e 8 (POO estilo Go) estão entregues. O backlog vivo:
 - [x] **Decisão PT→EN** — decidido (jul/2026): **mantém PT por enquanto**;
       inglês meme fica pra depois, se rolar, como ALIAS (sem quebrar PT).
       Detalhes na seção abaixo.
-- [ ] FFI / integração com Go (cgo `importa_go`) — grande; leva própria.
+- [x] **FFI / integração com Go (cgo `importa_go`)** — decidido: **não vai
+      ter**. cgo quebraria os binários estáticos (`CGO_ENABLED=0`) que rodam em
+      qualquer máquina — release, `install.sh` e `gs build --alvo` dependem
+      disso. O caminho pra estender é builtin em Go dentro do repo, ou
+      conversar com outro programa via `roda_comando`/HTTP/sockets.
 
 ### Tier 4 — Qualidade de vida ✅ entregue
 
@@ -421,10 +425,16 @@ Ainda abertos (pedem decisão de semântica):
       Worker (botão Parar + timeout, laço infinito não trava a aba), link de
       compartilhar (código comprimido no `#hash`), highlight próprio no
       CodeMirror e na doc (gramática TextMate da extensão), wasm gzipado.
-- [~] **Lint parte 2** — feito no typechecker (`gs check` + LSP): **código
-      morto** depois de `funciona`/`vaza`/`continua` e **variável `bota`
-      declarada e nunca usada** (top-level isento). Sombreamento ficou de fora
-      por ora (propenso a falso-positivo com o escopo Python-style).
+- [x] **Lint parte 2** — feito no typechecker (`gs check` + LSP): **código
+      morto** depois de `funciona`/`vaza`/`continua`, **variável `bota`
+      declarada e nunca usada** (top-level isento) e **sombreamento**: avisa
+      a gambiarra que lê um nome antes do primeiro `bota` dele quando ela
+      atribui no nome em algum lugar (vira local na função inteira) e o nome
+      existe fora — `total += 1` ou `bota total = total + 1` querendo mexer na
+      global (ou na var da função de fora, numa closure). `bota x = ...` antes
+      de ler é local de propósito: não avisa. Os locais vêm da mesma varredura
+      do compilador (`compiler.NomesLocais`). Nenhum aviso nos exemplos nem na
+      doc, fora os trechos que mostram a pegadinha de propósito.
 
 ### Tier 7 — Motor / performance
 
@@ -662,8 +672,9 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       com builtin, lambda, dot-call, `bora`, varargs e defaults. VM via
       `OpCallEspalha`/`OpBoraEspalha` (o `OpCall` comum não mudou; fib sem
       regressão). Espalhar não-lista: "so da pra espalhar lista, veio X".
-- [ ] **Divisão inteira `//`** — hoje `7 / 2` dá `3.5` e o jeito é
-      `chao(7 / 2)`. Avaliar contra a regra de uma pegada por conceito.
+- [x] **Divisão inteira `//`** — decidido: **não vai ter**. `chao(7 / 2)`
+      já cobre, e a linguagem mantém um nome por conceito (igual ficou sem
+      `potencia`/`dorme`).
 - [x] **Formato na interpolação** — `"${preco:.2f}"`, `"${n:05d}"`,
       `"${t:-8}"`: o que vem depois do último `:` fora de `()[]{}`/strings é o
       formato, com os verbos do `formata` sem o `%`. Formato inválido é erro
@@ -719,14 +730,14 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       exemplo "Quiz" no playground.
 - [ ] **Testar Firefox e Safari** — só o Chromium foi exercitado (worker,
       `DecompressionStream`, compartilhar).
-- [x] **Doc em inglês completa** — todas as 21 páginas em `docs/en/`.
+- [x] **Doc em inglês completa** — todas as 22 páginas em `docs/en/` (POO incluída).
 - [ ] **Wasm menor** — 13,8 MB cru / 3,4 MB gzip; o grosso deve ser
       `net/http` dos builtins de rede, que nem funcionam no navegador. Build
       tag pra tirar rede/banco/processo do `cmd/wasm`.
 
 ---
 
-## Migrar as palavras-chave para o INGLÊS (mas continua MEME)
+## Migrar as palavras-chave para o INGLÊS (mas continua MEME) — decidido: fica em PT
 
 > **DECISÃO (jul/2026): fica em PORTUGUÊS por enquanto.** A zoeira BR é a
 > identidade da linguagem. Se um dia rolar inglês, será como **alias meme**

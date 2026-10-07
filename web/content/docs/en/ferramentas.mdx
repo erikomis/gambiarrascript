@@ -81,8 +81,10 @@ The LSP server speaks JSON-RPC over stdin/stdout. It supports:
 
 The lint warnings are the same as `gs check`'s: a name that doesn't exist (not
 a builtin, keyword, variable, parameter or `quebrou`), a `bota` variable that's
-declared and never used (outside the top level of the file) and dead code after
-`funciona`/`vaza`/`continua`. Reassigning a nailed-down name (`crava`, "nail it
+declared and never used (outside the top level of the file), dead code after
+`funciona`/`vaza`/`continua` and a gambiarra that reads an outer name before
+assigning it (`total += 1` hoping to change the global — see
+[Gotchas](/docs/en/pegadinhas)). Reassigning a nailed-down name (`crava`, "nail it
 down") shows up as an **error**, just like in `gs roda`.
 
 ### Setting up the LSP in other editors

@@ -1,0 +1,246 @@
+---
+title: OOP (treta and combinado)
+description: Object orientation the Go way — treta (struct), methods with a receiver, combinado (implicit interface) and puxadinho (embedding). No class, this, new or inheritance.
+---
+
+GambiarraScript copies Go's way of doing OOP: **composition instead of
+inheritance**, interfaces satisfied **by behavior** (nothing to declare) and
+"constructors" only by convention. There's no `class`, `extends`, `this` or
+`new`.
+
+The slang: a **treta** is "a thing/a fuss" (here, a struct), a **combinado** is
+"a deal/an agreement" (an interface — whoever keeps the deal is in) and a
+**puxadinho** is "a makeshift house extension" (embedding: you bolt one treta
+onto another).
+
+| Concept | GambiarraScript | Go |
+| ------- | --------------- | -- |
+| struct | `treta Ponto` ... `acabou_finalmente` | `type Ponto struct` |
+| instance | `Ponto{x: 1, y: 2}` / `Ponto{1, 2}` | `Ponto{X: 1, Y: 2}` |
+| method | `gambiarra (p Ponto) distancia()` | `func (p *Ponto) Distancia()` |
+| interface | `combinado Forma` ... `acabou_finalmente` | `type Forma interface` |
+| embedding | a field that's just the treta's name (`Animal`) | same |
+| constructor | `gambiarra nova_ponto(x, y)` | `func NewPonto(x, y)` |
+| type switch | `escolhe tipo(v)` / `caso "Ponto"` | `switch v.(type)` |
+| type assertion | `como_tipo(v, Ponto)` | `v.(Ponto)` |
+
+## treta: the fields
+
+One field per line, with an optional default value. The treta's name starts
+with an **uppercase** letter — that's how the parser knows `Ponto{...}` is a
+treta and not a dictionary.
+
+```gambiarrascript
+treta Ponto
+    x
+    y = 0
+acabou_finalmente
+
+bota a = Ponto{x: 3, y: 4}   # by name
+bota b = Ponto{3, 4}         # in field order (you have to pass all of them)
+bota c = Ponto{x: 7}         # y is missing: it gets the default (0)
+bota d = Ponto{}             # everything at its zero value
+mostra c                     # Ponto{x: 7, y: 0}
+mostra d                     # Ponto{x: nada, y: 0}
+mostra a.x + b.y             # 7
+```
+
+- **Zero value**: a field the literal didn't pass gets its declared default
+  or, with no default, `nada` (fields have no type, so there's no Go-style
+  `0`/`""`).
+- The default runs **for every instance**: `itens = []` gives each one a fresh
+  list (it's not Python's shared mutable default).
+- A field that doesn't exist is an error, both in the literal and in
+  `bota p.z = 1`: new fields only by declaring them in the treta.
+- The `{` sticks to the name, on the same line (`Ponto{`). A treta from another
+  module works the same: `geo.Ponto{1, 2}`.
+
+## Methods: a gambiarra with a receiver
+
+The receiver goes in parentheses before the name. Inside, `p.x` reads and
+`bota p.x = ...` (or `p.x += ...`) writes.
+
+```gambiarrascript
+treta Conta
+    dono
+    saldo = 0
+acabou_finalmente
+
+gambiarra (c Conta) deposita(valor)
+    c.saldo += valor
+    funciona c
+acabou_finalmente
+
+gambiarra (c Conta) extrato()
+    funciona c.dono + ": " + texto(c.saldo)
+acabou_finalmente
+
+bota conta = Conta{dono: "ana"}
+conta.deposita(50).deposita(25)
+mostra conta.extrato()          # ana: 75
+```
+
+**Everything is by reference**: an instance is a shared object (like lists and
+dictionaries), so a method **changes** the treta — there's no Go-style split
+between value and pointer receivers. Want a copy? Build another one:
+`Conta{conta.dono, conta.saldo}`.
+
+- A method and a field with the same name in the same treta is an error (just
+  like Go).
+- `obj.metodo` without calling it returns the method with the receiver glued
+  on — you can stash it in a variable or pass it to `mapeia`, `rota`, `bora`...
+- `treta`, `combinado` and methods can only be declared at the **top level** of
+  the file. Declare the treta **before** its methods.
+
+## "Constructors" are a convention
+
+There's no `new` and no magic method: write a `nova_x` gambiarra that returns
+the ready-made treta (like Go's `NewX()`).
+
+```gambiarrascript
+treta Pilha
+    itens = []
+acabou_finalmente
+
+gambiarra nova_pilha(...iniciais)
+    bota p = Pilha{}
+    pra_cada x em iniciais
+        adiciona(p.itens, x)
+    acabou_finalmente
+    funciona p
+acabou_finalmente
+
+mostra nova_pilha(1, 2, 3)      # Pilha{itens: [1, 2, 3]}
+```
+
+## combinado: implicit interfaces
+
+A combinado lists signatures. Any treta that has those methods (with the right
+number of parameters) **satisfies** the combinado — it keeps the deal without
+signing anything.
+
+```gambiarrascript
+combinado Forma
+    area()
+    nome()
+acabou_finalmente
+
+treta Quadrado
+    lado
+acabou_finalmente
+gambiarra (q Quadrado) area()
+    funciona q.lado * q.lado
+acabou_finalmente
+gambiarra (q Quadrado) nome()
+    funciona "quadrado"
+acabou_finalmente
+
+mostra satisfaz(Quadrado{2}, Forma)    # deu_bom
+mostra satisfaz(42, Forma)             # deu_ruim
+mostra como_tipo(Quadrado{2}, Forma).area()   # 4
+```
+
+- `satisfaz(valor, Tipo)` ("satisfies") returns a boolean. With a combinado, it
+  checks the methods; with a treta, it tells whether the value is an instance
+  of it.
+- `como_tipo(valor, Tipo)` ("as type") is the type assertion: it returns the
+  value itself or blows up explaining why ("falta o metodo area" — "method
+  area is missing").
+- A combinado can embed another one: a line with just the name (`Forma`) brings
+  in its signatures. An empty combinado accepts anything (Go's `any`).
+
+## Type switch
+
+`tipo()` of an instance returns the **treta's name**, so the good old `escolhe`
+becomes a type switch:
+
+```gambiarrascript
+treta Circulo
+    raio
+acabou_finalmente
+treta Retangulo
+    largura
+    altura
+acabou_finalmente
+
+gambiarra descreve(v)
+    escolhe tipo(v)
+    caso "Circulo"
+        funciona "circulo de raio " + texto(v.raio)
+    caso "Retangulo"
+        funciona "retangulo " + texto(v.largura) + "x" + texto(v.altura)
+    se_nao_colar
+        funciona "sei la: " + tipo(v)
+    acabou_finalmente
+acabou_finalmente
+
+mostra descreve(Circulo{2})         # circulo de raio 2
+mostra descreve(Retangulo{3, 4})    # retangulo 3x4
+mostra descreve("oi")               # sei la: texto
+```
+
+`tipo(Circulo)` (the type, not an instance) is `"treta"`; `tipo(Forma)` is
+`"combinado"`.
+
+## Puxadinho: composition (embedding)
+
+A treta line that's **just the name of another treta** bolts it on inside. The
+inner one's fields and methods **move up** to the outer one (promotion) — it
+extends without turning into inheritance.
+
+```gambiarrascript
+treta Animal
+    nome = "anonimo"
+    patas = 4
+acabou_finalmente
+gambiarra (a Animal) fala()
+    funciona a.nome + " faz barulho"
+acabou_finalmente
+gambiarra (a Animal) apresenta()
+    funciona "sou " + a.nome
+acabou_finalmente
+
+treta Cachorro
+    Animal            # puxadinho
+    raca = "vira-lata"
+acabou_finalmente
+gambiarra (c Cachorro) fala()
+    funciona c.nome + " late"
+acabou_finalmente
+
+bota rex = Cachorro{Animal: Animal{nome: "rex"}}
+mostra rex.nome              # rex (promoted)
+mostra rex.fala()            # rex late (Cachorro's hides Animal's)
+mostra rex.Animal.fala()     # rex faz barulho (explicit path)
+mostra rex.apresenta()       # sou rex (promoted method runs on the inner Animal)
+bota rex.patas = 3           # writes into the inner Animal
+mostra rex                   # Cachorro{Animal: Animal{nome: "rex", patas: 3}, raca: "vira-lata"}
+```
+
+- The puxadinho's field is named after the treta (`rex.Animal`) and starts out
+  as a zeroed one. It only accepts an instance of that treta.
+- In the literal, the promoted field doesn't work directly: pass the whole
+  puxadinho, `Cachorro{Animal: Animal{nome: "rex"}}` (or in order:
+  `Cachorro{Animal{"rex", 4}, "poodle"}`).
+- Same conflict rule as Go: the **shallowest** name wins; if the same name
+  shows up in two puxadinhos at the same depth, it's only an error when
+  someone accesses it (use the full path).
+
+## Printing, comparing, JSON
+
+- `mostra p` prints `Ponto{x: 1, y: 2}` (text in quotes, like a dictionary).
+- `==` compares **field by field**: same treta and equal fields (like a Go
+  struct). A different treta with the same fields is different.
+- `pra_json(p)` becomes an object with the fields; the puxadinho is flattened,
+  like Go's `encoding/json`: `{"nome":"rex","patas":3,"raca":"vira-lata"}`.
+- `bota {x, y} = p` destructures by field.
+- An instance can't be a dictionary key or a set item.
+
+## Concurrency
+
+An instance is a shared mutable object, with the same guarantee as the
+collections: every field read or write is atomic (it never corrupts or crashes
+the process, even with `bora` and server handlers poking at it together). A
+**compound** operation (`p.x += 1`) is not atomic — wrap it with
+`com_trava(t, gambiarra() ... acabou_finalmente)` (see
+[Concurrency](/docs/en/concorrencia)).

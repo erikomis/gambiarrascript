@@ -98,7 +98,8 @@ Parses and lints (the same typechecker the LSP uses) without running anything.
 It prints `arquivo:linha:coluna: erro: ...` / `aviso: ...`. Touching a nailed-down
 name (`crava`, "nail it down") is an error. Warnings: a name that doesn't exist,
 a `bota` variable that's declared and never used, dead code after
-`funciona`/`vaza`/`continua`. It exits with `1` only when there's a syntax
+`funciona`/`vaza`/`continua`, a gambiarra that reads an outer name before
+assigning it (`total += 1` becomes a local, the global doesn't change). It exits with `1` only when there's a syntax
 error.
 
 ```bash

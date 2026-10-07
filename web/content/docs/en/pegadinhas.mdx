@@ -13,7 +13,7 @@ closures and `bora`.
 ```gambiarrascript
 bota total = 0
 gambiarra soma_no_total(x)
-    total += x           # creates a local "total"
+    total += x           # creates a local "total" (gs check warns)
     funciona total
 acabou_finalmente
 
@@ -22,7 +22,9 @@ mostra total             # 0
 ```
 
 For shared state, use a dict/list (passed by reference) and mutate its
-contents: `estado.total += x`. Or return the value with `funciona`.
+contents: `estado.total += x`. Or return the value with `funciona`. `gs check`
+(and the editor) warns when a gambiarra reads an outer name before assigning
+it — `x += ...` or `bota x = x + ...` with no `bota x = ...` before.
 
 The name becomes local in the **whole function**, not just from the `bota`
 line down. Reading before assigning sees the outer value — the innermost scope
@@ -34,7 +36,7 @@ the global and the next ones already read the local:
 bota x = 1
 gambiarra f()
     pra_cada i em [1, 2]
-        mostra x          # 1, then 11
+        mostra x          # 1, then 11 (gs check warns)
         bota x = 10 + i
     acabou_finalmente
 acabou_finalmente
