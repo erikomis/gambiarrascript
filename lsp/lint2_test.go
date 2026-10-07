@@ -1,6 +1,10 @@
 package lsp
 
-import "testing"
+import (
+	"testing"
+
+	"gambiarrascript/compiler"
+)
 
 func TestLintCodigoMortoAposFunciona(t *testing.T) {
 	diags := diagsDeTypecheck(t, `gambiarra f()
@@ -88,5 +92,20 @@ func TestLintVariavelGlobalNaoAvisa(t *testing.T) {
 	diags := diagsDeTypecheck(t, `bota resultado = 42`)
 	if contemMsg(diags, "nunca usada") {
 		t.Fatalf("nao devia avisar var top-level: %v", diags)
+	}
+}
+
+func TestTodoBuiltinDoCompiladorEConhecido(t *testing.T) {
+	// builtin que a VM conhece nao pode virar "pode estar indefinido"
+	for _, nome := range compiler.BuiltinNomes() {
+		if !builtinsSet[nome] {
+			t.Errorf("builtin %q fora da lista do LSP", nome)
+		}
+	}
+	diags := diagsDeTypecheck(t, `rota_ws("/x", gambiarra(ws, p) acabou_finalmente)
+antes(gambiarra(p) acabou_finalmente)
+mostra responde_json(1)`)
+	if contemMsg(diags, "indefinido") {
+		t.Fatalf("builtin do servidor acusado como indefinido: %v", diags)
 	}
 }

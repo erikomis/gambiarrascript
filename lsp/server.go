@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"gambiarrascript/ast"
+	"gambiarrascript/compiler"
 	"gambiarrascript/lexer"
 	"gambiarrascript/object"
 	"gambiarrascript/parser"
@@ -117,6 +118,19 @@ var builtinsSet = func() map[string]bool {
 	}
 	return m
 }()
+
+// A lista do compilador e a fonte da verdade dos builtins (a VM chama por
+// indice). Lista escrita a mao aqui ja ficou pra tras em merge de levas
+// paralelas — o `gs check` acusava rota_ws como indefinido. Entao o que
+// faltar entra no fim, pro autocomplete e pro linter saberem que existe.
+func init() {
+	for _, nome := range compiler.BuiltinNomes() {
+		if !builtinsSet[nome] {
+			builtinsSet[nome] = true
+			builtinsCompletion = append(builtinsCompletion, nome)
+		}
+	}
+}
 
 // docsBuiltin descreve cada builtin pro hover do LSP.
 var docsBuiltin = map[string]string{
