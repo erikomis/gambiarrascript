@@ -7,6 +7,7 @@ import (
 
 	"gambiarrascript/ast"
 	"gambiarrascript/lexer"
+	"gambiarrascript/object"
 	"gambiarrascript/parser"
 	"gambiarrascript/token"
 )
@@ -169,6 +170,19 @@ func novoContexto(carregar func(string) (string, bool)) *contextoAnalise {
 		}
 	}
 	return &contextoAnalise{carregar: carregar, modulos: map[string]*analise{}}
+}
+
+// resolveImporta acha o arquivo de um `importa` relativo com a mesma regra
+// dos engines: do lado de quem importa e, se nao tiver, em gs_modulos/
+// subindo pelos diretorios. Sem achar nada, fica o caminho do lado.
+func (ctx *contextoAnalise) resolveImporta(dir, caminho string) string {
+	candidatos := object.CandidatosModulo(dir, caminho)
+	for _, c := range candidatos {
+		if _, ok := ctx.carregar(c); ok {
+			return c
+		}
+	}
+	return candidatos[0]
 }
 
 // modulo devolve a analise do arquivo (cacheada), ou nil se nao der pra ler.
@@ -366,7 +380,7 @@ func (a *analise) andaStmt(s ast.Statement, esc *escopo, m mapaPos) {
 			if filepath.IsAbs(t.Value) {
 				imp.resolvido = filepath.Clean(t.Value)
 			} else if a.caminho != "" {
-				imp.resolvido = filepath.Join(filepath.Dir(a.caminho), t.Value)
+				imp.resolvido = a.ctx.resolveImporta(filepath.Dir(a.caminho), t.Value)
 			}
 		} else {
 			a.andaExpr(n.Path, esc, m)

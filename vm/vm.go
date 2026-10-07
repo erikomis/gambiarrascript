@@ -81,6 +81,10 @@ type VM struct {
 	// elemento). Compartilhado entre a VM raiz e os clones; um sync.Pool porque
 	// o `bora` pode disparar essas chamadas de varias goroutines.
 	subVMs *sync.Pool
+
+	// modulos e o cache do importa: cada modulo roda uma vez so por processo.
+	// Compartilhado com os clones (bora, sub-VMs) — vive junto com as globais.
+	modulos *object.Modulos
 }
 
 func New(bytecode *compiler.Bytecode, out io.Writer) *VM {
@@ -103,6 +107,7 @@ func NovaComInterp(bytecode *compiler.Bytecode, out io.Writer, interp *interpret
 		globals:    make([]object.Object, tamanhoGlobals(bytecode.NumGlobals)),
 		frames:     novosFrames(),
 		subVMs:     &sync.Pool{},
+		modulos:    &object.Modulos{},
 		builtinIdx: bidx,
 		builtins:   interp.BuiltinsVisiveis(),
 		out:        out,
@@ -170,6 +175,42 @@ func (vm *VM) chamaCompilada(cf *object.CompiledFunction, args []object.Object) 
 	// apos OpReturn/OpReturnNada o valor fica em stack[sp]
 	sub.sp--
 	return sub.stack[sub.sp]
+}
+
+// importa devolve o namespace do modulo, rodando o corpo dele se for a
+// primeira vez neste processo (cache compartilhado com as goroutines). O
+// corpo roda numa sub-VM sincrona, igual uma gambiarra chamada por builtin.
+func (vm *VM) importa(mod *object.Modulo, atual string, linha int) object.Object {
+	valor, _, falha := vm.modulos.Importa(atual, mod.Caminho, func() (object.Object, any, object.Object) {
+		if mod.Corpo == nil {
+			// o principal: o cache sempre acusa o ciclo antes de chegar aqui
+			return nil, nil, &object.Erro{Message: "importa circular: o modulo principal nao pode ser importado", Kind: object.KindModulo}
+		}
+		switch r := vm.chamaCompilada(mod.Corpo, nil).(type) {
+		case *object.Erro:
+			if !r.Handled {
+				return nil, nil, r
+			}
+		case *object.Sair:
+			return nil, nil, r
+		}
+		ns := object.NamespaceModulo(mod.Nomes, func(nome string) (object.Object, bool) {
+			for i, n := range mod.Nomes {
+				if n == nome {
+					return vm.globals[mod.Slots[i]], true
+				}
+			}
+			return nil, false
+		})
+		return ns, nil, nil
+	})
+	switch f := falha.(type) {
+	case *object.Sair:
+		panic(VMError{sai: f})
+	case *object.Erro:
+		panic(VMError{err: object.ComLinha(f, linha)})
+	}
+	return valor
 }
 
 // pegaSubVM tira uma VM do pool (ou clona uma nova) pra rodar UMA chamada
@@ -295,6 +336,7 @@ func (vm *VM) clone() *VM {
 		globals:    vm.globals, // slice compartilhado — pagadores por concorrencia
 		frames:     novosFrames(),
 		subVMs:     vm.subVMs,
+		modulos:    vm.modulos,
 		builtinIdx: vm.builtinIdx,
 		builtins:   vm.builtins,
 		out:        vm.out,
@@ -1088,6 +1130,12 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			mascara := vm.constants[int(code.ReadUint16(fn.Bytecode[ip+1:]))].(*object.Texto).Value
 			ip += 3
 			vm.execBoraCall(vm.espalhaArgs(mascara))
+		case code.OpImporta:
+			mod := vm.constants[int(code.ReadUint16(fn.Bytecode[ip+1:]))].(*object.Modulo)
+			atual := vm.constants[int(code.ReadUint16(fn.Bytecode[ip+3:]))].(*object.Texto).Value
+			linha := fn.LinhaDoPC(ip)
+			ip += 5
+			vm.push(vm.importa(mod, atual, linha))
 		case code.OpDup:
 			val := vm.stack[vm.sp-1]
 			vm.push(val)

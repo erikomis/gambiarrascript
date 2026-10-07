@@ -16,6 +16,25 @@ type Environment struct {
 	// primeiro). A checagem de verdade e estatica (ast.ChecaCravadas); isto
 	// so serve pro importa saber o que o modulo e o importador cravaram.
 	cravadas map[string]bool
+	// modulo: caminho absoluto do arquivo dono deste escopo — so no escopo
+	// raiz de um modulo importado (o principal fica "").
+	modulo string
+}
+
+// MarcaModulo diz que este escopo e o topo do modulo `caminho` (absoluto).
+// Chamado so na criacao do escopo do modulo, antes de qualquer uso.
+func (e *Environment) MarcaModulo(caminho string) { e.modulo = caminho }
+
+// Modulo devolve o arquivo do modulo dono deste escopo (subindo pelos
+// escopos externos) ou "" quando o codigo e do programa principal. O
+// `importa` usa pra resolver caminho relativo ao arquivo que importa.
+func (e *Environment) Modulo() string {
+	for env := e; env != nil; env = env.outer {
+		if env.modulo != "" {
+			return env.modulo
+		}
+	}
+	return ""
 }
 
 func NewEnvironment() *Environment {

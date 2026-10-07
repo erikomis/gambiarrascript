@@ -572,6 +572,22 @@ func TestInterpolacaoCrasEAninhada(t *testing.T) {
 	}
 }
 
+// importa sem o arquivo do lado cai em gs_modulos/ (subindo diretorios),
+// igual os engines.
+func TestDefinicaoEmGsModulos(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "gs_modulos"), 0755)
+	os.MkdirAll(filepath.Join(dir, "sub"), 0755)
+	os.WriteFile(filepath.Join(dir, "gs_modulos", "datas.gs"), []byte("gambiarra hoje()\n    funciona 1\nacabou_finalmente"), 0644)
+	uri := caminhoParaURI(filepath.Join(dir, "sub", "main.gs"))
+	src := "importa \"datas.gs\"\nmostra hoje()"
+	s := servidorCom(map[string]string{uri: src})
+	loc := definicaoEm(t, s, uri, acha(t, src, "hoje", 0))
+	if loc == nil || !strings.HasSuffix(loc.URI, "/gs_modulos/datas.gs") {
+		t.Fatalf("hoje deveria ir pro gs_modulos/datas.gs: %+v", loc)
+	}
+}
+
 func TestImportaCiclicoNaoTrava(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a.gs"), []byte("importa \"b.gs\"\ngambiarra fa() funciona fb() acabou_finalmente"), 0644)

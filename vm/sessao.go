@@ -19,6 +19,7 @@ type Sessao struct {
 	globals []object.Object
 	interp  *interpreter.Interpreter
 	out     io.Writer
+	modulos *object.Modulos // cache do importa: vale pra sessao inteira
 }
 
 // NovaSessao cria a sessao com o interpretador que hospeda os builtins.
@@ -46,6 +47,7 @@ func NovaSessaoComInterp(out io.Writer, interp *interpreter.Interpreter) *Sessao
 		globals: globals,
 		interp:  interp,
 		out:     out,
+		modulos: &object.Modulos{},
 	}
 }
 
@@ -72,6 +74,7 @@ func (s *Sessao) Avalia(prog *ast.Program) (object.Object, error) {
 
 	maq := NovaComInterp(bc, s.out, s.interp)
 	maq.globals = s.globals // as globais da sessao, nao as da VM nova
+	maq.modulos = s.modulos
 	if err := maq.Run(); err != nil {
 		return nil, err
 	}

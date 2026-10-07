@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"os"
+	"sort"
 
 	"gambiarrascript/code"
 	"gambiarrascript/compiler"
@@ -22,6 +23,7 @@ func init() {
 	gob.Register(&object.Booleano{})
 	gob.Register(&object.Nada{})
 	gob.Register(&object.CompiledFunction{})
+	gob.Register(&object.Modulo{})
 }
 
 // formatoGSC e a versao do formato do bytecode. Sobe toda vez que mudar
@@ -35,7 +37,9 @@ func init() {
 // 7 = servidor parte 2 e websocket (responde_json..conecta_ws).
 // 8 = trava e com_trava no fim da lista.
 // 9 = gera_certificado no fim da lista.
-const formatoGSC = 9
+// 10 = OpImporta: modulo compilado a parte (descritor object.Modulo), roda uma
+// vez so; o .gsc guarda o hash de cada modulo importado.
+const formatoGSC = 10
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)
@@ -46,6 +50,10 @@ type cacheGSC struct {
 	Instructions []byte
 	Linhas       []object.LinhaPC // tabela pc->linha do fluxo principal
 	NumGlobals   int              // quantas globais o programa declara
+	// HashModulos: sha256 da fonte de cada modulo importado (caminho
+	// absoluto). Modulo que mudou (ou sumiu) invalida o cache — antes so a
+	// fonte principal contava e o .gsc rodava o modulo velho.
+	HashModulos map[string][32]byte
 }
 
 // carregaCache tenta ler um .gsc valido pro arquivo/fonte. Devolve nil se
@@ -66,17 +74,35 @@ func carregaCache(caminhoGSC string, fonte []byte) *compiler.Bytecode {
 	if c.HashFonte != sha256.Sum256(fonte) {
 		return nil
 	}
+	modulos := make([]string, 0, len(c.HashModulos))
+	for caminho, hash := range c.HashModulos {
+		fonteMod, err := object.LeModulo(caminho)
+		if err != nil || sha256.Sum256(fonteMod) != hash {
+			return nil
+		}
+		modulos = append(modulos, caminho)
+	}
+	sort.Strings(modulos)
 	return &compiler.Bytecode{
 		Instructions: code.Instructions(c.Instructions),
 		Constants:    c.Constants,
 		Linhas:       c.Linhas,
 		NumGlobals:   c.NumGlobals,
+		Modulos:      modulos,
 	}
 }
 
 // gravaCache serializa o bytecode no .gsc. Falha e so aviso — cache e
 // otimizacao, nao requisito.
 func gravaCache(caminhoGSC string, fonte []byte, bc *compiler.Bytecode) {
+	hashModulos := map[string][32]byte{}
+	for _, caminho := range bc.Modulos {
+		fonteMod, err := object.LeModulo(caminho)
+		if err != nil {
+			return // modulo sumiu entre compilar e gravar: nao vale cachear
+		}
+		hashModulos[caminho] = sha256.Sum256(fonteMod)
+	}
 	f, err := os.Create(caminhoGSC)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "aviso: nao consegui gravar o cache %s: %v\n", caminhoGSC, err)
@@ -92,6 +118,7 @@ func gravaCache(caminhoGSC string, fonte []byte, bc *compiler.Bytecode) {
 		Instructions: []byte(bc.Instructions),
 		Linhas:       bc.Linhas,
 		NumGlobals:   bc.NumGlobals,
+		HashModulos:  hashModulos,
 	}
 	if err := gob.NewEncoder(f).Encode(&c); err != nil {
 		fmt.Fprintf(os.Stderr, "aviso: cache nao gravado: %v\n", err)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gambiarrascript/compiler"
@@ -366,23 +367,24 @@ func TestVMImportaComCiclo(t *testing.T) {
 	}
 	fonte, _ := os.ReadFile(a)
 	prog := parser.New(lexer.New(string(fonte))).ParseProgram()
-	comp := compiler.New()
-	comp.DirBase = dir
-	if err := comp.Compile(prog); err != nil {
-		t.Fatalf("compile: %v", err)
+	// sem saber o arquivo principal (so o dir) o ciclo e pego um passo depois
+	// (a.gs ainda roda uma vez como modulo); sabendo, e pego na hora.
+	for _, caso := range []struct {
+		arquivo, esperado string
+	}{{"", "importa circular: b.gs -> a.gs -> b.gs"}, {a, "importa circular: a.gs -> b.gs -> a.gs"}} {
+		comp := compiler.New()
+		comp.DirBase = dir
+		comp.Arquivo = caso.arquivo
+		if err := comp.Compile(prog); err != nil {
+			t.Fatalf("compile: %v", err)
+		}
+		var buf bytes.Buffer
+		maq := New(comp.Bytecode(), &buf)
+		err := maq.Run()
+		if err == nil || !strings.Contains(err.Error(), caso.esperado) {
+			t.Fatalf("ciclo deveria dar %q, veio %v", caso.esperado, err)
+		}
 	}
-	var buf bytes.Buffer
-	maq := New(comp.Bytecode(), &buf)
-	if err := maq.Run(); err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	// va = 1 + vb (=10) -> 11
-	if buf.String() != "" {
-		// nada impresso, mas o resultado deve ser va=11. Validamos via global.
-		// (mostra fica implicito — adiciona um mostra no teste se quiser ver.)
-	}
-	// verifica o valor final de va acessando a global 0
-	// (apenas consistencia: sem panic e sem loop infinito ja e sucesso)
 }
 
 // bora + espera na VM: dispara goroutine e bloqueia no futuro.

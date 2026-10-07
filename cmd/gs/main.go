@@ -215,7 +215,7 @@ func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []stri
 
 	if usarVM {
 		comp := compiler.New()
-		comp.DirBase = filepath.Dir(caminho)
+		comp.Arquivo = caminho
 		if err := comp.Compile(prog); err != nil {
 			fmt.Println("eita, teu codigo tem um perrengue:")
 			fmt.Println("  - " + err.Error())
@@ -230,7 +230,7 @@ func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []stri
 
 	interp := interpreter.New(os.Stdout)
 	interp.DefinirArgumentos(scriptArgs)
-	interp.DefinirDirBase(filepath.Dir(caminho))
+	interp.DefinirArquivo(caminho)
 	resultado := interp.Eval(prog, object.NewEnvironment())
 	if s, ok := resultado.(*object.Sair); ok {
 		os.Exit(s.Codigo) // sai(codigo) no tree-walker

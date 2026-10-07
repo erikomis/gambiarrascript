@@ -10,6 +10,7 @@ import (
 	"debug/macho"
 	"debug/pe"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,7 +22,10 @@ import (
 	"runtime"
 	"strings"
 
+	"gambiarrascript/ast"
+	"gambiarrascript/compiler"
 	"gambiarrascript/lexer"
+	"gambiarrascript/object"
 	"gambiarrascript/parser"
 )
 
@@ -126,10 +130,11 @@ func construir(o opcoesBuild, w io.Writer) (string, error) {
 	}
 	// valida antes de embedar — binario com script quebrado e vacilo
 	p := parser.New(lexer.New(string(fonte)))
-	p.ParseProgram()
+	prog := p.ParseProgram()
 	if errs := p.Errors(); len(errs) != 0 {
 		return "", fmt.Errorf("teu script tem perrengue de parse, arruma antes de buildar:\n  - %s", strings.Join(errs, "\n  - "))
 	}
+	payload, magic, nModulos := montaPayload(prog, o.arquivo, fonte, w)
 
 	var base []byte
 	switch {
@@ -162,13 +167,13 @@ func construir(o opcoesBuild, w io.Writer) (string, error) {
 		}
 	}
 
-	out := make([]byte, 0, len(base)+len(fonte)+16)
+	out := make([]byte, 0, len(base)+len(payload)+16)
 	out = append(out, base...)
-	out = append(out, fonte...)
+	out = append(out, payload...)
 	var lenBuf [8]byte
-	binary.LittleEndian.PutUint64(lenBuf[:], uint64(len(fonte)))
+	binary.LittleEndian.PutUint64(lenBuf[:], uint64(len(payload)))
 	out = append(out, lenBuf[:]...)
-	out = append(out, []byte(buildMagic)...)
+	out = append(out, []byte(magic)...)
 	if err := os.WriteFile(saida, out, 0755); err != nil {
 		return "", fmt.Errorf("nao consegui escrever a saida: %v", err)
 	}
@@ -183,8 +188,50 @@ func construir(o opcoesBuild, w io.Writer) (string, error) {
 			fmt.Fprintln(w, "       se o binario for morto pelo macOS, roda: codesign -s - "+saida)
 		}
 	}
-	fmt.Fprintf(w, "  %s  (binario standalone %s/%s, %.1f MB)\n", saida, goos, goarch, float64(len(out))/1024/1024)
+	extra := ""
+	if nModulos > 0 {
+		extra = fmt.Sprintf(", %d modulo(s) embutido(s)", nModulos)
+	}
+	fmt.Fprintf(w, "  %s  (binario standalone %s/%s, %.1f MB%s)\n", saida, goos, goarch, float64(len(out))/1024/1024, extra)
 	return saida, nil
+}
+
+// montaPayload decide o que vai no fim do binario. Script sem importa vai
+// cru (GSEMBED1, o formato de sempre). Com importa, vai o pacote JSON com as
+// fontes dos modulos (GSEMBED2) — descobertos compilando o programa, que
+// resolve os importa (inclusive gs_modulos/) igual na hora de rodar. Vale
+// igual pro build nativo e pro --alvo: o payload nao depende da plataforma.
+func montaPayload(prog *ast.Program, arquivo string, fonte []byte, w io.Writer) ([]byte, string, int) {
+	abs, err := filepath.Abs(arquivo)
+	if err != nil {
+		abs = arquivo
+	}
+	comp := compiler.New()
+	comp.Arquivo = abs
+	if err := comp.Compile(prog); err != nil {
+		// a VM nao compilou (o binario cai pro tree-walker): sem a lista de
+		// modulos, o importa resolve no disco de quem rodar
+		fmt.Fprintln(w, "aviso: nao compilou pra VM, modulos nao foram embutidos: "+err.Error())
+		return fonte, buildMagic, 0
+	}
+	caminhos := comp.Bytecode().Modulos
+	if len(caminhos) == 0 {
+		return fonte, buildMagic, 0
+	}
+	pacote := pacoteBuild{Principal: abs, Fonte: string(fonte), Modulos: map[string]string{}}
+	for _, c := range caminhos {
+		b, err := object.LeModulo(c)
+		if err != nil {
+			fmt.Fprintln(w, "aviso: nao consegui ler o modulo "+c+", ficou de fora: "+err.Error())
+			continue
+		}
+		pacote.Modulos[c] = string(b)
+	}
+	payload, err := json.Marshal(pacote)
+	if err != nil {
+		return fonte, buildMagic, 0
+	}
+	return payload, buildMagicPacote, len(pacote.Modulos)
 }
 
 func contem(lista []string, s string) bool {

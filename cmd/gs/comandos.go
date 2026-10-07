@@ -157,7 +157,7 @@ func cmdBench(args []string) {
 	var comp *compiler.Compiler
 	if usarVM {
 		comp = compiler.New()
-		comp.DirBase = filepath.Dir(arquivo)
+		comp.Arquivo = arquivo
 		if err := comp.Compile(prog); err != nil {
 			fmt.Println("a VM nao compilou: " + err.Error())
 			os.Exit(1)
@@ -175,7 +175,7 @@ func cmdBench(args []string) {
 			}
 		} else {
 			interp := interpreter.New(io.Discard)
-			interp.DefinirDirBase(filepath.Dir(arquivo))
+			interp.DefinirArquivo(arquivo)
 			res := interp.Eval(prog, object.NewEnvironment())
 			if res != nil && res.Type() == object.ERRO_OBJ {
 				fmt.Println("deu ruim: " + res.Inspect())
@@ -205,8 +205,45 @@ func cmdBench(args []string) {
 
 // Formato do payload embedado (lido de tras pra frente):
 //
-//	[binario gs][fonte .gs][8 bytes LE len(fonte)][magic 8 bytes]
-const buildMagic = "GSEMBED1"
+//	[binario gs][payload][8 bytes LE len(payload)][magic 8 bytes]
+//
+// buildMagic (GSEMBED1): payload = fonte .gs crua — script sem importa.
+// buildMagicPacote (GSEMBED2): payload = JSON pacoteBuild, o principal MAIS
+// os modulos que ele importa (o binario roda em qualquer pasta).
+const (
+	buildMagic       = "GSEMBED1"
+	buildMagicPacote = "GSEMBED2"
+)
+
+// pacoteBuild e o que o `gs build` embute quando o script importa modulos: a
+// fonte principal e as dos modulos, pelo caminho absoluto que tinham na hora
+// do build (e a chave que o importa usa pra achar o modulo embutido).
+type pacoteBuild struct {
+	Principal string            `json:"principal"`
+	Fonte     string            `json:"fonte"`
+	Modulos   map[string]string `json:"modulos,omitempty"`
+}
+
+// abrePacote le o payload conforme o magic. Pacote com modulos troca o
+// object.LeModulo pra achar os modulos embutidos primeiro (o resto ainda vem
+// do disco).
+func abrePacote(magic string, payload []byte) (fonte []byte, principal string, err error) {
+	if magic == buildMagic {
+		return payload, "", nil
+	}
+	var pacote pacoteBuild
+	if err := json.Unmarshal(payload, &pacote); err != nil {
+		return nil, "", err
+	}
+	embutidos := pacote.Modulos
+	object.LeModulo = func(caminho string) ([]byte, error) {
+		if src, ok := embutidos[caminho]; ok {
+			return []byte(src), nil
+		}
+		return os.ReadFile(caminho)
+	}
+	return []byte(pacote.Fonte), pacote.Principal, nil
+}
 
 // rodarEmbedado checa se ESTE executavel carrega um script embedado (gs
 // build). Se sim, roda o script com os args da linha de comando e devolve
@@ -229,16 +266,22 @@ func rodarEmbedado() bool {
 	if _, err := f.ReadAt(rodape, info.Size()-int64(len(rodape))); err != nil {
 		return false
 	}
-	if string(rodape[8:]) != buildMagic {
+	magic := string(rodape[8:])
+	if magic != buildMagic && magic != buildMagicPacote {
 		return false
 	}
 	tam := int64(binary.LittleEndian.Uint64(rodape[:8]))
 	if tam <= 0 || tam > info.Size() {
 		return false
 	}
-	fonte := make([]byte, tam)
-	if _, err := f.ReadAt(fonte, info.Size()-int64(len(rodape))-tam); err != nil {
+	payload := make([]byte, tam)
+	if _, err := f.ReadAt(payload, info.Size()-int64(len(rodape))-tam); err != nil {
 		return false
+	}
+	fonte, principal, err := abrePacote(magic, payload)
+	if err != nil {
+		fmt.Println("o script embedado ta corrompido: " + err.Error())
+		os.Exit(1)
 	}
 
 	p := parser.New(lexer.New(string(fonte)))
@@ -250,17 +293,26 @@ func rodarEmbedado() bool {
 		}
 		os.Exit(1)
 	}
+	// sem pacote (script sem importa), caminho relativo e do diretorio atual
 	wd, _ := os.Getwd()
 	interp := interpreter.New(os.Stdout)
 	interp.DefinirArgumentos(os.Args[1:])
-	interp.DefinirDirBase(wd)
+	if principal != "" {
+		interp.DefinirArquivo(principal)
+	} else {
+		interp.DefinirDirBase(wd)
+	}
 
 	// binario standalone roda na VM, igual `gs roda` — antes caia no
 	// tree-walker, o que fazia o executavel "compilado" ser ~10x MAIS LENTO
 	// que rodar o .gs solto. Se a compilacao falhar (construcao que so o
 	// tree-walker aceita), cai pro interpretador em vez de morrer.
 	comp := compiler.New()
-	comp.DirBase = wd
+	if principal != "" {
+		comp.Arquivo = principal
+	} else {
+		comp.DirBase = wd
+	}
 	if err := comp.Compile(prog); err == nil {
 		maquina := vm.NovaComInterp(comp.Bytecode(), os.Stdout, interp)
 		if err := maquina.Run(); err != nil {

@@ -39,10 +39,12 @@ gs roda [--tree] [--cache] <arquivo.gs> [args...]
   rodam todos os exemplos igual). `--vm` ainda e aceito por compatibilidade,
   mas nao muda nada.
 - `--cache` grava o bytecode compilado em `arquivo.gsc` do lado do `.gs` e
-  reaproveita nas proximas vezes (invalida sozinho quando a fonte, a versao do
-  `gs` ou a lista de builtins muda). Nao se aplica com `--tree`.
+  reaproveita nas proximas vezes (invalida sozinho quando a fonte, algum
+  modulo importado, a versao do `gs` ou a lista de builtins muda). Nao se
+  aplica com `--tree`.
 - Tudo depois do arquivo vira argumento acessivel via `argumentos()`.
-- `importa` resolve caminho relativo ao diretorio do arquivo rodado.
+- `importa` resolve caminho relativo ao arquivo que tem o `importa` (e cai em
+  `gs_modulos/` se nao achar). Veja [Modulos](/docs/modulos).
 
 ```bash
 gs roda exemplo.gs              # roda na VM
@@ -227,8 +229,9 @@ gs build app.gs -o app
 ./app arg1 arg2
 ```
 
-Gera um binario standalone: o proprio `gs` com o teu script embutido (roda na
-VM). Quem receber nao precisa ter o `gs` instalado. No macOS ele tenta
+Gera um binario standalone: o proprio `gs` com o teu script **e os modulos
+que ele importa** embutidos (roda na VM) — o executavel roda em qualquer
+pasta, sem os `.gs` do lado. Quem receber nao precisa ter o `gs` instalado. No macOS ele tenta
 re-assinar o binario (ad-hoc); se nao conseguir, avisa o comando `codesign`
 pra rodar.
 
@@ -256,8 +259,9 @@ segunda vez em diante sai do cache, sem rede.
 - `GS_RELEASES_URL` troca de onde baixar (espelho); o caminho continua
   `<base>/v<versao>/gs_<versao>_<os>_<arch>.tar.gz`.
 
-O binario **nao leva os modulos importados**: `importa` le os arquivos do
-diretorio atual na hora de rodar, entao manda o `gs_modulos/` junto.
+Os modulos importados (inclusive os de `gs_modulos/`) vao dentro do binario,
+nativo ou `--alvo`: nao precisa mandar os `.gs` junto. So `importa` com
+caminho que nao e texto literal (tree-walker) ainda le do disco.
 
 ## `gs bench`
 

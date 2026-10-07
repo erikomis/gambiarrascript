@@ -27,20 +27,82 @@ mostra dobra(5)                 # 10
 mostra versao                   # 1.0
 ```
 
-- **Com `como nome`**, o modulo vira um dicionario: cada variavel/gambiarra
-  que ele definiu vira uma chave, e voce acessa com ponto (`util.dobra(5)`).
-  E o jeito recomendado — nada de colisao de nome silenciosa.
-- **Sem `como`**, tudo que o modulo definiu fica visivel como se estivesse no
-  mesmo arquivo. Se dois modulos definirem o mesmo nome, o ultimo importado
-  ganha, sem aviso.
+- **Com `como nome`**, so o `nome` aparece no teu escopo: o modulo vira um
+  dicionario (cada variavel/gambiarra de topo vira uma chave, em ordem
+  alfabetica) e voce acessa com ponto (`util.dobra(5)`). Nada do modulo vaza
+  pro teu escopo. E o jeito recomendado — nada de colisao de nome silenciosa.
+- **Sem `como`**, os nomes de topo do modulo sao copiados pro escopo de quem
+  importa, como se estivessem no mesmo arquivo. Se dois modulos definirem o
+  mesmo nome, o ultimo importado ganha, sem aviso. Nome que voce `crava`ou
+  antes nao pode vir de modulo (da erro).
 
 Veja `examples/modulos/` no repo pra um exemplo completo (`principal.gs`
 importa `util.gs`).
 
+## O modulo roda uma vez so
+
+Igual Python/Node: cada modulo **roda uma vez por processo**, guardado pelo
+caminho absoluto do arquivo. Importar de novo — do mesmo arquivo ou de outro,
+com ou sem `como` — reaproveita o resultado: o `mostra` solto no modulo
+aparece uma vez so, e todo mundo enxerga o mesmo estado.
+
+```gambiarrascript
+# contador.gs
+mostra "carregando contador"
+bota estado = {"n": 0}
+gambiarra inc()
+    estado["n"] += 1
+    funciona estado["n"]
+acabou_finalmente
+```
+
+```gambiarrascript
+importa "contador.gs" como c     # carregando contador
+importa "contador.gs" como c2    # (nao roda de novo)
+c.inc()
+mostra c2.inc()                  # 2 — e o mesmo modulo
+```
+
+- O modulo tem **escopo proprio**: ele nao enxerga as variaveis de quem
+  importa (so builtins), e as gambiarras dele mexem no estado dele.
+- O dicionario do `como` e a foto dos nomes no fim do modulo. Reatribuir uma
+  variavel do modulo depois (`bota`) nao muda a foto; mexer dentro de uma
+  lista/dicionario dele aparece, porque e o mesmo objeto.
+- Varias goroutines (`bora`, handlers do servidor) importando o mesmo modulo
+  ao mesmo tempo: uma roda, as outras esperam e recebem o mesmo resultado.
+- Modulo que deu erro no meio **nao** fica guardado: o proximo `importa`
+  tenta de novo.
+
+## Import circular
+
+`a.gs` importa `b.gs` que importa `a.gs` de volta e erro, com a cadeia:
+
+```
+deu ruim na linha 1: importa circular: a.gs -> b.gs -> a.gs
+```
+
+O tipo do erro e `"parse"` (da pra pegar com `arruma`). Importar o proprio
+arquivo principal de dentro de um modulo tambem cai aqui. Ja um `importa`
+**dentro de uma gambiarra**, chamada depois que o outro modulo terminou de
+carregar, nao e ciclo: pega do cache.
+
+## Erros
+
+- Modulo que nao existe: `nao achei o modulo "x.gs" (procurei do lado de quem
+  importa e em gs_modulos/)` — tipo `"io"`.
+- Modulo que nao parseia: `o modulo "x.gs" ta com perrengue: linha 3: ...` —
+  a linha e a de dentro do modulo.
+- Erro rodando o topo do modulo: a mensagem original ganha
+  `(no modulo "x.gs")` no fim.
+- Na VM (motor padrao), modulo que nao existe/nao parseia e pego **antes** de
+  rodar (na compilacao); no tree-walker (`--tree`), na hora do `importa`.
+
 ## Resolucao de caminho
 
-- Relativo → relativo ao **diretorio do arquivo `.gs` principal** que o
-  `gs roda` recebeu.
+- Relativo → relativo ao **diretorio do arquivo que tem o `importa`** (um
+  modulo em `lib/` que importa `"b.gs"` acha `lib/b.gs`). Se nao achar ali,
+  procura em `gs_modulos/` no mesmo diretorio e depois subindo pelos pais —
+  entao `importa "datas.gs"` acha o que o `gs get` baixou.
 - Absoluto → usado direto.
 
 ## Modulos de terceiros: gs get e gs instala
@@ -52,7 +114,7 @@ Do GitHub da pra fixar uma tag ou commit com `@ref`:
 ```bash
 gs init
 gs get github.com/usuario/repo/libs/datas.gs@v1.2.0
-# usa com: importa "gs_modulos/datas.gs"
+# usa com: importa "datas.gs"  (ou "gs_modulos/datas.gs")
 gs get https://exemplo.com/libs/util.gs     # URL https comum tambem vale
 ```
 
@@ -77,7 +139,10 @@ So `https://` — `http://` so com `--inseguro`. Detalhes em
 
 ## Notas
 
-- Importar e **executar** o modulo: o codigo de topo dele roda (um `mostra`
-  solto no modulo aparece na saida).
+- Importar e **executar** o modulo (uma vez): o codigo de topo dele roda.
 - Nao existe `export`/privado: tudo que o modulo define fica acessivel.
-- Evite importacao circular (`a.gs` importa `b.gs` que importa `a.gs`).
+- `gs build` embute no binario os modulos que o script importa — o
+  executavel roda em qualquer pasta, sem os `.gs` do lado.
+- `gs roda --cache` invalida o `.gsc` quando qualquer modulo importado muda.
+- Na VM o caminho do `importa` tem que ser texto literal
+  (`importa "x.gs"`, nao uma variavel).

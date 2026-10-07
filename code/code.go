@@ -86,6 +86,11 @@ const (
 	// OpCall pra nao pesar no caminho quente das chamadas normais.
 	OpCallEspalha // maskIdx (2): igual OpCall, abrindo as listas marcadas
 	OpBoraEspalha // maskIdx (2): igual OpBoraCall, abrindo as listas marcadas
+	// importa: roda o modulo (descritor object.Modulo na constante) uma vez so
+	// por processo e empilha o namespace dele (dicionario). O segundo operando
+	// e a constante texto com o arquivo onde o importa esta escrito (cadeia
+	// pra detectar import circular).
+	OpImporta // moduloIdx (2) + atualIdx (2)
 	OpHalt   // para execucao
 )
 
@@ -162,6 +167,7 @@ var definitions = map[Opcode]*Definition{
 	OpPow:    {"OpPow", []int{}},
 	OpCallEspalha: {"OpCallEspalha", []int{2}},
 	OpBoraEspalha: {"OpBoraEspalha", []int{2}},
+	OpImporta:     {"OpImporta", []int{2, 2}},
 	OpHalt:   {"OpHalt", []int{}},
 }
 

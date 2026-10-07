@@ -29,6 +29,8 @@ type Interpreter struct {
 	inBuf             *bufio.Reader
 	argumentos        []string
 	dirBase           string
+	arquivo           string          // caminho absoluto do .gs principal ("" se nao tem)
+	modulos           *object.Modulos // cache do importa: cada modulo roda uma vez so
 	servidor          *servidorEstado
 	builtinsInstancia map[string]*object.Builtin
 
@@ -50,7 +52,7 @@ type Interpreter struct {
 }
 
 func New(out io.Writer) *Interpreter {
-	i := &Interpreter{out: out, erroOut: os.Stderr, in: os.Stdin}
+	i := &Interpreter{out: out, erroOut: os.Stderr, in: os.Stdin, modulos: &object.Modulos{}}
 	i.servidor = novoServidorEstado(i)
 	i.builtinsInstancia = map[string]*object.Builtin{
 		"rota":         {Nome: "rota", Fn: i.servidor.builtinRota},
@@ -136,6 +138,17 @@ func (i *Interpreter) DefinirArgumentos(args []string) { i.argumentos = args }
 
 // DefinirDirBase configura o diretorio base pra resolver importa "caminho.gs".
 func (i *Interpreter) DefinirDirBase(dir string) { i.dirBase = dir }
+
+// DefinirArquivo diz qual e o .gs principal: o dir base vira o dir dele, e o
+// caminho entra na cadeia do importa (o modulo que importa o principal de
+// volta da erro de import circular em vez de rodar ele de novo).
+func (i *Interpreter) DefinirArquivo(caminho string) {
+	if abs, err := filepath.Abs(caminho); err == nil {
+		caminho = abs
+	}
+	i.arquivo = caminho
+	i.dirBase = filepath.Dir(caminho)
+}
 
 func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
@@ -1066,6 +1079,11 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 	return NADA
 }
 
+// evalImporta: `importa "x.gs"` / `importa "x.gs" como m`. O modulo roda uma
+// vez so por interpretador, num escopo PROPRIO (nao enxerga as globais de quem
+// importa); o resultado fica no cache (object.Modulos) pelo caminho absoluto.
+// Com `como`, so o alias e amarrado; sem, os nomes do modulo sao copiados pro
+// escopo de quem importa (comportamento classico).
 func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Environment) object.Object {
 	caminhoVal := i.Eval(node.Path, env)
 	if isError(caminhoVal) {
@@ -1075,67 +1093,71 @@ func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Enviro
 	if !ok {
 		return newError(node.Token.Line, "importa quer um texto (caminho), veio %s", caminhoVal.Type())
 	}
-	resolvido := caminho.Value
-	if !filepath.IsAbs(resolvido) && i.dirBase != "" {
-		resolvido = filepath.Join(i.dirBase, resolvido)
+	linha := node.Token.Line
+	// relativo ao arquivo onde ESTE importa esta escrito (o escopo sabe de
+	// qual modulo veio; o principal usa o dir base do interpretador)
+	atual := env.Modulo()
+	dir := i.dirBase
+	if atual != "" {
+		dir = filepath.Dir(atual)
+	} else {
+		atual = i.arquivo
 	}
-	fonte, err := os.ReadFile(resolvido)
-	if err != nil {
-		return newError(node.Token.Line, "nao consegui importar %q: %v", caminho.Value, err)
+	abs, fonte, errRes := object.ResolveModulo(dir, caminho.Value)
+	if errRes != nil {
+		return object.ComLinha(errRes, linha)
 	}
-	p := parser.New(lexer.New(string(fonte)))
-	prog := p.ParseProgram()
-	if errs := p.Errors(); len(errs) != 0 {
-		return newError(node.Token.Line, "o modulo %q ta com perrengue: %s", caminho.Value, errs[0])
+	valor, extra, falha := i.modulos.Importa(atual, abs, func() (object.Object, any, object.Object) {
+		p := parser.New(lexer.New(string(fonte)))
+		prog := p.ParseProgram()
+		if errs := p.Errors(); len(errs) != 0 {
+			return nil, nil, object.ErroDeModulo(caminho.Value, errs[0])
+		}
+		if errs := ast.ChecaCravadas(prog, nil); len(errs) > 0 {
+			return nil, nil, object.ErroDeModulo(caminho.Value, fmt.Sprintf("linha %d: %s", errs[0].Linha, errs[0].Msg))
+		}
+		modEnv := object.NewEnvironment()
+		modEnv.MarcaModulo(abs)
+		res := i.evalProgram(prog, modEnv)
+		if isError(res) {
+			return nil, nil, res
+		}
+		ns := object.NamespaceModulo(modEnv.Locais(), modEnv.Get)
+		return ns, modEnv, nil
+	})
+	if falha != nil {
+		if e, ok := falha.(*object.Erro); ok {
+			return object.ComLinha(e, linha)
+		}
+		return falha // *Sair
 	}
-	// o modulo nao pode mexer no que o importador cravou (na VM ele compila
-	// no mesmo escopo, entao a regra e a mesma)
-	if errs := ast.ChecaCravadas(prog, env.Cravadas()); len(errs) > 0 {
-		return newError(node.Token.Line, "o modulo %q ta com perrengue: linha %d: %s", caminho.Value, errs[0].Linha, errs[0].Msg)
-	}
-
-	dirAntes := i.dirBase
-	i.DefinirDirBase(filepath.Dir(resolvido))
+	ns := valor.(*object.Dicionario)
 
 	if node.Alias != nil {
-		// importa "x.gs" como alias — modulo vira namespace isolado
-		modEnv := object.NewEnclosedEnvironment(env)
-		res := i.evalProgram(prog, modEnv)
-		i.DefinirDirBase(dirAntes)
-		if isError(res) {
-			return res
-		}
-		herdaCravadas(env, modEnv)
-		// Cria um dicionario com todas as definicoes do modulo
-		modulo := object.NovoDicionario()
-		for _, nome := range modEnv.Locais() {
-			if v, ok := modEnv.Get(nome); ok {
-				chave := &object.Texto{Value: nome}
-				modulo.Bota(chave.ChaveHash(), object.ParDic{Chave: chave, Valor: v})
-			}
-		}
-		env.Set(node.Alias.Value, modulo)
+		env.Set(node.Alias.Value, ns)
 		return NADA
 	}
 
-	// importa sem alias — despeja tudo no escopo (comportamento classico)
-	modEnv := object.NewEnclosedEnvironment(env)
-	res := i.evalProgram(prog, modEnv)
-	i.DefinirDirBase(dirAntes)
-	if isError(res) {
-		return res
-	}
-	for _, nome := range modEnv.Locais() {
-		if v, ok := modEnv.Get(nome); ok {
-			env.Set(nome, v)
+	// sem alias: copia os nomes do modulo pro escopo de quem importa. Nome
+	// que quem importa cravou nao pode ser sobrescrito pelo modulo.
+	pares := ns.Pares()
+	for _, par := range pares {
+		nome := par.Chave.(*object.Texto).Value
+		if env.EhCravada(nome) {
+			return newErrorKind(object.KindModulo, linha, "o modulo %q ta com perrengue: `%s` foi cravada, nao da pra mudar", caminho.Value, nome)
 		}
 	}
-	herdaCravadas(env, modEnv)
+	for _, par := range pares {
+		env.Set(par.Chave.(*object.Texto).Value, par.Valor)
+	}
+	if modEnv, ok := extra.(*object.Environment); ok {
+		herdaCravadas(env, modEnv)
+	}
 	return NADA
 }
 
-// herdaCravadas passa pro importador o que o modulo cravou no topo — na VM o
-// modulo compila no escopo de quem importa, entao la isso ja vem de graca.
+// herdaCravadas passa pro importador o que o modulo cravou no topo (so no
+// importa sem alias, que copia os nomes).
 func herdaCravadas(env, modEnv *object.Environment) {
 	for nome := range modEnv.Cravadas() {
 		env.Crava(nome)

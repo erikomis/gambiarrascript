@@ -182,7 +182,7 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
       na VM (OpPop espúrio no ramo não-nada do `?.`).
 - [x] **`importa ... como`** — `importa "util.gs" como util` →
       `util.funcao()`, em vez de despejar tudo no escopo global (colisão de
-      nome silenciosa). Ver bug aberto: na VM o `como` ainda vaza nomes.
+      nome silenciosa). O `como` amarra so o alias nos dois engines.
 - [x] **Constantes** — `crava NOME = valor`. Checagem estática compartilhada
       (`ast.ChecaCravadas`, pela ordem do fonte) roda antes da execução nos 2
       engines e no linter (`gs check`/LSP acusam como erro): `bota`, compostas,
@@ -290,8 +290,16 @@ Ainda abertos (pedem decisão de semântica):
 
 - [ ] Overflow de inteiro: VM satura, tree-walker dá a volta; `de_json`
       corta inteiro gigante em silêncio.
-- [ ] `importa`: na VM o `como` também vaza nomes pro global; import repetido
-      roda 1x na VM e 2x no tree-walker; import circular trava o tree-walker.
+- [x] `importa` com semântica de módulo de verdade, igual nos dois engines:
+      cada módulo roda **uma vez por processo** (cache pelo caminho absoluto,
+      `object.Modulos`); `como m` amarra só o `m` (namespace = dicionário em
+      ordem alfabética, módulo com escopo próprio); import circular vira
+      `importa circular: a.gs -> b.gs -> a.gs` (tipo `"parse"`, também entre
+      goroutines, via grafo de espera); relativo ao arquivo que importa, com
+      fallback em `gs_modulos/` subindo diretórios; goroutines importando
+      juntas esperam a mesma execução. Na VM o módulo compila à parte
+      (`OpImporta` + descritor `object.Modulo`); o `.gsc` confere o hash dos
+      módulos e o `gs build` embute os módulos importados.
 - [ ] Valor de erro difere entre engines (`erro_causa`, `mostra erro`).
 - [ ] VM não imprime traço de pilha em erro de builtin não pego no top-level.
 - [x] Interpolação engolia lixo calado (`"${3.14159:.2f}"` imprimia

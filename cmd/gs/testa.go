@@ -70,13 +70,13 @@ func rodaUmTeste(arq string, usarVM bool) (total, ok int, nota string) {
 	}
 
 	interp := interpreter.New(os.Stdout)
-	interp.DefinirDirBase(filepath.Dir(arq))
+	interp.DefinirArquivo(arq)
 	interp.ResetTeste()
 
 	var runErro object.Object
 	if usarVM {
 		comp := compiler.New()
-		comp.DirBase = filepath.Dir(arq)
+		comp.Arquivo = arq
 		if err := comp.Compile(prog); err != nil {
 			return 0, 0, "nao compilou pra VM: " + err.Error()
 		}

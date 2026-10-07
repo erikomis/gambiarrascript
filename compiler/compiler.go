@@ -1,10 +1,11 @@
 package compiler
 
 import (
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -38,6 +39,10 @@ type SymbolTable struct {
 	count   int
 	outer   *SymbolTable
 	free    []Symbol // freeVars coletadas
+	// globais: contador de slots globais COMPARTILHADO entre a tabela do
+	// principal e as tabelas dos modulos (cada modulo tem nomes proprios, mas
+	// os slots moram no mesmo array de globais da VM). nil = usa count.
+	globais *int
 }
 
 // NumGlobais conta os simbolos do escopo mais externo (as globais). Chamada no
@@ -46,6 +51,9 @@ func (s *SymbolTable) NumGlobais() int {
 	topo := s
 	for topo.outer != nil {
 		topo = topo.outer
+	}
+	if topo.globais != nil {
+		return *topo.globais
 	}
 	return topo.count
 }
@@ -76,6 +84,9 @@ func (s *SymbolTable) Define(nome string) Symbol {
 	sym := Symbol{Name: nome, Index: s.count, Scope: GlobalScope}
 	if s.outer != nil {
 		sym.Scope = LocalScope
+	} else if s.globais != nil {
+		sym.Index = *s.globais
+		*s.globais++
 	}
 	s.symbols[nome] = sym
 	s.count++
@@ -164,11 +175,17 @@ type Compiler struct {
 	linhas     []object.LinhaPC
 	linhaAtual int
 
-	// importa (VM): diretorio base pra resolver imports e mapa de caminhos
-	// absolutos ja importados (deteccao de ciclo). Quando dirBase e "" (REPL,
-	// disasm ad-hoc), `importa` devolve erro explicando.
-	DirBase    string
-	importados map[string]bool
+	// importa (VM): DirBase e o diretorio pra resolver caminho relativo do
+	// programa principal ("" = diretorio atual); Arquivo e o .gs principal
+	// (opcional: entra na cadeia do import circular e, se DirBase estiver
+	// vazio, da o diretorio). Cada modulo e compilado UMA vez (modulos, pelo
+	// caminho absoluto) com tabela de nomes propria; moduloAtual e o arquivo
+	// sendo compilado agora ("" = principal).
+	DirBase       string
+	Arquivo       string
+	modulos       map[string]*moduloInfo
+	moduloAtual   string
+	progPrincipal *ast.Program
 
 	// interning de constantes escalares (Numero/Texto/Booleano): mesma
 	// constante literal repetida reusa o mesmo indice no pool.
@@ -194,6 +211,7 @@ type compiledFn struct {
 
 func New() *Compiler {
 	main := NewSymbolTable()
+	main.globais = new(int)
 	c := &Compiler{scope: main, scopes: []*SymbolTable{main}, constDedupe: map[string]int{}, cravadas: map[string]bool{}}
 	// registra builtins no escopo global — idx 0..N-1. A ordem aqui determina
 	// o indice que a VM usa pra despachar a builtin (veja vm.Builtins()).
@@ -297,6 +315,9 @@ type Bytecode struct {
 	// `bora`, entao ele nao pode ser realocado depois (os clones ficariam com
 	// o array velho e as escritas parariam de se enxergar).
 	NumGlobals int
+	// Modulos: caminhos absolutos dos modulos compilados junto (o cache .gsc
+	// confere se nenhum mudou; o `gs build` embute as fontes).
+	Modulos []string
 }
 
 func (c *Compiler) Bytecode() *Bytecode {
@@ -306,7 +327,21 @@ func (c *Compiler) Bytecode() *Bytecode {
 		Functions:    c.compiledFns,
 		Linhas:       c.linhas,
 		NumGlobals:   c.scope.NumGlobais(),
+		Modulos:      c.caminhosModulos(),
 	}
+}
+
+// caminhosModulos lista (ordenado) os modulos compilados de verdade — o
+// principal, quando importado de volta, nao conta.
+func (c *Compiler) caminhosModulos() []string {
+	var out []string
+	for caminho, info := range c.modulos {
+		if info.desc.Corpo != nil {
+			out = append(out, caminho)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // NovaEntrada prepara o compilador pra compilar MAIS um pedaco de programa
@@ -387,6 +422,9 @@ func (c *Compiler) compile(node ast.Node) error {
 			return fmt.Errorf("linha %d: %s", errs[0].Linha, errs[0].Msg)
 		}
 		antes := copiaCravadas(c.cravadas)
+		if c.moduloAtual == "" {
+			c.progPrincipal = node
+		}
 		for _, s := range node.Statements {
 			if err := c.compile(s); err != nil {
 				c.cravadas = antes
@@ -1659,91 +1697,222 @@ func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 	return pos
 }
 
-// compileImporta resolve o caminho relativo ao dirBase, le o arquivo, faz
-// parse e compila cada statement do modulo INLINE no mesmo Compiler. Assim
-// as globals definidas no modulo (`bota`, `gambiarra`) passam a existir no
-// programa principal e a VM as acessa via OpGetGlobal. Imports recursivos
-// sao detidos via mapa de caminhos ja visitados (ciclo vira no-op).
+// moduloInfo e o que o compilador sabe de um modulo ja compilado (ou sendo
+// compilado, no caso de import circular).
+type moduloInfo struct {
+	desc     *object.Modulo
+	constIdx int
+	nomes    []string        // nomes de topo (o que o importa sem alias copia)
+	cravadas map[string]bool // o que o modulo cravou no topo
+}
+
+// compileImporta: o modulo e compilado UMA vez (com tabela de nomes propria,
+// sem enxergar as globais de quem importa) e vira um descritor no pool de
+// constantes. No lugar do importa sai um OpImporta, que roda o corpo uma vez
+// so por processo e empilha o namespace (dicionario). Com `como`, o
+// namespace vai pro alias; sem, cada nome e copiado pro escopo atual.
+// Modulo que nao existe/nao parseia/nao compila e erro de compilacao (a VM
+// nao tem como seguir sem saber os nomes); import circular so da pra saber
+// rodando, entao e erro de runtime (igual o tree-walker).
 // Suportamos somente caminho literal de texto (`importa "x.gs"`).
 func (c *Compiler) compileImporta(node *ast.ImportaStatement) error {
 	tx, ok := node.Path.(*ast.TextoLiteral)
 	if !ok {
 		return fmt.Errorf("importa na VM so aceita texto literal (veio %T)", node.Path)
 	}
-	resolvido := tx.Value
-	if !filepath.IsAbs(resolvido) && c.DirBase != "" {
-		resolvido = filepath.Join(c.DirBase, resolvido)
+	linha := node.Token.Line
+	abs, fonte, errRes := object.ResolveModulo(c.dirImporta(), tx.Value)
+	if errRes != nil {
+		return errors.New(object.ComLinha(errRes, linha).Message)
 	}
-	if c.importados == nil {
-		c.importados = map[string]bool{}
-	}
-	if c.importados[resolvido] {
-		return nil // ja importado — ciclo
-	}
-	c.importados[resolvido] = true
-
-	fonte, err := os.ReadFile(resolvido)
+	info, err := c.moduloPra(abs, fonte, tx.Value, linha)
 	if err != nil {
-		return fmt.Errorf("importa: nao consegui ler %q: %v", tx.Value, err)
+		return err
+	}
+	atual := c.moduloAtual
+	if atual == "" {
+		atual = c.arquivoPrincipal()
+	}
+	c.emit(code.OpImporta, info.constIdx, c.addConstant(&object.Texto{Value: atual}))
+
+	if node.Alias != nil {
+		c.emitVarSet(c.defineVar(node.Alias.Value))
+		return nil
+	}
+	// sem alias: copia cada nome do namespace pro escopo atual. No topo, nome
+	// cravado por quem importa nao pode vir do modulo; o que o modulo cravou
+	// passa a valer aqui tambem.
+	topo := c.scope.outer == nil
+	if topo {
+		for _, nome := range info.nomes {
+			if c.cravadas[nome] {
+				return fmt.Errorf("deu ruim na linha %d: o modulo %q ta com perrengue: `%s` foi cravada, nao da pra mudar", linha, tx.Value, nome)
+			}
+		}
+	}
+	for _, nome := range info.nomes {
+		c.emit(code.OpDup)
+		c.emit(code.OpConstant, c.addConstant(&object.Texto{Value: nome}))
+		c.emit(code.OpIndexOuNada)
+		c.emitVarSet(c.defineVar(nome))
+	}
+	c.emit(code.OpPop)
+	if topo {
+		for nome := range info.cravadas {
+			c.cravadas[nome] = true
+		}
+	}
+	return nil
+}
+
+// arquivoPrincipal devolve o caminho absoluto do .gs principal ("" se nao
+// foi informado).
+func (c *Compiler) arquivoPrincipal() string {
+	if c.Arquivo == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(c.Arquivo); err == nil {
+		return abs
+	}
+	return c.Arquivo
+}
+
+// dirImporta e o diretorio contra o qual o importa sendo compilado resolve
+// caminho relativo: o do arquivo onde ele esta escrito.
+func (c *Compiler) dirImporta() string {
+	if c.moduloAtual != "" {
+		return filepath.Dir(c.moduloAtual)
+	}
+	if c.DirBase != "" {
+		return c.DirBase
+	}
+	if p := c.arquivoPrincipal(); p != "" {
+		return filepath.Dir(p)
+	}
+	return ""
+}
+
+// moduloPra devolve o modulo ja compilado ou compila agora.
+func (c *Compiler) moduloPra(abs string, fonte []byte, escrito string, linha int) (*moduloInfo, error) {
+	if c.modulos == nil {
+		c.modulos = map[string]*moduloInfo{}
+	}
+	if info, ok := c.modulos[abs]; ok {
+		// ja compilado — ou no meio da compilacao (ciclo): os nomes vem da
+		// varredura do topo, e o runtime acusa o ciclo antes de usar.
+		return info, nil
+	}
+	novoInfo := func(nomes []string) *moduloInfo {
+		info := &moduloInfo{desc: &object.Modulo{Caminho: abs}, nomes: nomes}
+		info.constIdx = c.addConstant(info.desc)
+		c.modulos[abs] = info
+		return info
+	}
+	if p := c.arquivoPrincipal(); p != "" && abs == p {
+		// o principal esta no comeco de toda cadeia: importar ele e sempre
+		// circular, o runtime acusa. Os nomes so servem pra compilar o resto.
+		return novoInfo(nomesDeTopo(c.progPrincipal)), nil
 	}
 	p := parser.New(lexer.New(string(fonte)))
 	prog := p.ParseProgram()
 	if errs := p.Errors(); len(errs) != 0 {
-		return fmt.Errorf("importa: modulo %q com perrengue: %s", tx.Value, errs[0])
+		return nil, errors.New(object.ComLinha(object.ErroDeModulo(escrito, errs[0]), linha).Message)
 	}
-	// o modulo compila no escopo de quem importa: nao pode mexer no que foi
-	// cravado ate aqui, e o que ele cravar passa a valer pra frente.
-	if errs := ast.ChecaCravadas(prog, c.cravadas); len(errs) > 0 {
-		return fmt.Errorf("importa: modulo %q com perrengue: linha %d: %s", tx.Value, errs[0].Linha, errs[0].Msg)
+	if errs := ast.ChecaCravadas(prog, nil); len(errs) > 0 {
+		det := fmt.Sprintf("linha %d: %s", errs[0].Linha, errs[0].Msg)
+		return nil, errors.New(object.ComLinha(object.ErroDeModulo(escrito, det), linha).Message)
 	}
+	info := novoInfo(nomesDeTopo(prog))
+	if err := c.compilaCorpoModulo(info, prog); err != nil {
+		delete(c.modulos, abs)
+		return nil, err
+	}
+	return info, nil
+}
 
-	// registra nomes globais antes de compilar o modulo (pra saber quais
-	// variaveis novas vieram dele — usado em `importa ... como alias`)
-	globaisAntes := map[string]Symbol{}
-	for k, v := range c.scope.symbols {
-		if v.Scope == GlobalScope {
-			globaisAntes[k] = v
-		}
-	}
+// compilaCorpoModulo compila o topo do modulo como uma funcao sem argumentos
+// numa tabela de nomes PROPRIA (so builtins de fora). Os slots das globais
+// do modulo saem do mesmo contador das globais do principal.
+func (c *Compiler) compilaCorpoModulo(info *moduloInfo, prog *ast.Program) error {
+	abs := info.desc.Caminho
+	escopo, inst, linhas, linhaAtual := c.scope, c.instructions, c.linhas, c.linhaAtual
+	loops, arrumas, funcAtual, cravadas := c.loopStack, c.arrumas, c.funcAtual, c.cravadas
+	dirBase, moduloAtual := c.DirBase, c.moduloAtual
+	defer func() {
+		c.scope, c.instructions, c.linhas, c.linhaAtual = escopo, inst, linhas, linhaAtual
+		c.loopStack, c.arrumas, c.funcAtual, c.cravadas = loops, arrumas, funcAtual, cravadas
+		c.DirBase, c.moduloAtual = dirBase, moduloAtual
+	}()
 
-	dirAntes := c.DirBase
-	c.DirBase = filepath.Dir(resolvido)
+	tab := NewSymbolTable()
+	tab.globais = c.scopes[0].globais
+	for i, nome := range nomesBuiltins {
+		tab.DefineBuiltin(nome, i)
+	}
+	for nome := range object.Predefinidas {
+		tab.symbols[nome] = Symbol{Name: nome, Scope: PredefinidaScope}
+	}
+	c.scope = tab
+	c.instructions, c.linhas, c.linhaAtual = code.Instructions{}, nil, 0
+	c.loopStack, c.arrumas, c.funcAtual = nil, nil, ""
+	c.cravadas = map[string]bool{}
+	c.DirBase, c.moduloAtual = filepath.Dir(abs), abs
+
 	for _, s := range prog.Statements {
 		if err := c.compile(s); err != nil {
-			c.DirBase = dirAntes
-			return err
+			e := object.AnotaModulo(&object.Erro{Message: err.Error()}, object.NomeCurto(abs, c.arquivoPrincipal()))
+			return errors.New(e.Message)
 		}
 	}
-	c.DirBase = dirAntes
+	c.emit(code.OpReturnNada)
+	info.desc.Corpo = &object.CompiledFunction{Name: "<modulo>", Bytecode: c.instructions, Linhas: c.linhas}
 
-	// importa ... como alias: cria um dicionario com as definicoes do modulo
-	// e amarra no alias. As globals tambem existem no escopo global (nao da
-	// pra evitar na VM sem reescrever o sistema de modulos), mas o alias
-	// resolve o acesso via alias.nome.
-	if node.Alias != nil {
-		// coleta nomes novos (definidos pelo modulo)
-		novosNomes := []string{}
-		for k, v := range c.scope.symbols {
-			if v.Scope == GlobalScope {
-				if _, ja := globaisAntes[k]; !ja {
-					novosNomes = append(novosNomes, k)
-				}
-			}
+	nomes := make([]string, 0, len(tab.symbols))
+	for nome, sym := range tab.symbols {
+		if sym.Scope == GlobalScope && !strings.HasPrefix(nome, "__") {
+			nomes = append(nomes, nome)
 		}
-		// empilha OpHash com pares {nome: global}
-		nPares := 0
-		for _, nome := range novosNomes {
-			sym, _ := c.scope.Resolve(nome)
-			c.emit(code.OpConstant, c.addConstant(&object.Texto{Value: nome}))
-			c.emitVarGet(sym)
-			nPares++
-		}
-		c.emit(code.OpHash, nPares)
-		// amarra no alias
-		aliasSym := c.defineVar(node.Alias.Value)
-		c.emitVarSet(aliasSym)
 	}
+	sort.Strings(nomes)
+	slots := make([]int, len(nomes))
+	for i, nome := range nomes {
+		slots[i] = tab.symbols[nome].Index
+	}
+	info.desc.Nomes, info.desc.Slots = nomes, slots
+	info.nomes = nomes
+	info.cravadas = c.cravadas
 	return nil
+}
+
+// nomesDeTopo varre o topo do programa atras dos nomes que ele define — usado
+// so pra um modulo que ainda esta compilando (import circular), quando a
+// tabela de nomes dele ainda nao fechou.
+func nomesDeTopo(prog *ast.Program) []string {
+	if prog == nil {
+		return nil
+	}
+	visto := map[string]bool{}
+	var nomes []string
+	add := func(id *ast.Identifier) {
+		if id != nil && !visto[id.Value] {
+			visto[id.Value] = true
+			nomes = append(nomes, id.Value)
+		}
+	}
+	for _, s := range prog.Statements {
+		switch n := s.(type) {
+		case *ast.BotaStatement:
+			add(n.Name)
+		case *ast.CravaStatement:
+			add(n.Name)
+		case *ast.GambiarraStatement:
+			add(n.Name)
+		case *ast.ImportaStatement:
+			add(n.Alias)
+		}
+	}
+	sort.Strings(nomes)
+	return nomes
 }
 
 // compileFatia compila xs[inicio:fim]. Desugar pra chamada da builtin fatia
