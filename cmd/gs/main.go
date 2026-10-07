@@ -129,6 +129,8 @@ func main() {
 		cmdBench(os.Args[2:])
 	case "get":
 		cmdGet(os.Args[2:])
+	case "instala":
+		cmdInstala(os.Args[2:])
 	case "build":
 		cmdBuild(os.Args[2:])
 	case "--version", "-v", "version", "versao":
@@ -156,8 +158,10 @@ func uso() {
 	fmt.Println("  gs check <arquivo.gs>...               # parse + lint (erros e avisos)")
 	fmt.Println("  gs init [nome]                         # cria gambiarra.json + principal.gs")
 	fmt.Println("  gs bench [--tree] <arquivo.gs> [n]     # mede o tempo de execucao (n rodadas)")
-	fmt.Println("  gs get <url> [nome.gs]                 # baixa um modulo pra gs_modulos/")
+	fmt.Println("  gs get <url | github.com/u/r/x.gs@ref> # baixa um modulo pra gs_modulos/ (+ lock)")
+	fmt.Println("  gs instala [--atualiza]                # instala as dependencias, conferindo o gambiarra.lock")
 	fmt.Println("  gs build <arquivo.gs> [-o saida]       # gera binario standalone com o script")
+	fmt.Println("  gs build <arq.gs> --alvo linux/amd64   # standalone pra outra plataforma (ou --gs-base gs-do-alvo)")
 	fmt.Println("  gs repl                                # abre o modo interativo (multiline)")
 	fmt.Println("  gs testa [--tree] [<dir>]              # roda os testes (*_test.gs) e soma os asserts")
 	fmt.Println("  gs doc <arquivo.gs|dir>                # gera markdown com as gambiarras e cravas documentadas")

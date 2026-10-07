@@ -289,8 +289,10 @@ Além de `roda`, `repl` e `lsp`, o CLI tem:
 | `gs testa [<dir>]`       | roda os `*_test.gs` e soma os asserts |
 | `gs init [nome]`         | cria o esqueleto do projeto (`gambiarra.json` + `principal.gs`) |
 | `gs bench [--vm] <arq.gs> [n]` | mede o tempo de execução em `n` rodadas |
-| `gs get <url> [nome.gs]` | baixa um módulo `.gs` pra `gs_modulos/` |
+| `gs get <url \| github.com/u/repo/mod.gs@tag> [nome.gs]` | baixa um módulo `.gs` pra `gs_modulos/` e fixa no `gambiarra.lock` (URL + sha256) |
+| `gs instala [--atualiza]` | instala tudo do `gambiarra.json`; com lock, recusa conteúdo que não bate (`--atualiza` re-resolve) |
 | `gs build <arq.gs> [-o saida]` | gera um binário standalone com o script embutido |
+| `gs build <arq.gs> --alvo linux/amd64` | standalone pra outra plataforma (baixa o `gs` da release e confere o checksum; `--gs-base` pra usar um local) |
 
 Roda `gs` sem argumentos (ou `gs --help`) pra ver a ajuda completa.
 

@@ -43,18 +43,37 @@ importa `util.gs`).
   `gs roda` recebeu.
 - Absoluto → usado direto.
 
-## Modulos de terceiros: gs get
+## Modulos de terceiros: gs get e gs instala
 
-`gs get <url> [nome.gs]` baixa um `.gs` (e confere se ele parseia) pra
-`gs_modulos/` e registra a dependencia no `gambiarra.json` (se existir). Depois
-e so importar:
+`gs get` baixa um `.gs` (e confere se ele parseia) pra `gs_modulos/`, registra
+a dependencia no `gambiarra.json` e fixa a URL + sha256 no `gambiarra.lock`.
+Do GitHub da pra fixar uma tag ou commit com `@ref`:
 
 ```bash
-gs get https://exemplo.com/libs/datas.gs
+gs init
+gs get github.com/usuario/repo/libs/datas.gs@v1.2.0
 # usa com: importa "gs_modulos/datas.gs"
+gs get https://exemplo.com/libs/util.gs     # URL https comum tambem vale
 ```
 
-Ainda nao tem versao/lockfile. Veja [Linha de comando](/docs/cli#gs-get).
+```json
+{
+  "dependencias": {
+    "datas": "github.com/usuario/repo/libs/datas.gs@v1.2.0",
+    "util": "https://exemplo.com/libs/util.gs"
+  }
+}
+```
+
+Quem clonar o projeto roda `gs instala`: baixa tudo do `gambiarra.json` pra
+`gs_modulos/` e confere cada arquivo com o hash do `gambiarra.lock`. Se o
+conteudo mudou no servidor desde o lock, ele **recusa** e nao instala nada
+(protecao contra trocarem o modulo por baixo de voce); se a mudanca e
+legitima, `gs instala --atualiza` aceita e reescreve o lock. Commita o
+`gambiarra.lock`; o `gs_modulos/` pode ir pro `.gitignore`.
+
+So `https://` — `http://` so com `--inseguro`. Detalhes em
+[Linha de comando](/docs/cli#gs-get).
 
 ## Notas
 

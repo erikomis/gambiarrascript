@@ -16,8 +16,10 @@ gs formata [-w] <arquivo.gs | diretorio>...      formata (imprime ou sobrescreve
 gs testa [--tree] [-so nome] [<dir>]             roda os *_test.gs e soma os asserts
 gs doc [<arquivo.gs | diretorio>...]             gera markdown das gambiarras documentadas
 gs init [nome]                                   cria gambiarra.json + principal.gs
-gs get <url> [nome.gs]                           baixa um modulo pra gs_modulos/
+gs get <url | github.com/u/repo/mod.gs@tag>      baixa um modulo pra gs_modulos/ (+ lock)
+gs instala [--atualiza]                          instala as dependencias, conferindo o lock
 gs build <arquivo.gs> [-o saida]                 gera binario standalone com o script
+gs build <arquivo.gs> --alvo linux/amd64         standalone pra outra plataforma
 gs bench [--tree] <arquivo.gs> [n]               mede o tempo de execucao (n rodadas)
 gs disasm <arquivo.gs>                           mostra o bytecode da VM
 gs lsp                                           language server (usado pelo editor)
@@ -163,12 +165,60 @@ Cria `gambiarra.json` (nome, versao, principal, dependencias) e um
 ## `gs get`
 
 ```bash
-gs get https://exemplo.com/util.gs [nome.gs]
+gs get github.com/usuario/repo/caminho/datas.gs@v1.2.0   # GitHub numa tag/commit
+gs get https://exemplo.com/util.gs [nome.gs]             # URL https comum
+gs get --inseguro http://intranet/util.gs                # http so se voce pedir
 ```
 
-Baixa o modulo, confere se parseia, salva em `gs_modulos/` e registra em
-`dependencias` no `gambiarra.json`. Sem versao/lockfile ainda. Veja
-[Modulos](/docs/modulos).
+Baixa o modulo, confere se parseia, salva em `gs_modulos/` e, se tiver
+`gambiarra.json`, registra a fonte em `dependencias` e fixa a URL resolvida +
+sha256 no `gambiarra.lock`.
+
+- `github.com/usuario/repo/caminho.gs@ref` vira
+  `https://raw.githubusercontent.com/usuario/repo/<ref>/caminho.gs` — a ref
+  pode ser tag, commit ou branch. Sem `@ref` usa `HEAD` (o lock ainda fixa o
+  conteudo pelo hash). `https://github.com/...` tambem vale.
+- URL comum e baixada como esta; o `@ref` so existe pro GitHub.
+- So `https://`. `http://` (inclusive redirecionamento pra http) e recusado
+  a nao ser com `--inseguro`.
+
+Veja [Modulos](/docs/modulos#modulos-de-terceiros-gs-get-e-gs-instala).
+
+## `gs instala`
+
+```bash
+gs instala              # baixa tudo do gambiarra.json pra gs_modulos/
+gs instala --atualiza   # re-resolve as fontes e reescreve o gambiarra.lock
+```
+
+Le `dependencias` do `gambiarra.json` e instala cada uma em `gs_modulos/`.
+
+- **Sem lock** (ou dependencia nova, ou fonte mudada no manifesto): baixa e
+  grava a URL + sha256 no `gambiarra.lock`.
+- **Com lock**: cada arquivo tem que bater com o sha256 fixado. Se um so nao
+  bater, o `gs instala` **recusa** (sai com `1`, nao grava nada, nem o lock)
+  e mostra o hash esperado e o que veio — pode ser alguem trocando o arquivo
+  no servidor (ataque na cadeia de suprimentos) ou o autor reescrevendo a tag.
+  Se o arquivo em `gs_modulos/` ja bate com o lock, nem vai na rede.
+- `--atualiza`: voce conferiu a mudanca e confia nela — baixa de novo e
+  reescreve o lock.
+- `--inseguro`: libera `http://` (mesma regra do `gs get`).
+
+O `gambiarra.lock` e JSON com as chaves ordenadas (mesmas dependencias = mesmo
+arquivo, byte a byte) — commita ele junto com o `gambiarra.json`:
+
+```json
+{
+  "versao": 1,
+  "dependencias": {
+    "datas": {
+      "fonte": "github.com/usuario/repo/datas.gs@v1.2.0",
+      "url": "https://raw.githubusercontent.com/usuario/repo/v1.2.0/datas.gs",
+      "sha256": "5d85286fd6a1301f44c68fadd85e992d216e41938f91c7286ce420ffa2f132c5"
+    }
+  }
+}
+```
 
 ## `gs build`
 
@@ -178,9 +228,36 @@ gs build app.gs -o app
 ```
 
 Gera um binario standalone: o proprio `gs` com o teu script embutido (roda na
-VM). Quem receber nao precisa ter o `gs` instalado — so precisa ser o mesmo
-sistema operacional/arquitetura. No macOS ele tenta re-assinar o binario
-(ad-hoc); se nao conseguir, avisa o comando `codesign` pra rodar.
+VM). Quem receber nao precisa ter o `gs` instalado. No macOS ele tenta
+re-assinar o binario (ad-hoc); se nao conseguir, avisa o comando `codesign`
+pra rodar.
+
+### Pra outra plataforma: `--alvo`
+
+```bash
+gs build app.gs --alvo linux/amd64 -o app-linux
+gs build app.gs --alvo windows/amd64            # sai app.exe
+gs build app.gs --alvo linux/arm64 --gs-base ./gs-linux-arm64
+```
+
+Alvos: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`,
+`windows/amd64` (os que a release publica). O `gs` baixa o binario da
+**mesma versao** dele (`gs --version`) da release no GitHub, confere com o
+`checksums.txt` (nao bateu = recusa), guarda no cache do usuario
+(`~/Library/Caches/gambiarrascript/<versao>/` no mac,
+`~/.cache/gambiarrascript/<versao>/` no linux) e embute o script nele. Da
+segunda vez em diante sai do cache, sem rede.
+
+- **Build de desenvolvimento** (versao que nao tem release, tipo `dev`): da
+  erro sugerindo um `gs` de release ou `--gs-base`.
+- `--gs-base <caminho>`: usa esse binario `gs` do alvo em vez de baixar
+  (offline, build de dev, plataforma sem release). Ele confere se o arquivo e
+  mesmo um executavel daquele os/arch.
+- `GS_RELEASES_URL` troca de onde baixar (espelho); o caminho continua
+  `<base>/v<versao>/gs_<versao>_<os>_<arch>.tar.gz`.
+
+O binario **nao leva os modulos importados**: `importa` le os arquivos do
+diretorio atual na hora de rodar, entao manda o `gs_modulos/` junto.
 
 ## `gs bench`
 

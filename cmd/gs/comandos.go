@@ -5,14 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"gambiarrascript/compiler"
@@ -205,166 +201,12 @@ func cmdBench(args []string) {
 	fmt.Printf("  max:     %s\n", tempos[len(tempos)-1])
 }
 
-// ---------- gs get ----------
-
-// cmdGet baixa um modulo .gs de uma URL pra gs_modulos/ e registra em
-// gambiarra.json (se existir). Package manager raiz, sem firula: e literalmente
-// um wget com registro.
-func cmdGet(args []string) {
-	if len(args) == 0 {
-		fmt.Println("uso: gs get <url> [nome.gs]")
-		os.Exit(1)
-	}
-	url := args[0]
-	nome := filepath.Base(url)
-	if len(args) > 1 {
-		nome = args[1]
-	}
-	if !strings.HasSuffix(nome, ".gs") {
-		nome += ".gs"
-	}
-
-	resp, err := http.Get(url)
-	if err != nil {
-		fmt.Println("nao consegui baixar: " + err.Error())
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("o servidor respondeu %d — sem modulo pra voce\n", resp.StatusCode)
-		os.Exit(1)
-	}
-	corpo, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println("erro lendo a resposta: " + err.Error())
-		os.Exit(1)
-	}
-	// valida que o que veio parseia como GambiarraScript antes de salvar
-	p := parser.New(lexer.New(string(corpo)))
-	p.ParseProgram()
-	if errs := p.Errors(); len(errs) != 0 {
-		fmt.Println("o arquivo baixado nem parseia como .gs — abortando:")
-		fmt.Println("  - " + errs[0])
-		os.Exit(1)
-	}
-
-	if err := os.MkdirAll("gs_modulos", 0755); err != nil {
-		fmt.Println("nao consegui criar gs_modulos/: " + err.Error())
-		os.Exit(1)
-	}
-	destino := filepath.Join("gs_modulos", nome)
-	if err := os.WriteFile(destino, corpo, 0644); err != nil {
-		fmt.Println("nao consegui salvar: " + err.Error())
-		os.Exit(1)
-	}
-	fmt.Printf("  %s  (baixado, %d bytes)\n", destino, len(corpo))
-
-	// registra em gambiarra.json se ele existir
-	if blob, err := os.ReadFile("gambiarra.json"); err == nil {
-		var manifesto map[string]interface{}
-		if json.Unmarshal(blob, &manifesto) == nil {
-			deps, _ := manifesto["dependencias"].(map[string]interface{})
-			if deps == nil {
-				deps = map[string]interface{}{}
-			}
-			deps[strings.TrimSuffix(nome, ".gs")] = url
-			manifesto["dependencias"] = deps
-			if novo, err := json.MarshalIndent(manifesto, "", "  "); err == nil {
-				os.WriteFile("gambiarra.json", append(novo, '\n'), 0644)
-				fmt.Println("  gambiarra.json  (dependencia registrada)")
-			}
-		}
-	}
-	fmt.Printf("usa com: importa \"%s\"\n", destino)
-}
-
 // ---------- gs build ----------
 
 // Formato do payload embedado (lido de tras pra frente):
 //
 //	[binario gs][fonte .gs][8 bytes LE len(fonte)][magic 8 bytes]
 const buildMagic = "GSEMBED1"
-
-// cmdBuild gera um binario standalone: copia o proprio executavel gs e anexa
-// a fonte no final. Quando esse binario rodar, o main detecta o payload e
-// executa direto (ver rodarEmbedado).
-func cmdBuild(args []string) {
-	if len(args) == 0 {
-		fmt.Println("uso: gs build <arquivo.gs> [-o saida]")
-		os.Exit(1)
-	}
-	arquivo := ""
-	saida := ""
-	for i := 0; i < len(args); i++ {
-		if args[i] == "-o" && i+1 < len(args) {
-			saida = args[i+1]
-			i++
-			continue
-		}
-		if arquivo == "" {
-			arquivo = args[i]
-		}
-	}
-	if arquivo == "" {
-		fmt.Println("uso: gs build <arquivo.gs> [-o saida]")
-		os.Exit(1)
-	}
-	if saida == "" {
-		saida = strings.TrimSuffix(filepath.Base(arquivo), ".gs")
-		if runtime.GOOS == "windows" {
-			saida += ".exe"
-		}
-	}
-
-	fonte, err := os.ReadFile(arquivo)
-	if err != nil {
-		fmt.Printf("nao consegui abrir %q: %v\n", arquivo, err)
-		os.Exit(1)
-	}
-	// valida antes de embedar — binario com script quebrado e vacilo
-	p := parser.New(lexer.New(string(fonte)))
-	p.ParseProgram()
-	if errs := p.Errors(); len(errs) != 0 {
-		fmt.Println("teu script tem perrengue de parse, arruma antes de buildar:")
-		for _, e := range errs {
-			fmt.Println("  - " + e)
-		}
-		os.Exit(1)
-	}
-
-	eu, err := os.Executable()
-	if err != nil {
-		fmt.Println("nao achei o proprio gs: " + err.Error())
-		os.Exit(1)
-	}
-	binario, err := os.ReadFile(eu)
-	if err != nil {
-		fmt.Println("nao consegui ler o proprio gs: " + err.Error())
-		os.Exit(1)
-	}
-
-	out := make([]byte, 0, len(binario)+len(fonte)+16)
-	out = append(out, binario...)
-	out = append(out, fonte...)
-	var lenBuf [8]byte
-	binary.LittleEndian.PutUint64(lenBuf[:], uint64(len(fonte)))
-	out = append(out, lenBuf[:]...)
-	out = append(out, []byte(buildMagic)...)
-
-	if err := os.WriteFile(saida, out, 0755); err != nil {
-		fmt.Println("nao consegui escrever a saida: " + err.Error())
-		os.Exit(1)
-	}
-	// macOS (Apple Silicon) mata binario com assinatura invalida; re-assina
-	// ad-hoc. Sem codesign no PATH, so avisa.
-	if runtime.GOOS == "darwin" {
-		if err := exec.Command("codesign", "--force", "-s", "-", saida).Run(); err != nil {
-			fmt.Println("aviso: nao consegui re-assinar (codesign): " + err.Error())
-			fmt.Println("       se o binario for morto pelo macOS, roda: codesign -s - " + saida)
-		}
-	}
-	fmt.Printf("  %s  (binario standalone, %.1f MB)\n", saida, float64(len(out))/1024/1024)
-}
 
 // rodarEmbedado checa se ESTE executavel carrega um script embedado (gs
 // build). Se sim, roda o script com os args da linha de comando e devolve

@@ -19,7 +19,7 @@ Tiers 1–5 estão entregues. O backlog vivo:
 | Tier 2/3 | DAP (debug), multi-catch, FFI — itens grandes, levas próprias |
 | Tier 5b | libs: TLS no TCP cru (HTTP/API, WebSocket, TCP/UDP, senha/AES/JWT, log, flags e .env ✅) |
 | Bugs abertos | overflow, `importa`, erro entre engines |
-| Tier 6 | `gs instala` + lock, `build --alvo`, Homebrew, cobertura, sombreamento |
+| Tier 6 | Homebrew, cobertura, sombreamento (`gs instala` + lock e `build --alvo` ✅) |
 | Tier 7 | MaxStack por função |
 | Tier 8 | POO no estilo Go (`treta`/`combinado`) — tem decisões em aberto |
 | Tier 9 | sugestões novas: `//`, publicar a extensão no marketplace, playground com entrada |
@@ -307,13 +307,19 @@ Ainda abertos (pedem decisão de semântica):
 - [x] **`gs doc`** — novo subcomando: extrai a assinatura de cada `gambiarra`
       e os comentários `#` acima dela, gerando markdown de referência no stdout
       (aceita arquivo ou diretório).
-- [ ] **`gs instala`** — baixa todas as dependências do `gambiarra.json` de
-      uma vez; `gambiarra.lock` com hash pra build reprodutível; `gs get`
-      com versão/tag na URL.
-- [ ] **`gs build --alvo`** — cross-compile do standalone (linux/windows a
-      partir do mac). Destravado: a release já publica o `gs` de cada
-      plataforma — o `build --alvo` baixa o da mesma versão (conferindo o
-      `checksums.txt`) e embute o script nele.
+- [x] **`gs instala`** — baixa todas as dependências do `gambiarra.json` de
+      uma vez; `gambiarra.lock` (JSON ordenado: fonte + URL resolvida +
+      sha256) pra build reprodutível — com lock, conteúdo que não bate é
+      **recusado** (nada é gravado) e `--atualiza` re-resolve e reescreve.
+      `gs get github.com/usuario/repo/caminho.gs@tag` fixa tag/commit via
+      raw.githubusercontent; só https (http só com `--inseguro`, inclusive
+      em redirecionamento).
+- [x] **`gs build --alvo`** — cross-compile do standalone (linux/windows a
+      partir do mac): baixa o `gs` da release da mesma versão pro os/arch,
+      confere com o `checksums.txt`, guarda no cache do usuário
+      (`gambiarrascript/<versão>/`) e embute o script; alvo windows sai
+      `.exe`. Build de dev (sem release) → `--gs-base <gs-do-alvo>`. Ainda
+      não embute os módulos importados (eles são lidos do diretório atual).
 - [x] **REPL parte 2** — modo rico via `golang.org/x/term` quando a entrada é
       um TTY: histórico com setas ↑/↓, edição de linha, autocomplete no TAB
       (builtins + keywords + variáveis do escopo) e comandos `:ajuda`/`:limpa`.
