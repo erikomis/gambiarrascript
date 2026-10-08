@@ -48,6 +48,7 @@ func (s *servidorEstado) builtinServePasta(args []object.Object) object.Object {
 
 func builtinBusca(args []object.Object) object.Object        { return erroNavegador("busca") }
 func builtinRespondeJson(args []object.Object) object.Object { return erroNavegador("responde_json") }
+func builtinRespondeHtml(args []object.Object) object.Object { return erroNavegador("responde_html") }
 func builtinGeraCertificado(args []object.Object) object.Object {
 	return erroNavegador("gera_certificado")
 }

@@ -110,6 +110,19 @@ rota("GET", "/usuarios/:id", gambiarra(pedido)
 acabou_finalmente)
 ```
 
+### responde_html(html, [status])
+
+Same thing for pages: returns the response dictionary with `html` as the
+`corpo` and the header `Content-Type: text/html; charset=utf-8` (status
+defaults to `200`). Pair it with [templates](/docs/en/modelos), which escape
+the HTML for you:
+
+```gambiarrascript
+rota("GET", "/ola/:nome", gambiarra(pedido)
+    funciona responde_html(renderiza("<h1>Salve, {{ nome }}!</h1>", pedido.params))
+acabou_finalmente)
+```
+
 ### Error in the handler
 
 If the handler (or a middleware) blows up with an error, the client gets a

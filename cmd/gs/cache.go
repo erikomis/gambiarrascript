@@ -56,7 +56,8 @@ func init() {
 // 15 = builtins migra e valida no fim da lista.
 // 16 = a_cada, depois_de, agenda, cancela, formata_data e le_data no fim da
 // lista de builtins.
-const formatoGSC = 16
+// 17 = templates: renderiza, renderiza_arquivo e responde_html no fim da lista.
+const formatoGSC = 17
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

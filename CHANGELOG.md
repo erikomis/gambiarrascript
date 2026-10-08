@@ -35,7 +35,14 @@ no [ROADMAP](ROADMAP.md).
   e arm64, distroless, usuário `nonroot`) publicada a cada release, com
   `:latest` só nas estáveis. Doc de deploy de API com
   `FROM ghcr.io/erikomis/gambiarrascript`.
-- Cache `.gsc` antigo é descartado sozinho (formato 16: builtins novas).
+- **Templates HTML**: `renderiza(modelo, dados)`, `renderiza_arquivo(caminho,
+  dados)` e `responde_html(html, [status])` pra servir páginas. Valor
+  escapado por padrão (`{{{ x }}}` ou `| cru` pra HTML cru), filtros
+  (`maiusculo`, `formata "%.2f"`, `padrao "x"`, `json`...), `pra_cada`,
+  `se_colar` com comparação, comentário, parcial (`inclui`) e layout (`usa` +
+  `bloco`). Erro diz o modelo e a linha. Exemplo em `examples/site.gs`, doc
+  em [Modelos](https://erikomis.github.io/gambiarrascript/docs/modelos/).
+- Cache `.gsc` antigo é descartado sozinho (formato 17: builtins novas).
 
 ## v0.7.1 — 2026-10-08
 

@@ -105,6 +105,19 @@ rota("GET", "/usuarios/:id", gambiarra(pedido)
 acabou_finalmente)
 ```
 
+### responde_html(html, [status])
+
+O mesmo pra pagina: devolve o dicionario de resposta com o `html` no
+`corpo` e o cabecalho `Content-Type: text/html; charset=utf-8` (status
+default `200`). Junta com os [modelos](/docs/modelos), que escapam o HTML
+sozinhos:
+
+```gambiarrascript
+rota("GET", "/ola/:nome", gambiarra(pedido)
+    funciona responde_html(renderiza("<h1>Salve, {{ nome }}!</h1>", pedido.params))
+acabou_finalmente)
+```
+
 ### Erro no handler
 
 Se o handler (ou um middleware) estoura um erro, o cliente recebe **`500`**

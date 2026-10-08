@@ -32,7 +32,7 @@ func TestRedeNoNavegadorAvisa(t *testing.T) {
 // servidor, processo e TLS ficam fora do wasm e avisam na hora.
 func TestServidorProcessoETLSNoNavegadorAvisam(t *testing.T) {
 	i := New(&bytes.Buffer{})
-	for _, nome := range []string{"busca", "rota", "escuta", "rota_ws", "antes", "depois", "cors", "serve_pasta", "responde_json", "gera_certificado", "roda_comando"} {
+	for _, nome := range []string{"busca", "rota", "escuta", "rota_ws", "antes", "depois", "cors", "serve_pasta", "responde_json", "responde_html", "gera_certificado", "roda_comando"} {
 		b, ok := i.BuiltinsVisiveis()[nome]
 		if !ok {
 			t.Fatalf("%s nao registrado no wasm (a VM chama por indice)", nome)

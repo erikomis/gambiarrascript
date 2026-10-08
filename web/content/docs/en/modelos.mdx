@@ -1,0 +1,255 @@
+---
+title: Templates (modelos)
+description: renderiza(), renderiza_arquivo() and responde_html() — HTML pages with automatic escaping, loops, conditionals, partials and layouts.
+---
+
+```gambiarrascript
+bota html = renderiza("<h1>Salve, {{ nome }}!</h1>", {"nome": "Jurandir"})
+mostra html   # <h1>Salve, Jurandir!</h1>
+
+rota("GET", "/", gambiarra(pedido)
+    funciona responde_html(renderiza_arquivo("modelos/inicio.html", {
+        "titulo": "Cardapio",
+        "produtos": [{"nome": "Cafe", "preco": 6.5}, {"nome": "Pao", "preco": 4}]
+    }))
+acabou_finalmente)
+escuta(8080)
+```
+
+A **template** (`modelo`) is a piece of text (usually HTML) with holes between
+double curly braces that GambiarraScript fills with your data. The words are
+the same as the language's: `pra_cada`, `se_colar`, `se_nao_colar`, `acabou`.
+Full example with layout + partial + loop served through `rota`:
+`examples/site.gs` (templates live in `examples/site/`).
+
+## The builtins
+
+| Builtin | Returns |
+| --- | --- |
+| `renderiza(modelo, [dados], [opcoes])` | `texto` — the template (a string) filled in |
+| `renderiza_arquivo(caminho, [dados], [opcoes])` | `texto` — same, reading the template from a file |
+| `responde_html(html, [status])` | response dictionary with `Content-Type: text/html; charset=utf-8` (status defaults to `200`) |
+
+- `dados` is a dictionary (or a [treta](/docs/en/poo) instance); without data
+  only the fixed text comes out.
+- `renderiza_arquivo` compiles the file **once** and caches it: later calls
+  reuse it until the file changes (modification time or size). Edited the
+  `.html` with the server running? The next request already sees it.
+- `responde_html` is the sibling of [`responde_json`](/docs/en/servidor) and,
+  like it, only exists in the installed `gs` (the playground reports an
+  error). Both `renderiza` builtins work in the playground too.
+
+Options (third argument, a dictionary):
+
+| option | default | what it does |
+| --- | --- | --- |
+| `"pasta"` | the file's folder (or the current folder, for `renderiza`) | root for `inclui`/`usa`: no path may leave it |
+| `"estrito"` | `deu_ruim` | a missing variable becomes an **error** instead of empty text |
+| `"escapa"` | `deu_bom` | `deu_ruim` turns HTML escaping off (for plain text: e-mail, `.txt`) |
+
+## Values
+
+```html
+<p>{{ usuario.nome }} is {{ usuario.idade }} years old</p>
+<p>First item: {{ itens[0] }} · last: {{ itens[-1] }}</p>
+<p>{{ precos["cafe com leite"] }} · {{ tabela[chave] }}</p>
+```
+
+- `a.b` reads key `"b"` of a dictionary (or a treta field); `a[0]` reads a
+  list position (negative counts from the end) or a dictionary key;
+  `a[other]` uses another variable's value as the key.
+- Text goes out as is; `nada` renders empty; numbers, booleans and lists
+  render like `mostra` prints them (`3.5`, `deu_bom`, `[1, 2]`).
+- **A missing variable renders empty** (so does `usuario.nao.tem`, no error
+  halfway). Prefer an error? Pass `{"estrito": deu_bom}`:
+  ``modelo pagina.html linha 7: `usuario.idade` nao existe (modo estrito)``.
+  Even in strict mode, `se_colar` and the `padrao` filter accept missing
+  variables.
+- Literal strings work too: `{{ "{{" }}` writes double braces into the HTML.
+
+## Escaping (XSS safety)
+
+By default **every value is HTML-escaped**: `&`, `<`, `>`, `"` and `'` become
+`&amp;`, `&lt;`, `&gt;`, `&#34;` and `&#39;`. User input can go straight into
+the template — including inside a quoted attribute:
+
+```gambiarrascript
+mostra renderiza(`<a title="{{ t }}">{{ t }}</a>`, {"t": "<script>alert('x')</script>"})
+# <a title="&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;">&lt;script&gt;...</a>
+```
+
+To output **raw** HTML (that you generated and trust), use triple braces or
+the `cru` filter:
+
+```html
+{{{ conteudo_ja_em_html }}}
+{{ conteudo_ja_em_html | cru }}
+```
+
+<Callout type="warn" title="Raw means raw">
+  `{{{ x }}}` and `| cru` escape nothing. Never use them with text from the
+  outside (query, body, user-filled database rows) — that is how XSS is born.
+</Callout>
+
+Escaping protects text and **quoted** attributes. It does not make a bare
+value safe inside `<script>`, `style` or an `href` (the user can send
+`javascript:...`); for data inside `<script>`, use the `json` filter with
+`cru` (see below).
+
+## Filters
+
+A value goes through filters with `|`, left to right:
+
+```html
+{{ nome | maiusculo }}              ZE
+{{ nome | minusculo }}              ze
+{{ itens | tamanho }}               3   (text counts characters; nada = 0)
+{{ preco | formata "%.2f" }}        6.50 (the language's formata verbs)
+{{ apelido | padrao "anonimo" }}    anonimo, when missing, nada or ""
+{{ tags | junta ", " }}             quente, classico
+{{ dados | json }}                  compact JSON (escaped like text)
+{{ html_confiavel | cru }}          no escaping
+```
+
+- The argument (`"%.2f"`, `"anonimo"`) can be a string, a number or another
+  variable.
+- `json` replaces `<`, `>` and `&` with `<`, `>` and `&` (like
+  Go does), so `{{ dados | json | cru }}` inside `<script>` cannot close the tag:
+
+```html
+<script>const produto = {{ produto | json | cru }};</script>
+```
+
+## Loop: pra_cada
+
+```html
+<ul>
+  {{ pra_cada produto em produtos }}
+  <li>{{ produto.nome }} — R$ {{ produto.preco | formata "%.2f" }}</li>
+  {{ se_nao_colar }}
+  <li>nothing on the menu today</li>
+  {{ acabou }}
+</ul>
+```
+
+- `pra_cada item em lista`; with two names, `pra_cada i, item em lista`
+  gives the position (starting at 0) and the item — same as the language.
+- On a dictionary, one name iterates the **keys**; two names give key and
+  value: `pra_cada nome, preco em precos`. Sets work too.
+- `se_nao_colar` inside `pra_cada` (optional) runs when the collection is
+  empty or missing.
+- `acabou` closes the block (`acabou_finalmente` works too).
+
+## Conditional: se_colar
+
+```html
+{{ se_colar usuario.admin }}
+<a href="/painel">dashboard</a>
+{{ se_nao_colar se_colar usuario }}
+<a href="/sair">log out</a>
+{{ se_nao_colar }}
+<a href="/entrar">log in</a>
+{{ acabou }}
+```
+
+- Truthiness is the language's: only `nada` (or a missing variable) and
+  `deu_ruim` are false. **`0`, `""` and `[]` are true** — for an empty list,
+  compare the size or use the `se_nao_colar` of `pra_cada`:
+
+```html
+{{ se_colar carrinho | tamanho > 0 }} ... {{ acabou }}
+```
+
+- Comparisons: `==`, `!=`, `>`, `<`, `>=`, `<=` against a string, number,
+  `deu_bom`, `deu_ruim`, `nada` or another variable; combine with `e`, `ou`,
+  `nao` and parentheses: `{{ se_colar nota >= 7 e nao reprovado }}`.
+  `>`/`<` only compare number with number and text with text.
+
+## Comments
+
+```html
+{{# this never reaches the HTML }}
+{{# it can span
+    several lines }}
+```
+
+## A line with only a tag disappears
+
+A control tag (`pra_cada`, `se_colar`, `se_nao_colar`, `acabou`, `bloco`,
+`usa`, `inclui` and comments) **alone on its line** — only whitespace around
+it — takes the whole line with it. That is why the loop above leaves no blank
+lines in the HTML. Value tags (`{{ x }}`) never disappear.
+
+## Partials: inclui
+
+```html
+<ul>
+  {{ pra_cada produto em produtos }}
+  {{ inclui "parciais/item.html" }}
+  {{ acabou }}
+</ul>
+```
+
+- The path is **relative to the folder of the including template**, and the
+  partial sees the same variables (including the `pra_cada` one: `produto`
+  above).
+- It cannot leave the templates folder: `../`, absolute paths and symlinks
+  pointing outside are errors. The root is the folder of the file given to
+  `renderiza_arquivo` (or the `"pasta"` option, if your partials live one
+  level up).
+- With `renderiza` (template in a string) the path is relative to the current
+  folder (or `"pasta"`).
+- Circular includes (`a.html` includes `b.html` which includes `a.html`) stop
+  with an error after 32 levels.
+
+## Layouts: usa and bloco
+
+A layout is a regular template with **blocks** marking what changes:
+
+```html
+<!-- base.html -->
+<html>
+<head><title>{{ bloco "titulo" }}My site{{ acabou }}</title></head>
+<body>
+  {{ inclui "parciais/cabecalho.html" }}
+  <main>
+    {{ bloco "conteudo" }}
+    <p>default content</p>
+    {{ acabou }}
+  </main>
+</body>
+</html>
+```
+
+The page says which layout it `usa` and fills the blocks it wants — the rest
+keeps the layout's default:
+
+```html
+{{ usa "base.html" }}
+{{ bloco "titulo" }}{{ produto.nome }} · My site{{ acabou }}
+{{ bloco "conteudo" }}
+    <h1>{{ produto.nome }}</h1>
+{{ acabou }}
+```
+
+- In a page with `usa`, only blocks count: anything outside them is ignored.
+  `usa` goes outside any block, once.
+- A layout can `usa` another layout (the lowest page's block wins).
+- Blocks see the same data as the page.
+
+Rather not use layouts? Partials do the job too: `inclui "topo.html"` at the
+top and `inclui "rodape.html"` at the bottom of each page.
+
+## Errors
+
+Syntax and runtime errors in a template carry its name and line:
+
+```
+deu ruim: modelo pagina.html linha 7: `pra_cada` sem `acabou`
+deu ruim: modelo (texto) linha 1: filtro `sei_la` nao existe (tem: maiusculo, minusculo, tamanho, json, formata, padrao, junta, cru)
+deu ruim: modelo item.html linha 2: `>` so compara numero com numero ou texto com texto, veio lista
+```
+
+The error kind is `"builtin"`; a missing file is `"io"` (see
+[Arruma / quebrou](/docs/en/erros)). Inside a `rota` handler, a template error
+becomes a `500` for the client and the details go to stderr.

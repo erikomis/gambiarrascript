@@ -17,11 +17,14 @@ var builtins = map[string]*object.Builtin{
 	"de_json":  {Nome: "de_json", Fn: builtinDeJson},
 	"pra_json": {Nome: "pra_json", Fn: builtinPraJson},
 	// servidor/rede (o resto do servidor e por instancia, no New)
-	"responde_json":    {Nome: "responde_json", Fn: builtinRespondeJson},
-	"conecta_ws":       {Nome: "conecta_ws", Fn: builtinConectaWs},
-	"gera_certificado": {Nome: "gera_certificado", Fn: builtinGeraCertificado},
-	"tipo":             {Nome: "tipo", Fn: builtinTipo},
-	"trava":            {Nome: "trava", Fn: builtinTrava},
+	"responde_json":     {Nome: "responde_json", Fn: builtinRespondeJson},
+	"responde_html":     {Nome: "responde_html", Fn: builtinRespondeHtml},
+	"renderiza":         {Nome: "renderiza", Fn: builtinRenderiza},
+	"renderiza_arquivo": {Nome: "renderiza_arquivo", Fn: builtinRenderizaArquivo},
+	"conecta_ws":        {Nome: "conecta_ws", Fn: builtinConectaWs},
+	"gera_certificado":  {Nome: "gera_certificado", Fn: builtinGeraCertificado},
+	"tipo":              {Nome: "tipo", Fn: builtinTipo},
+	"trava":             {Nome: "trava", Fn: builtinTrava},
 
 	// texto
 	"formata":     {Nome: "formata", Fn: builtinFormata},

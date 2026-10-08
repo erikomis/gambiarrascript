@@ -592,6 +592,8 @@ type respostaHTTP struct {
 
 const tipoJSON = "application/json; charset=utf-8"
 
+const tipoHTML = "text/html; charset=utf-8"
+
 func respostaErroInterno() *respostaHTTP {
 	h := http.Header{}
 	h.Set("Content-Type", "text/plain; charset=utf-8")
@@ -799,6 +801,33 @@ func builtinRespondeJson(args []object.Object) object.Object {
 	dicBota(d, "corpo", &object.Texto{Value: buf.String()})
 	cab := object.NovoDicionario()
 	dicBota(cab, "Content-Type", &object.Texto{Value: tipoJSON})
+	dicBota(d, "cabecalhos", cab)
+	return d
+}
+
+// builtinRespondeHtml: responde_html(html, [status]) → o dicionario de
+// resposta com Content-Type de HTML (o par do renderiza/renderiza_arquivo).
+func builtinRespondeHtml(args []object.Object) object.Object {
+	if len(args) < 1 || len(args) > 2 {
+		return erroBuiltin("responde_html() quer 1 ou 2 argumentos (html, [status]), veio %d", len(args))
+	}
+	h, ok := args[0].(*object.Texto)
+	if !ok {
+		return erroBuiltin("responde_html(): o html tem que ser texto, veio %s (pra dado use responde_json)", object.NomeTipo(args[0]))
+	}
+	status := int64(200)
+	if len(args) == 2 {
+		n, ok := args[1].(*object.Numero)
+		if !ok || float64(int(n.Value)) != n.Value || n.Value < 100 || n.Value > 599 {
+			return erroBuiltin("responde_html(): o status tem que ser numero inteiro de 100 a 599, veio %s", args[1].Inspect())
+		}
+		status = int64(n.Value)
+	}
+	d := object.NovoDicionario()
+	dicBota(d, "status", object.NumInt(status))
+	dicBota(d, "corpo", h)
+	cab := object.NovoDicionario()
+	dicBota(cab, "Content-Type", &object.Texto{Value: tipoHTML})
 	dicBota(d, "cabecalhos", cab)
 	return d
 }

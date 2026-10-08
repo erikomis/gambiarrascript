@@ -1,0 +1,14 @@
+{{ usa "base.html" }}
+{{# pagina inicial: o layout e o base.html; aqui so os blocos }}
+{{ bloco "titulo" }}{{ titulo }} · Gambiarra Lanches{{ acabou }}
+{{ bloco "conteudo" }}
+    <h1>{{ titulo }}</h1>
+    {{ se_colar visitante }}
+    <p>Salve, {{ visitante }}!</p>
+    {{ acabou }}
+    <ul>
+      {{ pra_cada produto em produtos }}
+      {{ inclui "parciais/item.html" }}
+      {{ acabou }}
+    </ul>
+{{ acabou }}

@@ -117,6 +117,39 @@ obrigatorio"`) pra responder `400`; o banco fica em dia na subida com
 `migra(conexao)` (ou `gs migra` na linha de comando). Exemplos: `examples/api_rest.gs` e `examples/chat_ws.gs`;
 doc completa em [Servidor HTTP](https://erikomis.github.io/gambiarrascript/docs/servidor/).
 
+## Páginas HTML (modelos)
+
+```
+rota("GET", "/", gambiarra(pedido)
+    funciona responde_html(renderiza_arquivo("modelos/inicio.html", {
+        "titulo": "Cardapio",
+        "produtos": [{"nome": "Cafe <forte>", "preco": 6.5}]
+    }))
+acabou_finalmente)
+```
+
+```html
+{{ usa "base.html" }}
+{{ bloco "conteudo" }}
+<h1>{{ titulo }}</h1>
+<ul>
+  {{ pra_cada p em produtos }}
+  <li>{{ p.nome }} — R$ {{ p.preco | formata "%.2f" }}</li>
+  {{ acabou }}
+</ul>
+{{ acabou }}
+```
+
+`renderiza(texto, dados)` e `renderiza_arquivo(caminho, dados)` preenchem o
+modelo; todo valor sai **escapado** pra HTML (`Cafe &lt;forte&gt;`), e
+`{{{ x }}}` ou `| cru` mandam cru. Tem filtros (`maiusculo`, `tamanho`,
+`json`, `formata "%.2f"`, `padrao "x"`, `junta ", "`), `se_colar` com
+comparação, `{{# comentário }}`, parcial (`inclui "parcial.html"`, sem sair
+da pasta dos modelos) e layout (`usa` + `bloco`). Variável que falta sai
+vazia (`{"estrito": deu_bom}` vira erro). `responde_html` monta a resposta
+com `Content-Type: text/html`. Exemplo: `examples/site.gs`; doc em
+[Modelos](https://erikomis.github.io/gambiarrascript/docs/modelos/).
+
 ## Rede crua (TCP/UDP)
 
 ```

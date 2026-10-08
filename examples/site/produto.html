@@ -1,0 +1,13 @@
+{{ usa "base.html" }}
+{{ bloco "titulo" }}{{ produto.nome }} · Gambiarra Lanches{{ acabou }}
+{{ bloco "conteudo" }}
+    <h1>{{ produto.nome }}</h1>
+    <p>R$ {{ produto.preco | formata "%.2f" }}</p>
+    {{ se_colar produto.preco > 5 }}
+    <p>Esse e pros fortes.</p>
+    {{ se_nao_colar }}
+    <p>Baratinho!</p>
+    {{ acabou }}
+    <a href="/">voltar</a>
+    <script>const produto = {{ produto | json | cru }};</script>
+{{ acabou }}

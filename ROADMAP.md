@@ -760,6 +760,19 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       `aaaa aa mm mmm mmmm dd ddd dddd hh mi ss` (decisão: `mm` é sempre mês,
       minuto é `mi`, tudo minúsculo), literal entre aspas simples, nomes em
       português (leitura aceita sem acento) e fuso opcional.
+- [x] **Templates HTML** — `renderiza(modelo, dados, [opcoes])`,
+      `renderiza_arquivo(caminho, dados, [opcoes])` (cache por caminho +
+      mtime/tamanho) e `responde_html(html, [status])`. Motor no pacote
+      `modelo/` (só conhece `object.Object`; `pra_json`/`formata` entram por
+      função), então os dois engines chamam o mesmo código. Sintaxe com as
+      palavras da linguagem: `{{ a.b[0] }}` escapado (`& < > " '`),
+      `{{{ x }}}`/`| cru`, filtros (`maiusculo`, `minusculo`, `tamanho`,
+      `json`, `formata`, `padrao`, `junta`), `pra_cada i, x em l` com
+      `se_nao_colar` pra vazio, `se_colar` com `== != > < >= <=`/`e`/`ou`/`nao`,
+      `{{# }}`, `inclui` (relativo, sem sair da raiz nem por symlink) e
+      layout com `usa` + `bloco`. Variável que falta sai vazia (`estrito`
+      vira erro); etiqueta sozinha na linha some com a linha. Erros com
+      modelo + linha. Exemplo `examples/site.gs`, doc em `docs/modelos`.
 
 **API de verdade (banco + entrada)**
 

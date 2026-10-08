@@ -53,6 +53,7 @@ WASM runtime that runs in the browser.
     "syntax": { type: "string", description: "${} interpolation (with format specs ${x:.2f}), .. ranges, ternary, escolhe/caso, lambdas, spread f(...xs), destructuring, ?. and ??, +=, slices xs[1:3]" },
     "modules": { type: "boolean", default: true, description: "importa \"arquivo.gs\" [como nome]" },
     "http": { type: "boolean", default: true, description: "client (busca) and parallel server (rota/escuta)" },
+    "modelos": { type: "boolean", default: true, description: "HTML templates (renderiza/renderiza_arquivo) with auto-escaping, loops, partials and layouts" },
     "json": { type: "boolean", default: true, description: "de_json / pra_json (keep key order)" },
     "database": { type: "boolean", default: true, description: "conecta/consulta/executa — sqlite, mysql, postgres" },
     "stdlib": { type: "string", description: "text, regex, lists, sets, time, crypto, csv, gzip, files, processes" },
@@ -109,6 +110,7 @@ WASM runtime that runs in the browser.
     - [JSON](/docs/en/json)
     - [HTTP (client)](/docs/en/http)
     - [HTTP server](/docs/en/servidor)
+    - [Templates (modelos)](/docs/en/modelos)
     - [Raw network (TCP/UDP)](/docs/en/rede)
   </Accordion>
   <Accordion title="Tools">

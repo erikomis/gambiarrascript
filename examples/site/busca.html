@@ -1,0 +1,12 @@
+{{ usa "base.html" }}
+{{ bloco "titulo" }}Busca · Gambiarra Lanches{{ acabou }}
+{{ bloco "conteudo" }}
+    <h1>Voce buscou: {{ q }}</h1>
+    <ul>
+      {{ pra_cada produto em achados }}
+      {{ inclui "parciais/item.html" }}
+      {{ se_nao_colar }}
+      <li>nada encontrado</li>
+      {{ acabou }}
+    </ul>
+{{ acabou }}

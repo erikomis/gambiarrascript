@@ -1,0 +1,6 @@
+      <li>
+        <a href="/produto/{{ produto.id }}">{{ produto.nome }}</a> — R$ {{ produto.preco | formata "%.2f" }}
+        {{ se_colar produto.tags | tamanho > 0 }}
+        <small>({{ produto.tags | junta ", " }})</small>
+        {{ acabou }}
+      </li>

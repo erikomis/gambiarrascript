@@ -1,0 +1,251 @@
+---
+title: Modelos (templates HTML)
+description: renderiza(), renderiza_arquivo() e responde_html() — paginas HTML com escape automatico, laco, condicao, parcial e layout.
+---
+
+```gambiarrascript
+bota html = renderiza("<h1>Salve, {{ nome }}!</h1>", {"nome": "Jurandir"})
+mostra html   # <h1>Salve, Jurandir!</h1>
+
+rota("GET", "/", gambiarra(pedido)
+    funciona responde_html(renderiza_arquivo("modelos/inicio.html", {
+        "titulo": "Cardapio",
+        "produtos": [{"nome": "Cafe", "preco": 6.5}, {"nome": "Pao", "preco": 4}]
+    }))
+acabou_finalmente)
+escuta(8080)
+```
+
+Um **modelo** e um texto (normalmente HTML) com buracos entre chaves duplas
+que o GambiarraScript preenche com os seus dados. As palavras sao as mesmas
+da linguagem: `pra_cada`, `se_colar`, `se_nao_colar`, `acabou`. Exemplo
+completo, com layout + parcial + laco servido por `rota`: `examples/site.gs`
+(os modelos ficam em `examples/site/`).
+
+## Os builtins
+
+| Builtin | Devolve |
+| --- | --- |
+| `renderiza(modelo, [dados], [opcoes])` | `texto` — o modelo (texto) preenchido |
+| `renderiza_arquivo(caminho, [dados], [opcoes])` | `texto` — idem, lendo o modelo de um arquivo |
+| `responde_html(html, [status])` | `dicionario` de resposta com `Content-Type: text/html; charset=utf-8` (status default `200`) |
+
+- `dados` e um dicionario (ou instancia de [treta](/docs/poo)); sem dados, so
+  o texto fixo sai.
+- `renderiza_arquivo` compila o arquivo **uma vez** e guarda: as proximas
+  chamadas reaproveitam ate o arquivo mudar (data de modificacao ou tamanho).
+  Editou o `.html` com o servidor rodando? A proxima requisicao ja ve.
+- `responde_html` e o par do [`responde_json`](/docs/servidor)
+  e, igual a ele, so existe no `gs` instalado (no playground avisa). Os dois
+  `renderiza` funcionam no playground tambem.
+
+Opcoes (terceiro argumento, dicionario):
+
+| opcao | default | o que faz |
+| --- | --- | --- |
+| `"pasta"` | a pasta do arquivo (ou a pasta atual, no `renderiza`) | raiz dos `inclui`/`usa`: nenhum caminho sai dela |
+| `"estrito"` | `deu_ruim` | variavel que nao existe vira **erro** em vez de texto vazio |
+| `"escapa"` | `deu_bom` | `deu_ruim` desliga o escape de HTML (pra texto puro: e-mail, `.txt`) |
+
+## Valores
+
+```html
+<p>{{ usuario.nome }} tem {{ usuario.idade }} anos</p>
+<p>Primeiro item: {{ itens[0] }} · ultimo: {{ itens[-1] }}</p>
+<p>{{ precos["cafe com leite"] }} · {{ tabela[chave] }}</p>
+```
+
+- `a.b` le a chave `"b"` do dicionario (ou o campo da treta); `a[0]` le a
+  posicao da lista (negativo conta do fim) ou a chave do dicionario;
+  `a[outra]` usa o valor de outra variavel como chave.
+- Texto sai como e; `nada` sai vazio; numero, booleano e lista saem igual o
+  `mostra` imprime (`3.5`, `deu_bom`, `[1, 2]`).
+- **Variavel que nao existe sai vazia** (e `usuario.nao.tem` tambem, sem
+  erro no meio do caminho). Prefere erro? Passe `{"estrito": deu_bom}`:
+  ``modelo pagina.html linha 7: `usuario.idade` nao existe (modo estrito)``.
+  Mesmo no estrito, o `se_colar` e o filtro `padrao` aceitam variavel que falta.
+- Texto literal tambem vale: `{{ "{{" }}` escreve chaves duplas no HTML.
+
+## Escape (seguranca contra XSS)
+
+Por padrao **todo valor e escapado** pra HTML: `&`, `<`, `>`, `"` e `'` viram
+`&amp;`, `&lt;`, `&gt;`, `&#34;` e `&#39;`. Texto que veio do usuario pode ir
+direto pro modelo — inclusive dentro de atributo entre aspas:
+
+```gambiarrascript
+mostra renderiza(`<a title="{{ t }}">{{ t }}</a>`, {"t": "<script>alert('x')</script>"})
+# <a title="&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;">&lt;script&gt;...</a>
+```
+
+Pra mandar HTML **cru** (que voce mesmo gerou e confia), use chaves triplas
+ou o filtro `cru`:
+
+```html
+{{{ conteudo_ja_em_html }}}
+{{ conteudo_ja_em_html | cru }}
+```
+
+<Callout type="warn" title="Cru e cru mesmo">
+  `{{{ x }}}` e `| cru` nao escapam nada. Nunca use com texto que veio de
+  fora (query, corpo, banco preenchido por usuario) — e assim que nasce um XSS.
+</Callout>
+
+O escape protege texto e atributo **entre aspas**. Ele nao torna seguro um
+valor solto dentro de `<script>`, de `style` ou de um `href` (o usuario pode
+mandar `javascript:...`); pra dado dentro de `<script>`, use o filtro `json`
+com `cru` (veja abaixo).
+
+## Filtros
+
+O valor passa por filtros com `|`, da esquerda pra direita:
+
+```html
+{{ nome | maiusculo }}              ZE
+{{ nome | minusculo }}              ze
+{{ itens | tamanho }}               3   (texto conta caracteres; nada = 0)
+{{ preco | formata "%.2f" }}        6.50 (os verbos do formata da linguagem)
+{{ apelido | padrao "anonimo" }}    anonimo, se faltar, for nada ou ""
+{{ tags | junta ", " }}             quente, classico
+{{ dados | json }}                  JSON compacto (escapado como texto)
+{{ html_confiavel | cru }}          sem escape
+```
+
+- O argumento (`"%.2f"`, `"anonimo"`) pode ser texto, numero ou outra variavel.
+- `json` troca `<`, `>` e `&` por `<`, `>` e `&` (igual o Go),
+  entao `{{ dados | json | cru }}` dentro de `<script>` nao fecha a tag:
+
+```html
+<script>const produto = {{ produto | json | cru }};</script>
+```
+
+## Laco: pra_cada
+
+```html
+<ul>
+  {{ pra_cada produto em produtos }}
+  <li>{{ produto.nome }} — R$ {{ produto.preco | formata "%.2f" }}</li>
+  {{ se_nao_colar }}
+  <li>nada no cardapio hoje</li>
+  {{ acabou }}
+</ul>
+```
+
+- `pra_cada item em lista`; com dois nomes, `pra_cada i, item em lista` da
+  a posicao (comecando do 0) e o item — igual a linguagem.
+- No dicionario, um nome itera as **chaves**; dois nomes, chave e valor:
+  `pra_cada nome, preco em precos`. Conjunto tambem vale.
+- `se_nao_colar` dentro do `pra_cada` (opcional) roda quando a colecao esta
+  vazia ou nao existe.
+- `acabou` fecha o bloco (`acabou_finalmente` tambem vale).
+
+## Condicao: se_colar
+
+```html
+{{ se_colar usuario.admin }}
+<a href="/painel">painel</a>
+{{ se_nao_colar se_colar usuario }}
+<a href="/sair">sair</a>
+{{ se_nao_colar }}
+<a href="/entrar">entrar</a>
+{{ acabou }}
+```
+
+- Verdade igual a linguagem: so `nada` (ou variavel que falta) e `deu_ruim`
+  sao falsos. **`0`, `""` e `[]` sao verdade** — pra lista vazia, compare o
+  tamanho ou use o `se_nao_colar` do `pra_cada`:
+
+```html
+{{ se_colar carrinho | tamanho > 0 }} ... {{ acabou }}
+```
+
+- Comparacao: `==`, `!=`, `>`, `<`, `>=`, `<=` contra texto, numero,
+  `deu_bom`, `deu_ruim`, `nada` ou outra variavel; junta com `e`, `ou`, `nao`
+  e parenteses: `{{ se_colar nota >= 7 e nao reprovado }}`.
+  `>`/`<` so comparam numero com numero e texto com texto.
+
+## Comentario
+
+```html
+{{# isso nao aparece no HTML }}
+{{# pode ocupar
+    varias linhas }}
+```
+
+## Linha so com etiqueta some inteira
+
+Etiqueta de controle (`pra_cada`, `se_colar`, `se_nao_colar`, `acabou`,
+`bloco`, `usa`, `inclui` e comentario) **sozinha na linha** — so espaco em
+volta — leva a linha junto. Por isso o laco acima nao deixa linhas em branco
+no HTML. Valor (`{{ x }}`) nunca some.
+
+## Parcial: inclui
+
+```html
+<ul>
+  {{ pra_cada produto em produtos }}
+  {{ inclui "parciais/item.html" }}
+  {{ acabou }}
+</ul>
+```
+
+- O caminho e **relativo a pasta do modelo que inclui** e o parcial enxerga
+  as mesmas variaveis (inclusive a do `pra_cada`: `produto` acima).
+- Nao sai da pasta dos modelos: `../`, caminho absoluto e link simbolico pra
+  fora dao erro. A raiz e a pasta do arquivo passado pro `renderiza_arquivo`
+  (ou a opcao `"pasta"`, se seus parciais moram num nivel acima).
+- No `renderiza` (modelo em texto) o caminho e relativo a pasta atual (ou a
+  `"pasta"`).
+- Inclui em circulo (`a.html` inclui `b.html` que inclui `a.html`) para com
+  erro depois de 32 niveis.
+
+## Layout: usa e bloco
+
+O layout e um modelo comum com **blocos** marcando o que muda:
+
+```html
+<!-- base.html -->
+<html>
+<head><title>{{ bloco "titulo" }}Meu site{{ acabou }}</title></head>
+<body>
+  {{ inclui "parciais/cabecalho.html" }}
+  <main>
+    {{ bloco "conteudo" }}
+    <p>conteudo padrao</p>
+    {{ acabou }}
+  </main>
+</body>
+</html>
+```
+
+A pagina diz qual layout `usa` e preenche os blocos que quiser — o resto
+fica com o padrao do layout:
+
+```html
+{{ usa "base.html" }}
+{{ bloco "titulo" }}{{ produto.nome }} · Meu site{{ acabou }}
+{{ bloco "conteudo" }}
+    <h1>{{ produto.nome }}</h1>
+{{ acabou }}
+```
+
+- Numa pagina com `usa`, so os blocos contam: o que estiver fora deles e
+  ignorado. `usa` vai fora de qualquer bloco, uma vez so.
+- O layout pode `usa` outro layout (o bloco da pagina mais de baixo ganha).
+- Os blocos enxergam os mesmos dados da pagina.
+
+Prefere nao usar layout? Parcial resolve tambem: `inclui "topo.html"` no
+comeco e `inclui "rodape.html"` no fim de cada pagina.
+
+## Erros
+
+Erro de sintaxe ou de execucao no modelo diz o nome e a linha:
+
+```
+deu ruim: modelo pagina.html linha 7: `pra_cada` sem `acabou`
+deu ruim: modelo (texto) linha 1: filtro `sei_la` nao existe (tem: maiusculo, minusculo, tamanho, json, formata, padrao, junta, cru)
+deu ruim: modelo item.html linha 2: `>` so compara numero com numero ou texto com texto, veio lista
+```
+
+O erro e do tipo `"builtin"`; arquivo que nao existe e `"io"` (veja
+[Arruma / quebrou](/docs/erros)). Dentro de um handler de `rota`, erro no
+modelo vira `500` pro cliente e o detalhe vai pro stderr.

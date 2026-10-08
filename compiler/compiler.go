@@ -287,6 +287,8 @@ var nomesBuiltins = []string{
 	"migra", "valida",
 	// tarefas agendadas e datas amigaveis
 	"a_cada", "depois_de", "agenda", "cancela", "formata_data", "le_data",
+	// templates: renderiza/renderiza_arquivo e a resposta HTML
+	"renderiza", "renderiza_arquivo", "responde_html",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que
