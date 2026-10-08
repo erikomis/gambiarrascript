@@ -106,8 +106,22 @@ deu ruim: envia(): essa conexao websocket ja foi fechada (fecha), nao da pra man
 nativo
 `
 	servidorNosDois(t, fonteChat, func(t *testing.T, c ctxServidor) {
-		src := "bota URL = \"" + wsURL(c.base, "/chat/geral") + "\"\n" + cliente
-		esperaNosDois(t, src, esperado, "")
+		// cada engine do cliente numa sala propria: o "saiu" da ana da rodada
+		// anterior e transmitido de forma assincrona e, em maquina lenta (CI),
+		// chegava na ana nova da rodada seguinte se a sala fosse a mesma
+		clientes := []struct {
+			nome string
+			roda func(*testing.T, string) (string, string, string)
+		}{{"tree", rodaTWComp}, {"vm", rodaVMComp}}
+		for _, cli := range clientes {
+			sala := "geral" + cli.nome
+			src := "bota URL = \"" + wsURL(c.base, "/chat/"+sala) + "\"\n" + cliente
+			esp := strings.ReplaceAll(esperado, `"sala":"geral"`, `"sala":"`+sala+`"`)
+			_, saida, errStr := cli.roda(t, src)
+			if saida != esp || errStr != "" {
+				t.Errorf("[cliente %s] saida errada\n  veio:     %q\n  esperado: %q\n  erro: %s", cli.nome, saida, esp, errStr)
+			}
+		}
 	})
 }
 
