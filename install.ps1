@@ -44,17 +44,20 @@ function Instala-Gs {
             if (-not $versao) {
                 # API sem login tem limite por IP (rede de empresa, CI...): o
                 # redirect de /releases/latest diz a tag sem passar pela API.
-                # PowerShell 5.1 e 7 expoem o cabecalho de jeitos diferentes.
+                # HttpWebRequest sem seguir redirect se comporta igual no
+                # PowerShell 5.1 (.NET Framework) e no 7; o Invoke-WebRequest nao.
                 $local = $null
                 $resp = $null
                 try {
-                    $resp = Invoke-WebRequest -UseBasicParsing -Method Head -MaximumRedirection 0 -ErrorAction Stop "https://github.com/$repo/releases/latest"
+                    $req = [System.Net.HttpWebRequest]::Create("https://github.com/$repo/releases/latest")
+                    $req.AllowAutoRedirect = $false
+                    $req.Method = 'HEAD'
+                    $req.UserAgent = 'gs-instalador'
+                    try { $resp = $req.GetResponse() } catch [System.Net.WebException] { $resp = $_.Exception.Response }
+                    if ($resp) { $local = $resp.Headers['Location'] }
                 } catch {
-                    $resp = $_.Exception.Response
-                }
-                if ($resp) {
-                    try { $local = $resp.Headers.Location } catch {}
-                    if (-not $local) { try { $local = $resp.Headers['Location'] } catch {} }
+                } finally {
+                    if ($resp) { $resp.Close() }
                 }
                 if ($local -and ([string]$local) -match '/releases/tag/([^/]+)$') { $versao = $Matches[1] }
             }
