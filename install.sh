@@ -7,6 +7,8 @@
 #   GS_VERSAO=0.2.0   instala essa versao em vez da ultima
 #   GS_DIR=~/bin      instala nesse diretorio (padrao: /usr/local/bin se der
 #                     pra escrever, senao ~/.local/bin). Nunca usa sudo.
+#   GS_SEM_API=1      acha a ultima versao pelo redirect de /releases/latest
+#                     em vez da API do GitHub (que tem limite por IP; pra teste)
 #   GS_URL_BASE=...   baixa os arquivos dessa URL base em vez do GitHub
 #                     (pra testes/espelhos; exige GS_VERSAO)
 #
@@ -67,11 +69,31 @@ detecta_arch() {
 
 ultima_versao() {
   json="$tmp/latest.json"
-  baixa "https://api.github.com/repos/$REPO/releases/latest" "$json" ||
-    morre "nao consegui descobrir a ultima versao no GitHub (nenhuma release publicada ainda? sem internet? limite da API?). Tenta GS_VERSAO=x.y.z"
-  tag=$(sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' "$json" | head -n 1)
-  [ -n "$tag" ] || morre "o GitHub respondeu mas nao achei nenhuma release publicada"
+  tag=""
+  if [ -z "${GS_SEM_API:-}" ] && baixa "https://api.github.com/repos/$REPO/releases/latest" "$json" 2>/dev/null; then
+    tag=$(sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' "$json" | head -n 1)
+  fi
+  if [ -z "$tag" ]; then
+    # API sem login tem limite por IP (rede de empresa, CI...): o redirect de
+    # /releases/latest diz a tag sem passar pela API
+    tag=$(tag_pelo_redirect)
+  fi
+  [ -n "$tag" ] || morre "nao consegui descobrir a ultima versao no GitHub (nenhuma release publicada ainda? sem internet?). Tenta GS_VERSAO=x.y.z"
   echo "${tag#v}"
+}
+
+tag_pelo_redirect() {
+  url="https://github.com/$REPO/releases/latest"
+  if tem curl; then
+    local_=$(curl -fsSI "$url" 2>/dev/null | tr -d '\r' | sed -n 's/^[Ll]ocation: *//p' | tail -n 1)
+  elif tem wget; then
+    local_=$(wget -S --spider --max-redirect=0 "$url" 2>&1 | tr -d '\r' | sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1)
+  else
+    local_=""
+  fi
+  case "$local_" in
+    */releases/tag/*) echo "${local_##*/}" ;;
+  esac
 }
 
 escolhe_dir() {

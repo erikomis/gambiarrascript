@@ -33,6 +33,14 @@ jobs:
       - name: instala com o install.ps1 (igual o usuario faz com irm | iex)
         run: Get-Content -Raw .\install.ps1 | Invoke-Expression
 
+      - name: sem a API do GitHub (limite por IP) acha a versao pelo redirect
+        run: |
+          $env:GS_SEM_API = '1'
+          $env:GS_DIR = "$env:RUNNER_TEMP\gs-sem-api"
+          $env:GS_SEM_PATH = '1'
+          Get-Content -Raw .\install.ps1 | Invoke-Expression
+          & "$env:GS_DIR\gs.exe" --version
+
       - name: gs no PATH do usuario (terminal novo) roda um programa
         run: |
           $env:Path = [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + [Environment]::GetEnvironmentVariable('Path', 'Machine')
@@ -63,6 +71,9 @@ jobs:
 
       - name: instala com o install.sh (igual o usuario faz com curl | sh)
         run: GS_DIR="$HOME/.local/bin" sh ./install.sh
+
+      - name: sem a API do GitHub (limite por IP) acha a versao pelo redirect
+        run: GS_SEM_API=1 GS_DIR="$RUNNER_TEMP/gs-sem-api" sh ./install.sh && "$RUNNER_TEMP/gs-sem-api/gs" --version
 
       - name: roda um programa
         run: |
