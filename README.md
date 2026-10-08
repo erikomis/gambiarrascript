@@ -267,7 +267,7 @@ acabou_finalmente
 # Homebrew
 brew install erikomis/tap/gambiarrascript
 
-# ou o instalador (sem Homebrew)
+# ou o instalador (macOS e Linux, sem Homebrew)
 curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | sh
 
 gs roda examples/fizzbuzz.gs
@@ -281,8 +281,10 @@ Homebrew, a fórmula avisa do conflito; prefira o `install.sh` com
 
 Baixa o binário da última release, confere o sha256 e instala em
 `/usr/local/bin` (ou `~/.local/bin` se não tiver permissão — nunca usa sudo).
-`GS_VERSAO=0.2.0` fixa uma versão, `GS_DIR=~/bin` escolhe a pasta. No Windows,
-baixa o `.zip` direto da [página de releases](https://github.com/erikomis/gambiarrascript/releases).
+`GS_VERSAO=0.2.0` fixa uma versão, `GS_DIR=~/bin` escolhe a pasta. No Windows (PowerShell, sem admin): `irm https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.ps1 | iex`
+— instala em `%LOCALAPPDATA%\Programs\gambiarrascript` e poe no PATH do
+usuario. Passo a passo de cada sistema (PATH, WSL, Raspberry Pi, `.zip` na mao)
+na [doc de instalacao](https://erikomis.github.io/gambiarrascript/docs/instalacao/).
 
 Quer compilar você mesmo? Dois caminhos:
 

@@ -3,31 +3,108 @@ title: Installation
 description: How to install the gs binary, use Docker or build from source.
 ---
 
-Three ways to get `gs` onto your machine: the installer (downloads a prebuilt
-binary), building with your own Go, or building through Docker (no Go
-installed).
+Prebuilt binaries for **macOS, Linux and Windows** (64-bit). Pick your system
+below — none of the installers needs `sudo` or admin rights, and all of them
+check the download's sha256 against the release's `checksums.txt` before
+installing. Rather build it yourself? Jump to
+[Building with Go](#2-building-with-go) or
+[With Docker](#3-with-docker-no-go-install).
 
 ## 1. Installer (recommended)
 
-On Linux and macOS:
+### macOS
+
+With Homebrew:
+
+```bash
+brew install erikomis/tap/gambiarrascript
+gs --version
+```
+
+Without Homebrew, the Linux installer (right below) works on a Mac too — Intel
+and Apple Silicon.
+
+Ghostscript's binary is also called `gs`: if you have Ghostscript from
+Homebrew, the formula warns about the conflict; use the installer with
+`GS_DIR=~/.local/bin` instead.
+
+### Linux
+
+Any distro (Ubuntu, Debian, Fedora, Arch, Alpine...), `x86_64` or `arm64`
+(Raspberry Pi 4/5, ARM servers):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | sh
 gs --version
 ```
 
-It downloads the binary from the latest GitHub release, checks its sha256 and
-installs it to `/usr/local/bin` (if it can write there) or to `~/.local/bin`.
-**It never uses `sudo`.** You can tweak it with environment variables:
+It downloads the latest release binary, checks the sha256 and installs it into
+`/usr/local/bin` (if writable) or `~/.local/bin`. **It never uses `sudo`.** The
+binary is static (no glibc dependency), so it even runs in `alpine` or
+`scratch` containers.
+
+If it lands in `~/.local/bin` and `gs` isn't found, add it to your `PATH` (the
+installer tells you):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | GS_VERSAO=0.2.0 sh   # pinned version
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc   # or ~/.zshrc
+```
+
+Environment variables tweak it (they work on macOS too):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | GS_VERSAO=0.5.0 sh   # pinned version
 curl -fsSL https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | GS_DIR=~/bin sh       # another directory
 ```
 
-On Windows, download the `.zip` from the
-[releases](https://github.com/erikomis/gambiarrascript/releases) page and put
-`gs.exe` on your `PATH`.
+No `curl`? The installer works with `wget` too:
+`wget -qO- https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.sh | sh`.
+
+### Windows
+
+In **PowerShell** (no need to run as administrator):
+
+```powershell
+irm https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.ps1 | iex
+```
+
+It downloads the latest release `.zip`, checks the sha256, installs `gs.exe`
+into `%LOCALAPPDATA%\Programs\gambiarrascript` and adds that folder to your
+user `PATH`. **Open a new terminal** afterwards and run:
+
+```powershell
+gs --version
+gs roda salve.gs
+```
+
+Optional variables (set them before running the installer):
+
+```powershell
+$env:GS_VERSAO = "0.5.0"       # pinned version
+$env:GS_DIR = "C:\tools"        # another folder
+irm https://raw.githubusercontent.com/erikomis/gambiarrascript/main/install.ps1 | iex
+```
+
+If PowerShell complains about the execution policy, run this first, just for
+that window: `Set-ExecutionPolicy -Scope Process Bypass`.
+
+**By hand:** download `gs_<version>_windows_amd64.zip` from the
+[releases](https://github.com/erikomis/gambiarrascript/releases) page, extract
+`gs.exe` into a folder and add that folder to your `PATH` (Settings → System →
+About → Advanced system settings → Environment Variables → `Path`).
+
+**WSL:** inside WSL's Ubuntu, use the Linux installer.
+
+The docs' examples use `/` in paths (`examples/salve.gs`); on Windows
+`examples\salve.gs` works too. Windows on ARM runs the `amd64` binary through
+Windows' own emulation.
+
+### VSCode extension (every system)
+
+Each release has a `gambiarrascript-<version>.vsix`. In VSCode: Extensions →
+`...` → **Install from VSIX...** and pick the file — or
+`code --install-extension gambiarrascript-0.5.0.vsix`. Details in
+[Editor & format](/docs/en/ferramentas).
 
 ## 2. Building with Go
 
@@ -76,12 +153,12 @@ own image (handy for CI).
 | --- | --- |
 | Go | 1.23.12 or newer (if building with Go) |
 | Docker | any recent version (optional) |
-| OS | Linux, macOS, Windows |
+| OS | Linux (x86_64, arm64), macOS (Intel, Apple Silicon), Windows (64-bit) |
 
 ## Checking the installation
 
 ```bash
-gs --version                  # gs (GambiarraScript) 0.1.0 (gs versao works too)
+gs --version                  # gs (GambiarraScript) 0.5.0 (gs versao works too)
 gs --help                     # lists the subcommands
 gs roda examples/salve.gs     # Salve, tropa!
 ```

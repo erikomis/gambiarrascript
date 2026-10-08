@@ -1,0 +1,74 @@
+# Testa os instaladores de verdade em cada sistema: install.ps1 no Windows
+# (PowerShell 5.1, o que vem no Windows, e pwsh 7) e install.sh no Linux e no
+# macOS. Instala a ultima release publicada usando o script DESTE commit e
+# roda um programa com o gs instalado.
+name: instaladores
+
+on:
+  push:
+    branches: [main]
+    paths: ['install.sh', 'install.ps1', '.github/workflows/instaladores.yml']
+  pull_request:
+    paths: ['install.sh', 'install.ps1', '.github/workflows/instaladores.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: instala com o install.ps1 (igual o usuario faz com irm | iex)
+        run: Get-Content -Raw .\install.ps1 | Invoke-Expression
+
+      - name: gs no PATH do usuario (terminal novo) roda um programa
+        run: |
+          $env:Path = [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + [Environment]::GetEnvironmentVariable('Path', 'Machine')
+          gs --version
+          Set-Content -Path ola.gs -Value 'crava N = 6', 'mostra "salve do windows: ${N ** 2}"'
+          $saida = gs roda ola.gs
+          $saida
+          if ($saida -ne 'salve do windows: 36') { throw "saida errada: $saida" }
+
+      - name: GS_DIR e GS_VERSAO
+        run: |
+          $env:GS_DIR = "$env:RUNNER_TEMP\gs-fixo"
+          $env:GS_SEM_PATH = '1'
+          $versao = (Invoke-RestMethod https://api.github.com/repos/erikomis/gambiarrascript/releases/latest).tag_name.TrimStart('v')
+          $env:GS_VERSAO = $versao
+          Get-Content -Raw .\install.ps1 | Invoke-Expression
+          $v = & "$env:GS_DIR\gs.exe" --version
+          if ($v -notmatch [regex]::Escape($versao)) { throw "versao errada: $v" }
+
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: instala com o install.sh (igual o usuario faz com curl | sh)
+        run: GS_DIR="$HOME/.local/bin" sh ./install.sh
+
+      - name: roda um programa
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          gs --version
+          # o ${N ** 2} e interpolacao do GambiarraScript, nao do shell
+          # shellcheck disable=SC2016
+          printf 'crava N = 6\nmostra "salve do unix: ${N ** 2}"\n' > ola.gs
+          test "$(gs roda ola.gs)" = "salve do unix: 36"
