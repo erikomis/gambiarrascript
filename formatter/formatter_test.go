@@ -224,3 +224,28 @@ func TestFormataDolarEscapado(t *testing.T) {
 		}
 	}
 }
+
+func TestFormataMultiCatch(t *testing.T) {
+	src := `arruma
+mostra "try"
+quebrou a se erro_tipo(a)=="rede"
+mostra "rede"
+quebrou b se nao (erro_tipo(b) == "io")
+mostra "nao io"
+acabou_finalmente`
+	esperado := `arruma
+    mostra "try"
+quebrou a se erro_tipo(a) == "rede"
+    mostra "rede"
+quebrou b se nao (erro_tipo(b) == "io")
+    mostra "nao io"
+acabou_finalmente
+`
+	out := formataFonte(t, src)
+	if out != esperado {
+		t.Fatalf("got:\n%s\n--- esperado:\n%s", out, esperado)
+	}
+	if de2 := formataFonte(t, out); de2 != out {
+		t.Fatalf("nao e idempotente:\n%s", de2)
+	}
+}

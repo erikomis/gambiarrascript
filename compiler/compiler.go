@@ -1404,7 +1404,10 @@ func (c *Compiler) compileArruma(node *ast.ArrumaStatement) error {
 	//   OpTryEnd
 	//   OpJump <fim>
 	//   catchAddr:             (a VM empilha o erro)
-	//     com quebrou:  set err; [OpTry <relanca>]; <catch>; [OpTryEnd]; OpJump <fim>
+	//     com quebrou:  [set tmp]; [OpTry <relanca>]
+	//       cada clausula: [get tmp]; set nome; [<filtro>; OpJumpIfFalse <prox>]
+	//                      <corpo>; [OpTryEnd]; OpJump <fim>
+	//       nenhuma pegou (so com filtro na ultima): get tmp; OpThrow
 	//     relanca (so com finalmente): set tmp; <finally>; get tmp; OpThrow
 	//   fim: <finally>
 	//
@@ -1423,27 +1426,62 @@ func (c *Compiler) compileArruma(node *ast.ArrumaStatement) error {
 	jmpsFim := []int{c.emit(code.OpJump, 9999)}
 
 	c.backpatch(tryOp, len(c.instructions))
-	if node.Catch != nil {
-		if node.ErrName != nil {
-			c.emitVarSet(c.defineVar(node.ErrName.Value))
-		} else {
-			c.emit(code.OpPop) // descarta erro sem nome
+	if len(node.Quebrous) > 0 {
+		// multi-catch: o erro fica num temporario pra cada clausula amarrar
+		// e pra relancar se nenhum filtro colar. Um quebrou sem filtro so
+		// amarra direto (o bytecode de sempre).
+		temFiltro := false
+		for _, q := range node.Quebrous {
+			temFiltro = temFiltro || q.Filtro != nil
 		}
-		// com finalmente, erro dentro do quebrou roda o finalmente e sobe
+		var erroTmp Symbol
+		if temFiltro {
+			c.numTemps++
+			erroTmp = c.defineVar("__erro_gs" + strconv.Itoa(c.numTemps))
+			c.emitVarSet(erroTmp)
+		}
+		// com finalmente, erro dentro do quebrou (ou do filtro, ou nenhum
+		// filtro colou) roda o finalmente e sobe
 		relancaOp := -1
 		if node.Finally != nil {
 			relancaOp = c.emit(code.OpTry, 9999)
 		}
-		c.arrumas = append(c.arrumas, arrumaAtiva{handler: node.Finally != nil, finally: node.Finally, numLoops: len(c.loopStack)})
-		err := c.compile(node.Catch)
-		c.arrumas = c.arrumas[:len(c.arrumas)-1]
-		if err != nil {
-			return err
+		for _, q := range node.Quebrous {
+			if temFiltro {
+				c.emitVarGet(erroTmp)
+			}
+			if q.Nome != nil {
+				c.emitVarSet(c.defineVar(q.Nome.Value))
+			} else {
+				c.emit(code.OpPop) // descarta erro sem nome
+			}
+			jmpProx := -1
+			if q.Filtro != nil {
+				if err := c.compile(q.Filtro); err != nil {
+					return err
+				}
+				jmpProx = c.emit(code.OpJumpIfFalse, 9999)
+			}
+			c.arrumas = append(c.arrumas, arrumaAtiva{handler: node.Finally != nil, finally: node.Finally, numLoops: len(c.loopStack)})
+			err := c.compile(q.Corpo)
+			c.arrumas = c.arrumas[:len(c.arrumas)-1]
+			if err != nil {
+				return err
+			}
+			if node.Finally != nil {
+				c.emit(code.OpTryEnd)
+			}
+			jmpsFim = append(jmpsFim, c.emit(code.OpJump, 9999))
+			if jmpProx >= 0 {
+				c.backpatch(jmpProx, len(c.instructions))
+			}
 		}
-		if node.Finally != nil {
-			c.emit(code.OpTryEnd)
+		if node.Quebrous[len(node.Quebrous)-1].Filtro != nil {
+			// nenhum filtro colou: relanca o erro original (com finalmente,
+			// cai no relanca la embaixo, que roda o finalmente antes)
+			c.emitVarGet(erroTmp)
+			c.emit(code.OpThrow)
 		}
-		jmpsFim = append(jmpsFim, c.emit(code.OpJump, 9999))
 		if relancaOp >= 0 {
 			c.backpatch(relancaOp, len(c.instructions))
 		}

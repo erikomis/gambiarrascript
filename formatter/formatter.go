@@ -172,13 +172,16 @@ func (f *formatter) emitStmt(s ast.Statement, nivel int, primeiro *bool) {
 	case *ast.ArrumaStatement:
 		f.abre(s, nivel, primeiro, "arruma", f.cabeca(n.Try))
 		f.emitBlock(n.Try, nivel+1)
-		if n.Catch != nil {
-			if n.ErrName != nil {
-				f.linha(nivel, "quebrou "+n.ErrName.Value, f.cabeca(n.Catch))
-			} else {
-				f.linha(nivel, "quebrou", f.cabeca(n.Catch))
+		for _, q := range n.Quebrous {
+			cab := "quebrou"
+			if q.Nome != nil {
+				cab += " " + q.Nome.Value
 			}
-			f.emitBlock(n.Catch, nivel+1)
+			if q.Filtro != nil {
+				cab += " se " + f.emitExpr(q.Filtro)
+			}
+			f.linha(nivel, cab, f.cabeca(q.Corpo))
+			f.emitBlock(q.Corpo, nivel+1)
 		}
 		if n.Finally != nil {
 			f.linha(nivel, "finalmente", f.cabeca(n.Finally))

@@ -244,6 +244,21 @@ quebrou erro
 acabou_finalmente
 ```
 
+Dá pra ter vários `quebrou`, cada um com filtro (`se` + qualquer condição);
+o primeiro que colar pega, e o que nenhum pegar continua subindo:
+
+```
+arruma
+    bota cfg = de_json(le_arquivo("config.json"))
+quebrou erro se erro_tipo(erro) == "io"
+    bota cfg = {}                  # sem arquivo: config padrão
+quebrou erro
+    quebra("config quebrada", erro)
+finalmente
+    mostra "pronto"
+acabou_finalmente
+```
+
 ## Instalação e uso
 
 ### Jeito rápido — binário pronto (macOS / Linux)

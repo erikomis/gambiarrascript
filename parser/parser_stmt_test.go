@@ -78,8 +78,95 @@ acabou_finalmente`
 	if !ok {
 		t.Fatalf("esperava *ast.ArrumaStatement, got %T", prog.Statements[0])
 	}
-	if stmt.ErrName.Value != "erro" {
-		t.Fatalf("nome do erro errado: %q", stmt.ErrName.Value)
+	if len(stmt.Quebrous) != 1 || stmt.Quebrous[0].Nome.Value != "erro" || stmt.Quebrous[0].Filtro != nil {
+		t.Fatalf("quebrou errado: %+v", stmt.Quebrous)
+	}
+}
+
+func TestParseMultiCatch(t *testing.T) {
+	input := `arruma
+    bota x = 1
+quebrou erro se erro_tipo(erro) == "rede"
+    mostra 1
+quebrou e2 se erro_tipo(e2) == "jwt" ou erro_msg(e2) == "x"
+    mostra 2
+quebrou resto
+    mostra 3
+finalmente
+    mostra 4
+acabou_finalmente`
+	prog := parse(t, input)
+	stmt := prog.Statements[0].(*ast.ArrumaStatement)
+	if len(stmt.Quebrous) != 3 {
+		t.Fatalf("esperava 3 quebrou, veio %d", len(stmt.Quebrous))
+	}
+	nomes := []string{"erro", "e2", "resto"}
+	filtros := []string{`(erro_tipo(erro) == "rede")`, `((erro_tipo(e2) == "jwt") ou (erro_msg(e2) == "x"))`, ""}
+	for i, q := range stmt.Quebrous {
+		if q.Nome.Value != nomes[i] {
+			t.Fatalf("clausula %d: nome %q", i, q.Nome.Value)
+		}
+		f := ""
+		if q.Filtro != nil {
+			f = q.Filtro.String()
+		}
+		if f != filtros[i] {
+			t.Fatalf("clausula %d: filtro %q, esperava %q", i, f, filtros[i])
+		}
+		if len(q.Corpo.Statements) != 1 {
+			t.Fatalf("clausula %d: corpo com %d statements", i, len(q.Corpo.Statements))
+		}
+	}
+	if stmt.Finally == nil {
+		t.Fatal("cade o finalmente")
+	}
+}
+
+func TestParseMultiCatchSoFiltrados(t *testing.T) {
+	// todos com filtro (sem pega-resto) e valido: o que sobrar sobe
+	prog := parse(t, `arruma
+    bota x = 1
+quebrou a se a
+    mostra 1
+quebrou b se nao b
+    mostra 2
+acabou_finalmente`)
+	if n := len(prog.Statements[0].(*ast.ArrumaStatement).Quebrous); n != 2 {
+		t.Fatalf("esperava 2 quebrou, veio %d", n)
+	}
+}
+
+func TestParseSeContextual(t *testing.T) {
+	// `se` so e filtro na mesma linha do nome; fora dali e nome comum
+	prog := parse(t, `gambiarra se(x)
+    funciona x
+acabou_finalmente
+bota se2 = 1
+arruma
+    bota se = 1
+quebrou erro
+    se(erro)
+acabou_finalmente
+mostra se`)
+	arr := prog.Statements[2].(*ast.ArrumaStatement)
+	q := arr.Quebrous[0]
+	if q.Filtro != nil || len(q.Corpo.Statements) != 1 {
+		t.Fatalf("`se` na linha de baixo e corpo, nao filtro: %+v", q)
+	}
+}
+
+func TestParseQuebrouSemFiltroNoMeio(t *testing.T) {
+	p := New(lexer.New(`arruma
+    bota x = 1
+quebrou erro
+    mostra 1
+quebrou outro se erro_tipo(outro) == "rede"
+    mostra 2
+acabou_finalmente`))
+	p.ParseProgram()
+	errs := p.ErrosDetalhados()
+	if len(errs) != 1 || !strings.Contains(errs[0].Msg, "quebrou sem filtro tem que ser o ultimo") || errs[0].Linha != 3 {
+		t.Fatalf("esperava erro do quebrou sem filtro na linha 3: %+v", errs)
 	}
 }
 

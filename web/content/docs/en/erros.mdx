@@ -165,6 +165,74 @@ quebrou erro
 acabou_finalmente
 ```
 
+## Several quebrou: filtering the error
+
+An `arruma` can have **several** `quebrou` clauses, each one with an optional
+filter: `quebrou NAME se CONDITION` (`se` = "if"). When an error happens, the
+clauses are tried **in order**: the error is bound to the name, the condition
+runs and, if it holds, that clause's block runs — and only that one. A
+`quebrou` without a filter catches the rest.
+
+```gambiarrascript
+gambiarra carrega(caminho)
+    arruma
+        funciona de_json(le_arquivo(caminho))
+    quebrou erro se erro_tipo(erro) == "io"
+        mostra "sem arquivo, vai o padrao"
+        funciona {}
+    quebrou erro se erro_tipo(erro) == "rede" ou contem(erro_msg(erro), "timeout")
+        envolve_erro("config", "config remota fora do ar", erro)
+    quebrou erro
+        quebra("config quebrada", erro)   # catches the rest
+    finalmente
+        mostra "carrega: fim"             # runs exactly once, caught or not
+    acabou_finalmente
+acabou_finalmente
+
+mostra carrega("nao_existe.json")
+# sem arquivo, vai o padrao
+# carrega: fim
+# {}
+```
+
+The rules:
+
+- The condition is **any expression**, evaluated with the name already bound:
+  you can test `erro_tipo`, `erro_msg`, `erro_causa`, call one of your own
+  gambiarras, read outer variables.
+- **No filter matched** (and there's no unfiltered `quebrou`): the error keeps
+  going up, after `finalmente`, just like an `arruma` without `quebrou`.
+- The unfiltered `quebrou` has to be the **last** one — nothing below it could
+  ever run, so it's a syntax error (`quebrou sem filtro tem que ser o ultimo`).
+- **An error inside the filter** (e.g. `tamanho(erro)`) propagates in place of
+  the original one, like Python's `except` expression: the remaining clauses
+  aren't tried and `finalmente` runs first.
+- Each clause can use a different name; all of them become variables of the
+  function scope (same as a plain `quebrou`), even the one from a clause that
+  didn't match.
+- `se` is a keyword only there, on the same line, right after `quebrou NAME`.
+  Everywhere else `se` is still an ordinary name.
+
+```gambiarrascript
+gambiarra divide(a, b)
+    arruma
+        funciona a / b
+    quebrou erro se erro_tipo(erro) == "rede"
+        funciona 0                        # not a network error: doesn't catch
+    finalmente
+        mostra "divide: fim"
+    acabou_finalmente
+acabou_finalmente
+
+arruma
+    divide(1, 0)
+quebrou erro
+    mostra "subiu: " + erro_tipo(erro)
+acabou_finalmente
+# divide: fim
+# subiu: runtime
+```
+
 ## Control signals
 
 `funciona`, `vaza`, `continua` and `sai(...)` inside an `arruma` are **not**

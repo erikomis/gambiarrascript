@@ -486,3 +486,54 @@ func TestComentarioBlocoSemFechar(t *testing.T) {
 	confereIgual(t, "mostra 1 /* nunca fecha\nmostra 2\n\n", "mostra 1  /* nunca fecha\nmostra 2\n")
 	confereIgual(t, "mostra 1\n/* nunca", "mostra 1\n/* nunca\n")
 }
+
+// multi-catch: cada `quebrou NOME se COND` numa linha, comentario no fim da
+// linha do filtro fica nela, comentario antes de um quebrou fica no nivel do
+// bloco que fecha.
+func TestComentarioMultiCatch(t *testing.T) {
+	src := `arruma
+  le_arquivo("x")   # tenta
+quebrou erro   se   erro_tipo(erro)=="rede"   # so rede
+  mostra "rede"
+  # antes do proximo
+quebrou erro se erro_tipo(erro) == "jwt" ou contem(erro_msg(erro), "token") /* jwt */
+  mostra "jwt"
+# pega o resto
+quebrou erro
+  mostra "resto"  # qualquer um
+finalmente
+  mostra "fim"
+acabou_finalmente
+`
+	esperado := `arruma
+    le_arquivo("x")  # tenta
+quebrou erro se erro_tipo(erro) == "rede"  # so rede
+    mostra "rede"
+    # antes do proximo
+quebrou erro se erro_tipo(erro) == "jwt" ou contem(erro_msg(erro), "token")  /* jwt */
+    mostra "jwt"
+    # pega o resto
+quebrou erro
+    mostra "resto"  # qualquer um
+finalmente
+    mostra "fim"
+acabou_finalmente
+`
+	confereIgual(t, src, esperado)
+}
+
+// comentario no meio de um filtro quebrado em linhas nao some
+func TestComentarioMultiCatchFiltroEmLinhas(t *testing.T) {
+	src := `arruma
+    quebra("x")
+quebrou erro se contem(
+    erro_msg(erro),  # a mensagem
+    "x")
+    mostra 1
+acabou_finalmente
+`
+	out := formataComentarios(t, src)
+	if !strings.Contains(out, "# a mensagem") || !strings.Contains(out, `quebrou erro se contem(erro_msg(erro), "x")`) {
+		t.Fatalf("filtro em linhas mal formatado:\n%s", out)
+	}
+}

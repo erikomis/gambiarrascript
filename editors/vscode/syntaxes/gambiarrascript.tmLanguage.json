@@ -93,6 +93,14 @@
     "keywords": {
       "patterns": [
         {
+          "comment": "multi-catch: `se` so e palavra-chave depois de `quebrou NOME`",
+          "match": "\\b(quebrou)\\s+([\\p{L}_][\\p{L}\\p{N}_]*)\\s+(se)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.gambiarrascript" },
+            "3": { "name": "keyword.control.gambiarrascript" }
+          }
+        },
+        {
           "match": "\\b(se_colar|se_nao_colar|enquanto|pra_cada|de|ate|em|vaza|continua|arruma|quebrou|finalmente|acabou_finalmente|escolhe|caso|funciona|importa|bora|entao|como)\\b",
           "name": "keyword.control.gambiarrascript"
         },

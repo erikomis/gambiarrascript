@@ -177,8 +177,12 @@ func (v *varredura) stmt(s ast.Statement) {
 		v.bloco(n.Default)
 	case *ast.ArrumaStatement:
 		v.bloco(n.Try)
-		v.amarra(n.ErrName)
-		v.bloco(n.Catch)
+		// cada quebrou amarra o nome dele como local (o filtro ja enxerga)
+		for _, q := range n.Quebrous {
+			v.amarra(q.Nome)
+			v.expr(q.Filtro)
+			v.bloco(q.Corpo)
+		}
 		v.bloco(n.Finally)
 	case *ast.ImportaStatement:
 		v.expr(n.Path)

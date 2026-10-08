@@ -24,8 +24,8 @@ gambiarra quem_e(token)
     arruma
         bota claims = jwt_confere(token, SEGREDO)
         funciona "${claims.sub} (${claims.papel})"
-    quebrou err
-        # erro de token vem com tipo "jwt": vira 401, nao 500
+    quebrou err se erro_tipo(err) == "jwt"
+        # so erro de token (tipo "jwt") vira 401; o resto sobe e vira 500
         funciona "401 — ${erro_tipo(err)}: ${erro_msg(err)}"
     acabou_finalmente
 acabou_finalmente

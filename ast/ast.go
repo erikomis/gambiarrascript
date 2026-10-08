@@ -305,23 +305,36 @@ func (s *GambiarraStatement) String() string {
 }
 
 type ArrumaStatement struct {
-	Token   token.Token
-	Try     *BlockStatement
-	ErrName *Identifier
-	Catch   *BlockStatement
-	Finally *BlockStatement // opcional; bloco roda sempre (try+catch), com/sem erro
+	Token    token.Token
+	Try      *BlockStatement
+	Quebrous []*QuebrouClausula // tentados em ordem; vazio = so finalmente
+	Finally  *BlockStatement    // opcional; bloco roda sempre (try+catch), com/sem erro
+}
+
+// QuebrouClausula e um `quebrou NOME [se CONDICAO]` do arruma (multi-catch):
+// o erro e amarrado em Nome, o Filtro roda com ele amarrado e, se colar, o
+// Corpo roda. Sem filtro pega qualquer erro (so pode ser a ultima).
+type QuebrouClausula struct {
+	Token  token.Token // o `quebrou`
+	Nome   *Identifier
+	Filtro Expression // nil = pega o resto
+	Corpo  *BlockStatement
 }
 
 func (s *ArrumaStatement) statementNode()       {}
 func (s *ArrumaStatement) TokenLiteral() string { return s.Token.Literal }
 func (s *ArrumaStatement) String() string {
 	out := "arruma " + s.Try.String()
-	if s.Catch != nil { // arruma so com finalmente nao tem quebrou
+	for _, q := range s.Quebrous { // arruma so com finalmente nao tem quebrou
 		nome := ""
-		if s.ErrName != nil {
-			nome = s.ErrName.String()
+		if q.Nome != nil {
+			nome = q.Nome.String()
 		}
-		out += "quebrou " + nome + " " + s.Catch.String()
+		out += "quebrou " + nome + " "
+		if q.Filtro != nil {
+			out += "se " + q.Filtro.String() + " "
+		}
+		out += q.Corpo.String()
 	}
 	if s.Finally != nil {
 		out += "finalmente " + s.Finally.String()

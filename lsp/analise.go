@@ -352,8 +352,13 @@ func (a *analise) andaStmt(s ast.Statement, esc *escopo, m mapaPos) {
 		a.andaBloco(n.Body, esc, m)
 	case *ast.ArrumaStatement:
 		a.andaBloco(n.Try, esc, m)
-		a.anota(n.ErrName, esc, ligQuebrou, m)
-		a.andaBloco(n.Catch, esc, m)
+		for _, q := range n.Quebrous {
+			a.anota(q.Nome, esc, ligQuebrou, m)
+			if q.Filtro != nil {
+				a.andaExpr(q.Filtro, esc, m)
+			}
+			a.andaBloco(q.Corpo, esc, m)
+		}
 		a.andaBloco(n.Finally, esc, m)
 	case *ast.DesestruturaStatement:
 		a.andaExpr(n.Value, esc, m)

@@ -1266,14 +1266,12 @@ func (i *Interpreter) evalFatia(node *ast.FatiaExpression, env *object.Environme
 func (i *Interpreter) evalArruma(node *ast.ArrumaStatement, env *object.Environment) object.Object {
 	res := i.evalBlock(node.Try, env)
 
-	// se houve erro e existe catch: captura e amarra ao ErrName.
-	if res != nil && res.Type() == object.ERRO_OBJ && node.Catch != nil {
-		erro := res.(*object.Erro)
-		erro.Handled = true
-		if node.ErrName != nil {
-			env.Set(node.ErrName.Value, erro)
-		}
-		res = i.evalBlock(node.Catch, env)
+	// se houve erro e existe quebrou: tenta as clausulas em ordem. Cada uma
+	// amarra o erro no nome dela; com filtro (`quebrou e se COND`), so pega se
+	// a condicao colar. Nenhuma pegou: o erro continua subindo (depois do
+	// finalmente), igual arruma sem quebrou. Erro no filtro sobe no lugar.
+	if res != nil && res.Type() == object.ERRO_OBJ && len(node.Quebrous) > 0 {
+		res = i.pegaErro(node, res.(*object.Erro), env)
 	}
 
 	// finally sempre roda, com erro/return/vaza/continua pendente. O valor
@@ -1290,6 +1288,31 @@ func (i *Interpreter) evalArruma(node *ast.ArrumaStatement, env *object.Environm
 		}
 	}
 	return res
+}
+
+// pegaErro roda o primeiro quebrou que aceita o erro (ver evalArruma).
+func (i *Interpreter) pegaErro(node *ast.ArrumaStatement, erro *object.Erro, env *object.Environment) object.Object {
+	// pego: dali pra frente e valor (o filtro pode passar pra builtin,
+	// testar `se erro`...) sem relancar
+	erro.Handled = true
+	for _, q := range node.Quebrous {
+		if q.Nome != nil {
+			env.Set(q.Nome.Value, erro)
+		}
+		if q.Filtro != nil {
+			c := i.Eval(q.Filtro, env)
+			if isError(c) {
+				return c
+			}
+			if !isTruthy(c) {
+				continue
+			}
+		}
+		return i.evalBlock(q.Corpo, env)
+	}
+	// ninguem pegou: volta a ser erro levantado
+	erro.Handled = false
+	return erro
 }
 
 // ehDesvio diz se o resultado de um statement e desvio de fluxo (nao valor).

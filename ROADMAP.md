@@ -16,7 +16,7 @@ Tiers 1–5, 5b e 8 (POO estilo Go) estão entregues. O backlog vivo:
 
 | Onde | O que sobra |
 |---|---|
-| Tier 2/3 | DAP (debug), multi-catch — itens grandes, levas próprias (FFI decidido: não vai ter) |
+| Tier 2/3 | DAP (debug) — item grande, leva própria (FFI decidido: não vai ter; multi-catch ✅) |
 | Bugs abertos | overflow, `importa`, erro entre engines |
 | Tier 6 | Homebrew, cobertura (`gs instala` + lock, `build --alvo` e lint de sombreamento ✅) |
 | Tier 7 | MaxStack por função |
@@ -106,7 +106,13 @@ Tiers 1–5, 5b e 8 (POO estilo Go) estão entregues. O backlog vivo:
 - [x] **Enums de `erro_tipo` padronizados** — constantes `runtime`, `builtin`,
       `io`, `rede`, `parse`, `usuario` (ver `interpreter/errors.go`).
 - [ ] Debug com breakpoints (DAP no LSP + `gs debug`) — grande; fica pra uma leva própria.
-- [ ] multi-catch (vários `quebrou` filtrando por `erro_tipo`) deixar para depois esse.
+- [x] **multi-catch** — vários `quebrou NOME [se CONDICAO]` no mesmo `arruma`,
+      tentados em ordem; o primeiro cujo filtro colar pega. Nenhum colou: o
+      erro sobe depois do `finalmente`. `quebrou` sem filtro só como o último
+      (erro de parse). Erro dentro do filtro sobe no lugar do original (igual
+      Python). `se` é palavra-chave só ali (contextual, mesma linha). Os 2
+      engines, formatter, LSP e gramática do VSCode. Veja
+      `examples/multi_catch.gs`.
 
 ### Tier 3 — Maturidade
 
@@ -679,8 +685,8 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       `"${t:-8}"`: o que vem depois do último `:` fora de `()[]{}`/strings é o
       formato, com os verbos do `formata` sem o `%`. Formato inválido é erro
       de parse.
-- [ ] **multi-catch** — já listado no Tier 2; com `tipo()` e `erro_tipo` fica
-      natural: `quebrou erro se erro_tipo(erro) == "rede"`.
+- [x] **multi-catch** — entregue no Tier 2 do jeito sugerido aqui:
+      `quebrou erro se erro_tipo(erro) == "rede"`.
 
 **Editor / LSP**
 

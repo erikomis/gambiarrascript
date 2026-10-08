@@ -46,6 +46,9 @@ interface Estado {
   interp: number[];
   // proximo identificador e nome de funcao sendo declarada (depois de `gambiarra`)
   defineFuncao: boolean;
+  // multi-catch: 1 = logo depois de `quebrou`, 2 = depois do nome do erro
+  // (ai um `se` na mesma linha e palavra-chave do filtro)
+  quebrou: number;
 }
 
 const ident = /^[\p{L}_][\p{L}\p{N}_]*/u;
@@ -71,11 +74,14 @@ function tokenTexto(stream: StringStream, estado: Estado): string {
 }
 
 function tokenCodigo(stream: StringStream, estado: Estado): string | null {
+  if (stream.sol()) estado.quebrou = 0; // o `se` do filtro e na mesma linha
   if (stream.eatSpace()) return null;
 
   // so o token logo depois de `gambiarra` conta (gambiarra(x) anonima nao)
   const nomeDeFuncao = estado.defineFuncao;
   estado.defineFuncao = false;
+  const passoQuebrou = estado.quebrou;
+  estado.quebrou = 0;
 
   if (stream.eat("#")) {
     stream.skipToEnd();
@@ -123,8 +129,14 @@ function tokenCodigo(stream: StringStream, estado: Estado): string | null {
     if (palavra === "nada") return "atom"; // o tema one-dark nao pinta "null"
     if (keywords.has(palavra)) {
       if (palavra === "gambiarra") estado.defineFuncao = true;
+      if (palavra === "quebrou") estado.quebrou = 1;
       return "keyword";
     }
+    if (passoQuebrou === 1) {
+      estado.quebrou = 2; // o nome do erro
+      return "variableName";
+    }
+    if (passoQuebrou === 2 && palavra === "se") return "keyword";
     // chamada: nome( — pinta como funcao
     if (stream.match(/^\s*\(/, false)) return "variableName.function";
     return "variableName";
@@ -160,7 +172,12 @@ function tokenCru(stream: StringStream, estado: Estado): string {
 
 export const gambiarraScript = StreamLanguage.define<Estado>({
   name: "gambiarrascript",
-  startState: () => ({ modo: "codigo", interp: [], defineFuncao: false }),
+  startState: () => ({
+    modo: "codigo",
+    interp: [],
+    defineFuncao: false,
+    quebrou: 0,
+  }),
   copyState: (e) => ({ ...e, interp: [...e.interp] }),
   token(stream, estado) {
     switch (estado.modo) {

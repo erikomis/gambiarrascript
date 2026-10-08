@@ -163,6 +163,72 @@ quebrou erro
 acabou_finalmente
 ```
 
+## Varios quebrou: filtrando o erro
+
+Um `arruma` pode ter **varios** `quebrou`, cada um com um filtro opcional:
+`quebrou NOME se CONDICAO`. Quando da erro, as clausulas sao tentadas **em
+ordem**: o erro e amarrado no nome, a condicao roda e, se colar, o bloco dela
+roda — e so ela. O `quebrou` sem filtro pega o resto.
+
+```gambiarrascript
+gambiarra carrega(caminho)
+    arruma
+        funciona de_json(le_arquivo(caminho))
+    quebrou erro se erro_tipo(erro) == "io"
+        mostra "sem arquivo, vai o padrao"
+        funciona {}
+    quebrou erro se erro_tipo(erro) == "rede" ou contem(erro_msg(erro), "timeout")
+        envolve_erro("config", "config remota fora do ar", erro)
+    quebrou erro
+        quebra("config quebrada", erro)   # pega o resto
+    finalmente
+        mostra "carrega: fim"             # roda uma vez so, pegou ou nao
+    acabou_finalmente
+acabou_finalmente
+
+mostra carrega("nao_existe.json")
+# sem arquivo, vai o padrao
+# carrega: fim
+# {}
+```
+
+As regras:
+
+- A condicao e **qualquer expressao**, rodando com o nome ja amarrado: da pra
+  testar `erro_tipo`, `erro_msg`, `erro_causa`, chamar uma gambiarra tua, ler
+  variavel de fora.
+- **Nenhum filtro colou** (e nao tem `quebrou` sem filtro): o erro continua
+  subindo, depois do `finalmente`, igual um `arruma` sem `quebrou`.
+- O `quebrou` sem filtro tem que ser o **ultimo** — embaixo dele nada ia rodar,
+  entao e erro de sintaxe (`quebrou sem filtro tem que ser o ultimo`).
+- **Erro dentro do filtro** (ex.: `tamanho(erro)`) sobe no lugar do original,
+  como no `except` do Python: as outras clausulas nao sao tentadas e o
+  `finalmente` roda antes.
+- Cada clausula pode usar um nome diferente; todos viram variavel do escopo da
+  funcao (igual o `quebrou` simples), mesmo o de clausula que nao colou.
+- `se` so e palavra-chave ali, na mesma linha, logo depois do `quebrou NOME`.
+  No resto do codigo `se` continua sendo nome comum.
+
+```gambiarrascript
+gambiarra divide(a, b)
+    arruma
+        funciona a / b
+    quebrou erro se erro_tipo(erro) == "rede"
+        funciona 0                        # nao e erro de rede: nao pega
+    finalmente
+        mostra "divide: fim"
+    acabou_finalmente
+acabou_finalmente
+
+arruma
+    divide(1, 0)
+quebrou erro
+    mostra "subiu: " + erro_tipo(erro)
+acabou_finalmente
+# divide: fim
+# subiu: runtime
+```
+
 ## Sinais de controle
 
 `funciona`, `vaza`, `continua` e `sai(...)` dentro de um `arruma` **nao** sao

@@ -47,7 +47,9 @@ func init() {
 // vira real no folding, traco com frame de builtin.
 // 12 = POO: OpTreta/OpCombinado/OpMetodo/OpInstancia (descritores no pool) e
 // builtins satisfaz/como_tipo no fim da lista.
-const formatoGSC = 12
+// 13 = multi-catch: varios `quebrou NOME se COND` (temporario do erro +
+// OpJumpIfFalse por filtro e OpThrow quando nenhum cola).
+const formatoGSC = 13
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

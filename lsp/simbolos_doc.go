@@ -143,7 +143,9 @@ func (m *montaSimbolos) doEscopo(st ast.Statement, out *[]SimboloDoc, vistos map
 		m.doBloco(n.Body, out, vistos, topo)
 	case *ast.ArrumaStatement:
 		m.doBloco(n.Try, out, vistos, topo)
-		m.doBloco(n.Catch, out, vistos, topo)
+		for _, q := range n.Quebrous {
+			m.doBloco(q.Corpo, out, vistos, topo)
+		}
 		m.doBloco(n.Finally, out, vistos, topo)
 	case *ast.EscolheStatement:
 		for _, c := range n.Casos {

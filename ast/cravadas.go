@@ -141,8 +141,11 @@ func (ch *checaCrava) stmt(s Statement) {
 		ch.bloco(n.Default)
 	case *ArrumaStatement:
 		ch.bloco(n.Try)
-		ch.atribui(n.ErrName)
-		ch.bloco(n.Catch)
+		for _, q := range n.Quebrous {
+			ch.atribui(q.Nome)
+			ch.expr(q.Filtro)
+			ch.bloco(q.Corpo)
+		}
 		ch.bloco(n.Finally)
 	case *ImportaStatement:
 		ch.atribui(n.Alias)

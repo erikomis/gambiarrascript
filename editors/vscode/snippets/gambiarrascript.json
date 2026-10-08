@@ -44,6 +44,11 @@
     "body": ["arruma", "\t${1}", "quebrou ${2:erro}", "\t${0}", "acabou_finalmente"],
     "description": "Tratamento de erro"
   },
+  "Quebrou filtrado (multi-catch)": {
+    "prefix": "quebrou_se",
+    "body": ["quebrou ${1:erro} se erro_tipo(${1:erro}) == \"${2:rede}\"", "\t${0}"],
+    "description": "Clausula quebrou que so pega erro que bate no filtro"
+  },
   "Pra cada (colecao)": {
     "prefix": "pra_cada_em",
     "body": ["pra_cada ${1:item} em ${2:colecao}", "\t${0}", "acabou_finalmente"],

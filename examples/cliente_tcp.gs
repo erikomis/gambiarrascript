@@ -24,10 +24,8 @@ arruma
     envia(c, "tchau")
     mostra recebe(c) ?? "(servidor desligou)"  # nada = o outro lado fechou
     fecha(c)
+quebrou erro se erro_tipo(erro) == "rede"
+    mostra "rede zuada: " + erro_msg(erro)
 quebrou erro
-    se_colar erro_tipo(erro) == "rede"
-        mostra "rede zuada: " + erro_msg(erro)
-    se_nao_colar
-        mostra "deu ruim: " + erro_msg(erro)
-    acabou_finalmente
+    mostra "deu ruim: " + erro_msg(erro)
 acabou_finalmente

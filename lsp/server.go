@@ -284,8 +284,8 @@ var docsKeyword = map[string]string{
 	"escolhe":           "escolhe x / caso v1, v2 <bloco> / se_nao_colar <bloco> / acabou_finalmente: switch — casa o primeiro caso igual (==) e sai, sem fallthrough.",
 	"caso":              "caso v1[, v2...]: um braco do escolhe. Aceita varios valores separados por virgula.",
 	"funciona":          "funciona valor: return de uma gambiarra.",
-	"arruma":            "arruma ... quebrou erro ... acabou_finalmente: try/catch.",
-	"quebrou":           "quebrou nome: captura o erro do arruma.",
+	"arruma":            "arruma ... quebrou erro ... acabou_finalmente: try/catch. Aceita varios quebrou (`quebrou erro se CONDICAO`), tentados em ordem.",
+	"quebrou":           "quebrou nome [se condicao]: captura o erro do arruma. Com `se`, so pega se a condicao colar (multi-catch: varios quebrou, o primeiro que colar pega; sem filtro so o ultimo; nenhum colou = o erro sobe).",
 	"vaza":              "vaza: break de um loop.",
 	"continua":          "continua: continue de um loop.",
 	"deu_bom":           "deu_bom: booleano verdadeiro.",
@@ -804,11 +804,14 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 		tc.walkBlock(n.Body)
 	case *ast.ArrumaStatement:
 		tc.walkBlock(n.Try)
-		if n.Catch != nil {
-			if n.ErrName != nil {
-				tc.define(n.ErrName.Value)
+		for _, q := range n.Quebrous {
+			if q.Nome != nil {
+				tc.define(q.Nome.Value)
 			}
-			tc.walkBlock(n.Catch)
+			if q.Filtro != nil {
+				tc.walkExpr(q.Filtro)
+			}
+			tc.walkBlock(q.Corpo)
 		}
 		if n.Finally != nil {
 			tc.walkBlock(n.Finally)

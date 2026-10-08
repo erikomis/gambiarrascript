@@ -1179,21 +1179,37 @@ func (p *Parser) parseArruma() ast.Statement {
 	stmt := &ast.ArrumaStatement{Token: p.curToken}
 	p.nextToken()
 	stmt.Try = p.parseBlockStatement()
-	// catch opcional: `quebrou err <catch-block>`
-	if p.curTokenIs(token.QUEBROU) {
+	// catch opcional, um ou mais (multi-catch): `quebrou err [se COND] <bloco>`,
+	// tentados em ordem. So o ultimo pode ficar sem filtro.
+	for p.curTokenIs(token.QUEBROU) {
+		q := &ast.QuebrouClausula{Token: p.curToken}
 		if !p.expectPeek(token.IDENT) {
 			return nil
 		}
-		stmt.ErrName = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+		q.Nome = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+		// `se` e palavra-chave so aqui (contextual): na mesma linha do nome.
+		// Fora disso continua sendo nome comum (`se` em linha propria e o
+		// comeco do corpo).
+		if p.peekToken.Type == token.IDENT && p.peekToken.Literal == "se" &&
+			p.peekToken.Line == p.curToken.Line {
+			p.nextToken() // vai pro `se`
+			p.nextToken() // vai pro comeco da condicao
+			q.Filtro = p.parseExpression(LOWEST)
+		}
+		if n := len(stmt.Quebrous); n > 0 && stmt.Quebrous[n-1].Filtro == nil {
+			p.addErro(stmt.Quebrous[n-1].Token.Line, stmt.Quebrous[n-1].Token.Coluna,
+				"quebrou sem filtro tem que ser o ultimo (os de baixo nunca iam rodar)")
+		}
 		p.nextToken()
-		stmt.Catch = p.parseBlockStatement()
+		q.Corpo = p.parseBlockStatement()
+		stmt.Quebrous = append(stmt.Quebrous, q)
 	}
 	// bloco finally opcional: `finalmente <block> acabou_finalmente`
 	if p.curTokenIs(token.FINALMENTE) {
 		p.nextToken()
 		stmt.Finally = p.parseBlockStatement()
 	}
-	if stmt.Catch == nil && stmt.Finally == nil {
+	if len(stmt.Quebrous) == 0 && stmt.Finally == nil {
 		p.addErro(p.curToken.Line, p.curToken.Coluna,
 			"arruma sem 'quebrou' nem 'finalmente'? cade o resto?")
 	}
