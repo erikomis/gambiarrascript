@@ -44,8 +44,8 @@ mostra loga("info", ...msg)
 
 # default completa o que faltar
 gambiarra saudacao(nome, cumprimento = "e ai") funciona "${cumprimento}, ${nome}!" acabou_finalmente
-mostra saudacao(...["Erik"])
-mostra saudacao(...["Erik", "salve"])
+mostra saudacao(...["Jurandir"])
+mostra saudacao(...["Jurandir", "salve"])
 
 # bora tambem espalha
 bota fu = bora volume(...medidas)

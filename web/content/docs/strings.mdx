@@ -25,9 +25,9 @@ Nao processa escape nenhum, aceita multiline e nao precisa escapar aspas
 duplas. Perfeita pra JSON, regex, caminho do Windows:
 
 ```gambiarrascript
-bota j = `{"nome": "Erik", "tags": ["go", "gs"]}`
-mostra de_json(j)["nome"]                    # Erik
-mostra `c:\Users\erik\arquivo.txt`           # c:\Users\erik\arquivo.txt
+bota j = `{"nome": "Jurandir", "tags": ["go", "gs"]}`
+mostra de_json(j)["nome"]                    # Jurandir
+mostra `c:\Users\jurandir\arquivo.txt`       # c:\Users\jurandir\arquivo.txt
 mostra `linha1
 linha2
 linha3`                                      # multiline
@@ -42,10 +42,10 @@ So uma coisa ainda e processada na crase: o `${...}` da interpolacao (abaixo).
 qualquer expressao: variavel, conta, chamada, indice.
 
 ```gambiarrascript
-bota nome = "Erik"
+bota nome = "Jurandir"
 bota itens = ["cafe", "pao"]
 mostra "salve, ${nome}! tem ${tamanho(itens)} itens: ${junta(itens, ", ")}"
-# salve, Erik! tem 2 itens: cafe, pao
+# salve, Jurandir! tem 2 itens: cafe, pao
 mostra "conta: ${2 + 3 * 4}"               # conta: 14
 mostra "preco: \${nao interpola}"          # preco: ${nao interpola}
 ```
@@ -214,9 +214,9 @@ acabou_finalmente
 mostra repete("ba", 3)                    # bababa
 
 # parse de linha CSV simples (pra arquivo CSV de verdade tem le_csv)
-bota linha = "Erik;25;Sao Paulo"
+bota linha = "Jurandir;25;Sao Paulo"
 bota [nome, idade, cidade] = separa(linha, ";")
-mostra "${nome} tem ${numero(idade) + 1} ano que vem"   # Erik tem 26 ano que vem
+mostra "${nome} tem ${numero(idade) + 1} ano que vem"   # Jurandir tem 26 ano que vem
 ```
 
 Mais em [Biblioteca padrao](/docs/biblioteca) e [Receitas](/docs/exemplos).

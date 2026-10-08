@@ -1,6 +1,6 @@
 # conta quantos itens tem num array
 
-bota tropa = ["Erik", "Ana", "Joao", "Bia"]
+bota tropa = ["Jurandir", "Ana", "Joao", "Bia"]
 
 # jeito nativo, ja vem de fabrica na linguagem
 mostra "nativo: " + tamanho(tropa)

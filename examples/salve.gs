@@ -1,7 +1,7 @@
 # o classico, do jeito gambiarra
 mostra "Salve, tropa!"
 
-bota nome = "Erik"
+bota nome = "Jurandir"
 bota idade = 25
 
 se_colar idade >= 18

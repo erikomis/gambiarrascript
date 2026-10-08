@@ -148,9 +148,9 @@ dicionario **lembra a ordem de insercao** — `chaves`, `pra_cada`, `mostra` e
 `pra_json` saem sempre na mesma ordem.
 
 ```gambiarrascript
-bota pessoa = {"nome": "Erik", "idade": 25, "dev": deu_bom}
+bota pessoa = {"nome": "Jurandir", "idade": 25, "dev": deu_bom}
 
-mostra pessoa["nome"]                  # Erik
+mostra pessoa["nome"]                  # Jurandir
 mostra pessoa["idade"]                 # 25
 
 bota pessoa["cidade"] = "Sao Paulo"    # insere ou atualiza
@@ -164,10 +164,10 @@ lendo, escrevendo e em atribuicao composta. Da pra guardar gambiarra no
 dicionario e chamar como "metodo" (passando o proprio objeto):
 
 ```gambiarrascript
-bota jogador = {"nome": "Erik", "pontos": 0}
+bota jogador = {"nome": "Jurandir", "pontos": 0}
 jogador.pontos += 100
 bota jogador.nivel = "chefe"
-mostra "${jogador.nome}: ${jogador.pontos} (${jogador.nivel})"   # Erik: 100 (chefe)
+mostra "${jogador.nome}: ${jogador.pontos} (${jogador.nivel})"   # Jurandir: 100 (chefe)
 mostra jogador.vidas                  # nada
 
 bota cachorro = {"nome": "Rex", "late": gambiarra(eu) funciona eu.nome + " faz au au" acabou_finalmente}
@@ -181,9 +181,9 @@ Se a variavel puder ser `nada`, use `d?.campo` (veja [Tipos](/docs/tipos#nada-na
 A chave e uma expressao, entao voce pode computar:
 
 ```gambiarrascript
-bota pessoa = {"nome": "Erik"}
+bota pessoa = {"nome": "Jurandir"}
 bota k = "nome"
-mostra pessoa[k]                       # Erik
+mostra pessoa[k]                       # Jurandir
 bota dic = {"2024": 1, "2025": 2}
 mostra dic["202" + "4"]                # 1
 ```
@@ -282,8 +282,8 @@ mesmo nome. O que faltar vira `nada` (e o que sobrar e ignorado):
 bota [primeiro, segundo] = [1, 2, 3]
 mostra "${primeiro} e ${segundo}"     # 1 e 2
 
-bota {nome, idade, cpf} = {"nome": "Erik", "idade": 25}
-mostra [nome, idade, cpf]             # [Erik, 25, nada]
+bota {nome, idade, cpf} = {"nome": "Jurandir", "idade": 25}
+mostra [nome, idade, cpf]             # [Jurandir, 25, nada]
 ```
 
 ## Conjuntos

@@ -149,9 +149,9 @@ types). The dictionary **remembers insertion order** — `chaves`, `pra_cada`,
 `mostra` and `pra_json` always come out in the same order.
 
 ```gambiarrascript
-bota pessoa = {"nome": "Erik", "idade": 25, "dev": deu_bom}
+bota pessoa = {"nome": "Jurandir", "idade": 25, "dev": deu_bom}
 
-mostra pessoa["nome"]                  # Erik
+mostra pessoa["nome"]                  # Jurandir
 mostra pessoa["idade"]                 # 25
 
 bota pessoa["cidade"] = "Sao Paulo"    # inserts or updates
@@ -165,10 +165,10 @@ for reading, writing and compound assignment. You can store a gambiarra in the
 dictionary and call it like a "method" (passing the object itself):
 
 ```gambiarrascript
-bota jogador = {"nome": "Erik", "pontos": 0}
+bota jogador = {"nome": "Jurandir", "pontos": 0}
 jogador.pontos += 100
 bota jogador.nivel = "chefe"
-mostra "${jogador.nome}: ${jogador.pontos} (${jogador.nivel})"   # Erik: 100 (chefe)
+mostra "${jogador.nome}: ${jogador.pontos} (${jogador.nivel})"   # Jurandir: 100 (chefe)
 mostra jogador.vidas                  # nada
 
 bota cachorro = {"nome": "Rex", "late": gambiarra(eu) funciona eu.nome + " faz au au" acabou_finalmente}
@@ -182,9 +182,9 @@ If the variable might be `nada`, use `d?.campo` (see [Types](/docs/en/tipos#nada
 The key is an expression, so you can compute it:
 
 ```gambiarrascript
-bota pessoa = {"nome": "Erik"}
+bota pessoa = {"nome": "Jurandir"}
 bota k = "nome"
-mostra pessoa[k]                       # Erik
+mostra pessoa[k]                       # Jurandir
 bota dic = {"2024": 1, "2025": 2}
 mostra dic["202" + "4"]                # 1
 ```
@@ -285,8 +285,8 @@ ignored):
 bota [primeiro, segundo] = [1, 2, 3]
 mostra "${primeiro} e ${segundo}"     # 1 e 2
 
-bota {nome, idade, cpf} = {"nome": "Erik", "idade": 25}
-mostra [nome, idade, cpf]             # [Erik, 25, nada]
+bota {nome, idade, cpf} = {"nome": "Jurandir", "idade": 25}
+mostra [nome, idade, cpf]             # [Jurandir, 25, nada]
 ```
 
 ## Sets

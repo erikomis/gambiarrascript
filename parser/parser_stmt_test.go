@@ -9,7 +9,7 @@ import (
 )
 
 func TestParseBota(t *testing.T) {
-	prog := parse(t, `bota nome = "Erik"`)
+	prog := parse(t, `bota nome = "Jurandir"`)
 	if len(prog.Statements) != 1 {
 		t.Fatalf("esperava 1 statement, got %d", len(prog.Statements))
 	}
@@ -196,7 +196,7 @@ func TestErrosDetalhados(t *testing.T) {
 }
 
 func TestParseDicionario(t *testing.T) {
-	prog := parse(t, `bota d = {"nome": "Erik", "idade": 25}`)
+	prog := parse(t, `bota d = {"nome": "Jurandir", "idade": 25}`)
 	stmt := prog.Statements[0].(*ast.BotaStatement)
 	dic, ok := stmt.Value.(*ast.DicionarioLiteral)
 	if !ok {

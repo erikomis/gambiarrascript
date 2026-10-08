@@ -36,7 +36,7 @@ export default function HomePage() {
         <pre className="mt-4 max-w-xl overflow-auto rounded-lg border border-fd-foreground/10 bg-fd-muted p-4 text-left text-sm">
           <code>{`mostra "Salve, tropa!"
 
-bota nome = "Erik"
+bota nome = "Jurandir"
 bota idade = 25
 
 se_colar idade >= 18

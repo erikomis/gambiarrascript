@@ -72,7 +72,7 @@ acabou_finalmente
 ## Parse e re-serializar JSON
 
 ```gambiarrascript
-bota json_texto = `{"nome": "Erik", "idade": 25, "langs": ["go", "gs"]}`
+bota json_texto = `{"nome": "Jurandir", "idade": 25, "langs": ["go", "gs"]}`
 bota dados = de_json(json_texto)
 
 mostra "nome: " + dados["nome"]
@@ -210,7 +210,7 @@ mostra media(nums)                          # 3
 
 ```gambiarrascript
 bota pessoas = [
-    {"nome": "Erik", "idade": 25},
+    {"nome": "Jurandir", "idade": 25},
     {"nome": "Ana", "idade": 30},
     {"nome": "Bia", "idade": 22}
 ]
@@ -219,11 +219,11 @@ bota pessoas = [
 pra_cada p em ordena_por(pessoas, "idade")
     mostra "${p.nome} (${p.idade})"
 acabou_finalmente
-# Bia (22) / Erik (25) / Ana (30)
+# Bia (22) / Jurandir (25) / Ana (30)
 
 # criterio livre: ordena_com muta a lista; aqui, idade decrescente
 ordena_com(pessoas, gambiarra(a, b) funciona a.idade > b.idade acabou_finalmente)
-mostra mapeia(pessoas, gambiarra(p) funciona p.nome acabou_finalmente)   # [Ana, Erik, Bia]
+mostra mapeia(pessoas, gambiarra(p) funciona p.nome acabou_finalmente)   # [Ana, Jurandir, Bia]
 ```
 
 ## Ler CSV e tirar media

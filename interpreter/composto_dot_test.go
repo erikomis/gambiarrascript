@@ -43,16 +43,16 @@ mostra d["n"]`)
 }
 
 func TestDotAccessLeitura(t *testing.T) {
-	out := rodar(t, `bota p = {"nome": "Erik", "idade": 25}
+	out := rodar(t, `bota p = {"nome": "Jurandir", "idade": 25}
 mostra p.nome
 mostra p.idade`)
-	if out != "Erik\n25\n" {
+	if out != "Jurandir\n25\n" {
 		t.Fatalf("saida %q", out)
 	}
 }
 
 func TestDotAccessEscrita(t *testing.T) {
-	out := rodar(t, `bota p = {"nome": "Erik"}
+	out := rodar(t, `bota p = {"nome": "Jurandir"}
 bota p.nome = "Zeh"
 bota p.novo = 1
 mostra p.nome
@@ -86,9 +86,9 @@ func TestDotAccessMetodo(t *testing.T) {
 	out := rodar(t, `gambiarra fala(eu)
     funciona "salve, " + eu["nome"]
 acabou_finalmente
-bota p = {"nome": "Erik", "fala": fala}
+bota p = {"nome": "Jurandir", "fala": fala}
 mostra p.fala(p)`)
-	if out != "salve, Erik\n" {
+	if out != "salve, Jurandir\n" {
 		t.Fatalf("saida %q", out)
 	}
 }

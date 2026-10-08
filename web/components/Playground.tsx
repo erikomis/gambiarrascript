@@ -13,7 +13,7 @@ import { codificar, decodificarLink } from "@/lib/compartilhar";
 const defaultCode = `# o classico, do jeito gambiarra
 mostra "Salve, tropa!"
 
-bota nome = "Erik"
+bota nome = "Jurandir"
 bota idade = 25
 
 se_colar idade >= 18
@@ -55,7 +55,7 @@ acabou_finalmente
 bota frutas[1] = "jambo"
 mostra frutas
 
-bota pessoa = {"nome": "Erik", "idade": 25}
+bota pessoa = {"nome": "Jurandir", "idade": 25}
 mostra pessoa["nome"] + " tem " + pessoa["idade"] + " anos"
 
 pra_cada fruta em frutas
@@ -74,7 +74,7 @@ acabou_finalmente
   },
   {
     nome: "JSON",
-    codigo: `bota dados = de_json(\`{"nome": "Erik", "tags": ["go", "gs"]}\`)
+    codigo: `bota dados = de_json(\`{"nome": "Jurandir", "tags": ["go", "gs"]}\`)
 mostra dados["nome"]
 mostra dados["tags"][0]
 mostra pra_json({"ok": deu_bom, "n": 42})
@@ -172,7 +172,7 @@ se_nao_colar
     mostra "boa escolha: " + bonus
 acabou_finalmente
 `,
-    entrada: "Erik\n1024\nGambiarra\nfim\n",
+    entrada: "Jurandir\n1024\nGambiarra\nfim\n",
   },
 ];
 
@@ -449,7 +449,7 @@ export default function Playground() {
                 onChange={(e) => setEntrada(e.target.value)}
                 rows={4}
                 spellCheck={false}
-                placeholder={"uma linha por pergunta(), ex.:\nErik\n42"}
+                placeholder={"uma linha por pergunta(), ex.:\nJurandir\n42"}
                 className="block w-full resize-y rounded-md bg-fd-muted/30 p-2 font-mono text-sm outline-none focus:ring-1 focus:ring-fd-primary"
               />
               <p className="mt-1 text-xs text-fd-muted-foreground">

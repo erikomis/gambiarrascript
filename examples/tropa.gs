@@ -1,4 +1,4 @@
-bota tropa = ["Erik", "Ana", "Joao", "Bia"]
+bota tropa = ["Jurandir", "Ana", "Joao", "Bia"]
 
 mostra "chamando a tropa:"
 pra_cada nome em tropa

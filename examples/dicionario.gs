@@ -1,5 +1,5 @@
 # dicionario: o jeito gambiarra de guardar coisas com nome
-bota pessoa = {"nome": "Erik", "idade": 25, "dev": deu_bom}
+bota pessoa = {"nome": "Jurandir", "idade": 25, "dev": deu_bom}
 
 mostra "nome: " + pessoa["nome"]
 mostra "idade: " + texto(pessoa["idade"])

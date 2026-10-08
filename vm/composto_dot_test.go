@@ -19,7 +19,7 @@ func TestVMAtribuicaoComposta(t *testing.T) {
 
 func TestVMDotAccess(t *testing.T) {
 	casos := []struct{ input, esp string }{
-		{`bota p = {"nome": "Erik"}` + "\np.nome", "Erik"},
+		{`bota p = {"nome": "Jurandir"}` + "\np.nome", "Jurandir"},
 		{`bota p = {"n": 1}` + "\nbota p.n = 42\np.n", "42"},
 		{`bota c = {"t": 0}` + "\nc.t += 10\nc.t", "10"},
 		{`bota cfg = {"db": {"porta": 5432}}` + "\ncfg.db.porta", "5432"},

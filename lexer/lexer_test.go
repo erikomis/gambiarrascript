@@ -132,14 +132,14 @@ func TestStringEscapes(t *testing.T) {
 }
 
 func TestRawStringCrase(t *testing.T) {
-	// fonte gs: `{"nome": "Erik"}`  (crase, json com aspas, crase)
-	input := "\x60{\"nome\": \"Erik\"}\x60"
+	// fonte gs: `{"nome": "Jurandir"}`  (crase, json com aspas, crase)
+	input := "\x60{\"nome\": \"Jurandir\"}\x60"
 	l := New(input)
 	tok := l.NextToken()
 	if tok.Type != token.TEXTO {
 		t.Fatalf("tipo: got %q, esperado TEXTO", tok.Type)
 	}
-	if tok.Literal != `{"nome": "Erik"}` {
+	if tok.Literal != `{"nome": "Jurandir"}` {
 		t.Fatalf("literal: got %q", tok.Literal)
 	}
 	if l.NextToken().Type != token.EOF {

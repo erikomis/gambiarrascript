@@ -8,7 +8,7 @@ contador *= 2
 mostra "contador: ${contador}"
 
 # --- dot access: dict como record, com escrita e metodo ---
-bota jogador = {"nome": "Erik", "pontos": 0}
+bota jogador = {"nome": "Jurandir", "pontos": 0}
 jogador.pontos += 100
 bota jogador.nivel = "chefe"
 mostra "${jogador.nome} tem ${jogador.pontos} pontos (nivel ${jogador.nivel})"

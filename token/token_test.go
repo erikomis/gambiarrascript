@@ -13,7 +13,7 @@ func TestLookupIdent(t *testing.T) {
 		"pra_cada":          PRA_CADA,
 		"deu_bom":           DEU_BOM,
 		"nao":               NAO,
-		"erik":              IDENT, // nao-keyword vira identificador
+		"jurandir":          IDENT, // nao-keyword vira identificador
 	}
 	for entrada, esperado := range casos {
 		if got := LookupIdent(entrada); got != esperado {

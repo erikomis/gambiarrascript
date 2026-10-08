@@ -112,7 +112,7 @@ acabou_finalmente
 rota("GET", "/ver", ver)`)
 	defer srv.Close()
 
-	req, _ := http.NewRequest("GET", srv.URL+"/ver?nome=erik", nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/ver?nome=jurandir", nil)
 	req.Header.Set("X-Teste", "valor")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -120,7 +120,7 @@ rota("GET", "/ver", ver)`)
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
-	if string(b) != "erik|valor" {
+	if string(b) != "jurandir|valor" {
 		t.Fatalf("corpo: got %q", string(b))
 	}
 }

@@ -14,7 +14,7 @@ func TestDeJsonTipos(t *testing.T) {
 		{`mostra de_json("false")`, "deu_ruim"},
 		{`mostra de_json("null")`, "nada"},
 		{`mostra de_json("[1, 2, 3]")`, "[1, 2, 3]"},
-		{`mostra de_json("{\"nome\": \"Erik\"}")["nome"]`, "Erik"},
+		{`mostra de_json("{\"nome\": \"Jurandir\"}")["nome"]`, "Jurandir"},
 	}
 	for _, c := range casos {
 		out := rodar(t, c.input)
@@ -31,7 +31,7 @@ func TestPraJsonTipos(t *testing.T) {
 		{`mostra pra_json(deu_bom)`, "true"},
 		{`mostra pra_json(nada)`, "null"},
 		{`mostra pra_json([1, 2])`, "[1,2]"},
-		{`mostra pra_json({"nome": "Erik"})`, `{"nome":"Erik"}`},
+		{`mostra pra_json({"nome": "Jurandir"})`, `{"nome":"Jurandir"}`},
 	}
 	for _, c := range casos {
 		out := rodar(t, c.input)
@@ -42,7 +42,7 @@ func TestPraJsonTipos(t *testing.T) {
 }
 
 func TestJsonRoundTrip(t *testing.T) {
-	out := rodar(t, `bota original = {"nome": "Erik", "tags": ["dev", "br"], "ativo": deu_bom}
+	out := rodar(t, `bota original = {"nome": "Jurandir", "tags": ["dev", "br"], "ativo": deu_bom}
 bota voltou = de_json(pra_json(original))
 mostra original == voltou`)
 	if out != "deu_bom\n" {

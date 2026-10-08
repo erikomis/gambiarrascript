@@ -92,7 +92,7 @@ x <<= 3`)
 }
 
 func TestFormataDotAccess(t *testing.T) {
-	out := formataFonte(t, `bota p = {"nome": "Erik"}
+	out := formataFonte(t, `bota p = {"nome": "Jurandir"}
 mostra p.nome
 bota p.nome = "Zeh"
 p.idade += 1`)

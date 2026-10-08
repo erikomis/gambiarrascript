@@ -11,7 +11,7 @@ GambiarraScript é uma linguagem onde você não fecha bloco com `}` nem com `en
 ```
 mostra "Salve, tropa!"
 
-bota nome = "Erik"
+bota nome = "Jurandir"
 bota idade = 25
 
 se_colar idade >= 18
@@ -171,8 +171,8 @@ goroutine esta mexendo percorre um retrato tirado no comeco do laco.
 bota cfg = opcoes({"porta": 8080, "segredo": env("JWT_SEGREDO", "troca-isso")})
 bota hash = hash_senha("hunter2")               # bcrypt
 mostra confere_senha("hunter2", hash)          # deu_bom
-bota token = jwt_assina({"usuario": "erik"}, cfg["segredo"], {"expira_em": 3600})
-mostra jwt_confere(token, cfg["segredo"])["usuario"]   # erik
+bota token = jwt_assina({"usuario": "jurandir"}, cfg["segredo"], {"expira_em": 3600})
+mostra jwt_confere(token, cfg["segredo"])["usuario"]   # jurandir
 bota chave = gera_chave()
 mostra decripta(encripta("cartao 1234", chave), chave) # AES-256-GCM
 log_info("subiu", {"porta": cfg["porta"]})     # stderr; GS_LOG_FORMATO=json
@@ -187,8 +187,8 @@ responder 401 num `antes(...)`. Veja `examples/seguranca.gs`,
 ## JSON
 
 ```
-bota dados = de_json("{\"nome\": \"Erik\"}")
-mostra dados["nome"]                       # Erik
+bota dados = de_json("{\"nome\": \"Jurandir\"}")
+mostra dados["nome"]                       # Jurandir
 mostra pra_json({"ok": deu_bom, "n": 42})  # {"ok":true,"n":42}
 ```
 
@@ -204,8 +204,8 @@ Pra escrever JSON, caminhos ou regex sem escapar cada `"`, use crase — string
 crua, igual ao Go e ao Node:
 
 ```
-bota j = `{"nome": "Erik", "tags": ["go", "gs"]}`
-mostra de_json(j)["nome"]   # Erik
+bota j = `{"nome": "Jurandir", "tags": ["go", "gs"]}`
+mostra de_json(j)["nome"]   # Jurandir
 ```
 
 Dentro de crases nada é escapado (`\n` é barra-n literal) e a string pode ocupar

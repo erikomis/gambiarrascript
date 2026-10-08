@@ -13,7 +13,7 @@ gambiarra saudacao(nome)
     mostra "salve, " + nome
 acabou_finalmente
 
-saudacao("Erik")        # salve, Erik
+saudacao("Jurandir")        # salve, Jurandir
 ```
 
 ## Retorno
@@ -39,8 +39,8 @@ gambiarra cumprimenta(nome, saudacao = "salve")
     funciona saudacao + ", " + nome
 acabou_finalmente
 
-mostra cumprimenta("Erik")            # salve, Erik
-mostra cumprimenta("Erik", "fala")    # fala, Erik
+mostra cumprimenta("Jurandir")            # salve, Jurandir
+mostra cumprimenta("Jurandir", "fala")    # fala, Jurandir
 
 gambiarra retangulo(largura, altura = largura)
     funciona largura * altura
@@ -82,8 +82,8 @@ mostra soma3(10, ...[20, 30])        # 60
 mostra max(...xs)                    # 3
 mostra max(0, ...xs, 9, ...[4, 5])   # 9
 
-bota args = ["%s tem %d anos", "Erik", 25]
-mostra formata(...args)              # Erik tem 25 anos
+bota args = ["%s tem %d anos", "Jurandir", 25]
+mostra formata(...args)              # Jurandir tem 25 anos
 ```
 
 Funciona em qualquer coisa chamavel — gambiarra com nome, lambda, chamada com
@@ -106,11 +106,11 @@ acabou_finalmente
 bota dobra = gambiarra(x) funciona x * 2 acabou_finalmente
 bota ops = {"soma": soma_tudo}
 
-mostra soma_tudo(...[1, 2], ...[3, 4])     # 10
-mostra cumprimenta(...["Erik"])            # salve, Erik
-mostra cumprimenta(...["Erik", "fala"])    # fala, Erik
-mostra dobra(...[21])                      # 42
-mostra ops.soma(...[5, 5])                 # 10
+mostra soma_tudo(...[1, 2], ...[3, 4])        # 10
+mostra cumprimenta(...["Jurandir"])           # salve, Jurandir
+mostra cumprimenta(...["Jurandir", "fala"])   # fala, Jurandir
+mostra dobra(...[21])                         # 42
+mostra ops.soma(...[5, 5])                    # 10
 mostra espera(bora soma_tudo(...[1, 2, 3]))   # 6
 ```
 

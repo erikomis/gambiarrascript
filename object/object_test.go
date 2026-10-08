@@ -54,8 +54,8 @@ func TestChaveHash(t *testing.T) {
 func TestDicionarioInspect(t *testing.T) {
 	d := NovoDicionario()
 	chave := &Texto{Value: "nome"}
-	d.Bota(chave.ChaveHash(), ParDic{Chave: chave, Valor: &Texto{Value: "Erik"}})
-	if d.Inspect() != `{"nome": "Erik"}` {
+	d.Bota(chave.ChaveHash(), ParDic{Chave: chave, Valor: &Texto{Value: "Jurandir"}})
+	if d.Inspect() != `{"nome": "Jurandir"}` {
 		t.Fatalf("Inspect errado: got %q", d.Inspect())
 	}
 }

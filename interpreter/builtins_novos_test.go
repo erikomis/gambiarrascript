@@ -128,8 +128,8 @@ mostra le_arquivo("`+caminho+`")`)
 
 func TestPergunta(t *testing.T) {
 	out := rodarComStdin(t, `bota nome = pergunta("teu nome: ")
-mostra "eai " + nome`, bytes.NewBufferString("erik\n"))
-	if out != "teu nome: eai erik\n" {
+mostra "eai " + nome`, bytes.NewBufferString("jurandir\n"))
+	if out != "teu nome: eai jurandir\n" {
 		t.Fatalf("pergunta: got %q", out)
 	}
 }

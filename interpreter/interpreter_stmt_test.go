@@ -124,11 +124,11 @@ mostra fatorial(5)`)
 }
 
 func TestDicionarioAcesso(t *testing.T) {
-	out := rodar(t, `bota pessoa = {"nome": "Erik", "idade": 25}
+	out := rodar(t, `bota pessoa = {"nome": "Jurandir", "idade": 25}
 mostra pessoa["nome"]
 mostra pessoa["idade"]
 mostra pessoa["faltando"]`)
-	if out != "Erik\n25\nnada\n" {
+	if out != "Jurandir\n25\nnada\n" {
 		t.Fatalf("got %q", out)
 	}
 }

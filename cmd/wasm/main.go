@@ -68,7 +68,7 @@ func (s *saidaRastreada) quebraLinha() {
 // mais dado quando o buffer dele acaba, cada linha so sai daqui quando o
 // programa vai consumir ela de fato — e nessa hora ela e ecoada na saida, do
 // jeito que o terminal mostra o que voce digita. Assim
-// `pergunta("teu nome: ")` aparece como "teu nome: Erik" na transcricao.
+// `pergunta("teu nome: ")` aparece como "teu nome: Jurandir" na transcricao.
 // Depois da ultima linha vem io.EOF, igual stdin fechado no nativo (pergunta
 // devolve texto vazio); so que aqui, se a saida parou no meio de uma linha
 // (o prompt), ela e quebrada — como o Enter/ctrl+d no terminal.

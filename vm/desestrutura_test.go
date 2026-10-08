@@ -6,7 +6,7 @@ func TestVMDesestrutura(t *testing.T) {
 	casos := []struct{ input, esp string }{
 		{"bota [a, b] = [1, 2, 3]\na + b", "3"},
 		{"bota [a, b, c] = [1]\nc", "nada"},
-		{`bota {nome} = {"nome": "Erik"}` + "\nnome", "Erik"},
+		{`bota {nome} = {"nome": "Jurandir"}` + "\nnome", "Jurandir"},
 		{`bota {sumido} = {"outra": 1}` + "\nsumido", "nada"},
 	}
 	for _, c := range casos {

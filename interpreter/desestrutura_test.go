@@ -27,10 +27,10 @@ mostra c`)
 }
 
 func TestDesestruturaDict(t *testing.T) {
-	out := rodar(t, `bota {nome, idade} = {"nome": "Erik", "idade": 25, "extra": 1}
+	out := rodar(t, `bota {nome, idade} = {"nome": "Jurandir", "idade": 25, "extra": 1}
 mostra nome
 mostra idade`)
-	if out != "Erik\n25\n" {
+	if out != "Jurandir\n25\n" {
 		t.Fatalf("saida %q", out)
 	}
 }
