@@ -17,11 +17,11 @@ var builtins = map[string]*object.Builtin{
 	"de_json":  {Nome: "de_json", Fn: builtinDeJson},
 	"pra_json": {Nome: "pra_json", Fn: builtinPraJson},
 	// servidor/rede (o resto do servidor e por instancia, no New)
-	"responde_json": {Nome: "responde_json", Fn: builtinRespondeJson},
-	"conecta_ws":    {Nome: "conecta_ws", Fn: builtinConectaWs},
+	"responde_json":    {Nome: "responde_json", Fn: builtinRespondeJson},
+	"conecta_ws":       {Nome: "conecta_ws", Fn: builtinConectaWs},
 	"gera_certificado": {Nome: "gera_certificado", Fn: builtinGeraCertificado},
-	"tipo":     {Nome: "tipo", Fn: builtinTipo},
-	"trava":    {Nome: "trava", Fn: builtinTrava},
+	"tipo":             {Nome: "tipo", Fn: builtinTipo},
+	"trava":            {Nome: "trava", Fn: builtinTrava},
 
 	// texto
 	"formata":     {Nome: "formata", Fn: builtinFormata},
@@ -134,23 +134,23 @@ var builtins = map[string]*object.Builtin{
 	"separa_regex":    {Nome: "separa_regex", Fn: builtinSeparaRegex},
 
 	// tempo/datetime
-	"agora":          {Nome: "agora", Fn: builtinAgora},
-	"agora_num":      {Nome: "agora_num", Fn: builtinAgoraNum},
-	"agora_ns":       {Nome: "agora_ns", Fn: builtinAgoraNs},
-	"formata_tempo":  {Nome: "formata_tempo", Fn: builtinFormataTempo},
-	"parse_tempo":    {Nome: "parse_tempo", Fn: builtinParseTempo},
-	"duracao":        {Nome: "duracao", Fn: builtinDuracao},
-	"espera_ms":      {Nome: "espera_ms", Fn: builtinEsperaMs},
-	"soma_tempo":     {Nome: "soma_tempo", Fn: builtinSomaTempo},
-	"sub_tempo":      {Nome: "sub_tempo", Fn: builtinSubTempo},
-	"dia_da_semana":  {Nome: "dia_da_semana", Fn: builtinDiaDaSemana},
-	"diferenca_dias": {Nome: "diferenca_dias", Fn: builtinDiferencaDias},
-	"diferenca_horas":{Nome: "diferenca_horas", Fn: builtinDiferencaHoras},
-	"converte_tz":    {Nome: "converte_tz", Fn: builtinConverteTZ},
+	"agora":           {Nome: "agora", Fn: builtinAgora},
+	"agora_num":       {Nome: "agora_num", Fn: builtinAgoraNum},
+	"agora_ns":        {Nome: "agora_ns", Fn: builtinAgoraNs},
+	"formata_tempo":   {Nome: "formata_tempo", Fn: builtinFormataTempo},
+	"parse_tempo":     {Nome: "parse_tempo", Fn: builtinParseTempo},
+	"duracao":         {Nome: "duracao", Fn: builtinDuracao},
+	"espera_ms":       {Nome: "espera_ms", Fn: builtinEsperaMs},
+	"soma_tempo":      {Nome: "soma_tempo", Fn: builtinSomaTempo},
+	"sub_tempo":       {Nome: "sub_tempo", Fn: builtinSubTempo},
+	"dia_da_semana":   {Nome: "dia_da_semana", Fn: builtinDiaDaSemana},
+	"diferenca_dias":  {Nome: "diferenca_dias", Fn: builtinDiferencaDias},
+	"diferenca_horas": {Nome: "diferenca_horas", Fn: builtinDiferencaHoras},
+	"converte_tz":     {Nome: "converte_tz", Fn: builtinConverteTZ},
 
 	// csv
-	"le_csv":     {Nome: "le_csv", Fn: builtinLeCsv},
-	"escreve_csv":{Nome: "escreve_csv", Fn: builtinEscreveCsv},
+	"le_csv":      {Nome: "le_csv", Fn: builtinLeCsv},
+	"escreve_csv": {Nome: "escreve_csv", Fn: builtinEscreveCsv},
 
 	// compressao
 	"gzip_comprime":    {Nome: "gzip_comprime", Fn: builtinGzipComprime},

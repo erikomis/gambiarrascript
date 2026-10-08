@@ -141,7 +141,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.LBRACKET, p.parseIndex)
 	p.registerInfix(token.RANGE, p.parseRange)
 	p.registerInfix(token.DOT, p.parseDot)
-	p.registerInfix(token.QDOT, p.parseDot)       // obj?.campo
+	p.registerInfix(token.QDOT, p.parseDot)          // obj?.campo
 	p.registerInfix(token.COALESCE, p.parseCoalesce) // x ?? padrao
 
 	p.nextToken()

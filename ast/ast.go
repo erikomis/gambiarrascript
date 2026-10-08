@@ -288,10 +288,10 @@ func (s *PraCadaListStatement) String() string {
 }
 
 type GambiarraStatement struct {
-	Token       token.Token
-	Name        *Identifier
-	Parameters  []*Parametro
-	Body        *BlockStatement
+	Token      token.Token
+	Name       *Identifier
+	Parameters []*Parametro
+	Body       *BlockStatement
 }
 
 func (s *GambiarraStatement) statementNode()       {}
@@ -609,10 +609,10 @@ func (e *BoraExpression) String() string {
 // FatiaExpression representa uma fatia sintatica [inicio:fim] de uma lista ou
 // texto. Inicio/Fim nil = omitido (xs[:2], xs[2:], xs[:]).
 type FatiaExpression struct {
-	Token   token.Token
-	Left    Expression
-	Inicio  Expression // nil = do comeco
-	Fim     Expression // nil = ate o fim
+	Token  token.Token
+	Left   Expression
+	Inicio Expression // nil = do comeco
+	Fim    Expression // nil = ate o fim
 }
 
 func (e *FatiaExpression) expressionNode()      {}
@@ -632,8 +632,8 @@ func (e *FatiaExpression) String() string {
 // ---- TernarioExpression: se_colar cond entao a se_nao_colar b ----
 
 type TernarioExpression struct {
-	Token       token.Token
-	Cond        Expression
+	Token        token.Token
+	Cond         Expression
 	SeVerdadeiro Expression
 	SeFalso      Expression
 }
@@ -647,9 +647,9 @@ func (e *TernarioExpression) String() string {
 // ---- CoalesceExpression: x ?? padrao ----
 
 type CoalesceExpression struct {
-	Token    token.Token
-	Left     Expression
-	Right    Expression
+	Token token.Token
+	Left  Expression
+	Right Expression
 }
 
 func (e *CoalesceExpression) expressionNode()      {}
@@ -663,9 +663,9 @@ func (e *CoalesceExpression) String() string {
 // Parametro representa um parametro de gambiarra com valor padrao opcional
 // e/ou flag varargs (...resto).
 type Parametro struct {
-	Nome    *Identifier
-	Padrao  Expression // nil = sem valor padrao
-	Variadico bool     // true: ...resto (coleta args extras numa lista)
+	Nome      *Identifier
+	Padrao    Expression // nil = sem valor padrao
+	Variadico bool       // true: ...resto (coleta args extras numa lista)
 }
 
 func (p *Parametro) String() string {

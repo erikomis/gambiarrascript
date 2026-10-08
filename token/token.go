@@ -63,9 +63,9 @@ const (
 	COLON    = ":"
 
 	RANGE    = ".."
-	DOT      = "."  // acesso por ponto: obj.campo
-	QDOT     = "?." // navegacao segura: obj?.campo
-	COALESCE = "??" // coalescing: x ?? padrao
+	DOT      = "."   // acesso por ponto: obj.campo
+	QDOT     = "?."  // navegacao segura: obj?.campo
+	COALESCE = "??"  // coalescing: x ?? padrao
 	ELLIPSIS = "..." // varargs: gambiarra f(primeiro, ...resto)
 
 	ENTAO = "ENTAO" // se_colar cond ENTAO a se_nao_colar b (ternario)

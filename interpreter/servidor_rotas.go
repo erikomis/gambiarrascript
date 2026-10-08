@@ -38,7 +38,7 @@ type rotaHTTP struct {
 	// origens liberadas no handshake do rota_ws (nil = so a mesma origem;
 	// "*" = qualquer uma, so quando o script pede com todas as letras)
 	wsOrigens []string
-	ordem   int  // ordem de registro, desempata especificidade
+	ordem     int // ordem de registro, desempata especificidade
 }
 
 // rotulo e o nome que aparece no log de erro e no traço de pilha.
