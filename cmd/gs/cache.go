@@ -111,6 +111,9 @@ func carregaCache(caminhoGSC string, fonte []byte) *compiler.Bytecode {
 // gravaCache serializa o bytecode no .gsc. Falha e so aviso — cache e
 // otimizacao, nao requisito.
 func gravaCache(caminhoGSC string, fonte []byte, bc *compiler.Bytecode) {
+	if len(bc.Sitios) > 0 {
+		return // bytecode instrumentado (OpLinha) nunca vai pro cache
+	}
 	hashModulos := map[string][32]byte{}
 	for _, caminho := range bc.Modulos {
 		fonteMod, err := object.LeModulo(caminho)

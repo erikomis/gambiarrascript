@@ -14,6 +14,7 @@ gs repl                                          modo interativo (multiline)
 gs check <arquivo.gs>...                         parse + lint (erros e avisos)
 gs formata [-w] <arquivo.gs | diretorio>...      formata (imprime ou sobrescreve)
 gs testa [--tree] [-so nome] [<dir>]             roda os *_test.gs e soma os asserts
+gs testa --cobertura [<dir>]                     + % de linhas que rodaram (perfil/HTML)
 gs doc [<arquivo.gs | diretorio>...]             gera markdown das gambiarras documentadas
 gs init [nome]                                   cria gambiarra.json + principal.gs
 gs get <url | github.com/u/repo/mod.gs@tag>      baixa um modulo pra gs_modulos/ (+ lock)
@@ -121,7 +122,7 @@ estava. Mais em [Editor e formata](/docs/ferramentas#formatter-gs-formata).
 ## `gs testa`
 
 ```bash
-gs testa [--tree] [-so nome] [<dir>]
+gs testa [--tree] [-so nome] [--cobertura] [<dir>]
 ```
 
 Roda cada `*_test.gs` do diretorio (default: o atual; nao entra em
@@ -146,6 +147,83 @@ rodando 1 arquivo(s) no VM:
 
 Resumo (VM): 1 arquivos, 2/2 asserts passaram, 0 com perrengue
 ```
+
+### Cobertura (`--cobertura`)
+
+```bash
+gs testa --cobertura [--tree] [<dir>]
+gs testa --cobertura-perfil cobertura.out [<dir>]   # + perfil arquivo:linha contagem
+gs testa --cobertura-html cobertura.html [<dir>]    # + relatorio HTML colorido
+```
+
+Roda a suite instrumentada e, no fim, mostra a % de **linhas executaveis**
+que rodaram, por arquivo e no total. Linha executavel e a linha onde comeca um
+statement (inclusive `gambiarra`, `treta`, metodo e `importa`, que rodam
+quando a execucao passa por eles); comentario, linha em branco,
+`acabou_finalmente`, campo de `treta` e assinatura de `combinado` nao contam.
+Funciona nos dois engines (VM padrao, `--tree` tambem) e os dois dao
+exatamente as mesmas linhas e contagens.
+
+Entram no relatorio todos os `.gs` que rodaram durante os testes (os modulos
+importados, em qualquer pasta) mais os `.gs` do diretorio testado que nenhum
+teste importou (aparecem com 0%). Ficam de fora os `*_test.gs` e o que mora em
+`gs_modulos/` (dependencia nao e codigo teu) — igual o `go test -cover`.
+
+- `--cobertura-perfil arq` grava o perfil legivel por maquina: um cabecalho
+  `modo: contagem` e uma linha `arquivo:linha contagem` por linha executavel
+  (`0` = nao rodou).
+- `--cobertura-html arq` grava uma pagina so (sem dependencia) com o indice
+  dos arquivos e a fonte com as linhas pintadas: verde rodou (com quantas
+  vezes), vermelho nao rodou.
+- As duas ligam a cobertura sozinhas; aceitam `--flag arq` ou `--flag=arq`.
+- A cobertura nunca muda o codigo de saida: so os asserts mandam.
+
+```gambiarrascript
+# calc.gs
+gambiarra divide(a, b)
+    se_colar b == 0
+        quebra("divisao por zero")
+    acabou_finalmente
+    funciona a / b
+acabou_finalmente
+
+gambiarra dobra(x)
+    funciona x * 2
+acabou_finalmente
+```
+
+```gambiarrascript
+# calc_test.gs
+importa "calc.gs"
+
+espera(divide(10, 2), 5)
+```
+
+```bash
+$ gs testa --cobertura-perfil cobertura.out
+rodando 1 arquivo(s) no VM:
+  OK  calc_test.gs  (1/1 asserts)
+
+Resumo (VM): 1 arquivos, 1/1 asserts passaram, 0 com perrengue
+
+cobertura (VM):
+  calc.gs      4/6     linhas   66.7%
+  total        4/6     linhas   66.7%
+perfil gravado em cobertura.out
+
+$ cat cobertura.out
+modo: contagem
+calc.gs:1 1
+calc.gs:2 1
+calc.gs:3 0
+calc.gs:5 1
+calc.gs:8 1
+calc.gs:9 0
+```
+
+Rodar instrumentado custa: na VM o compilador emite um opcode a mais antes de
+cada statement (so quando a cobertura esta ligada — o bytecode normal, o do
+`gs roda`, e o mesmo de sempre e nunca vai pro cache `.gsc`).
 
 ## `gs doc`
 

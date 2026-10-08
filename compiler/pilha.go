@@ -159,7 +159,7 @@ func efeitoPilha(op code.Opcode, operandos []byte, consts []object.Object) (efei
 		return efeito{tira: 1, poe: 1}, true
 	case code.OpDup:
 		return efeito{tira: 1, poe: 2}, true
-	case code.OpCelula, code.OpTryEnd:
+	case code.OpCelula, code.OpTryEnd, code.OpLinha:
 		return efeito{}, true
 	case code.OpIndexSet:
 		return efeito{tira: 3}, true

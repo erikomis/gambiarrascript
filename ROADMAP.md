@@ -392,10 +392,19 @@ Ainda abertos (pedem decisão de semântica):
 
 ### Tier 6 — Tooling / ecossistema
 
-- [~] **`gs testa` parte 2** — feito: flag `--vm` (roda a suíte na VM, com
-      contagem de asserts via `vm.NovaComInterp`) e filtro por nome
-      (`gs testa -so aquele_teste`). Falta cobertura (% de linhas) — exige
-      instrumentar linha nos dois engines, fica pra depois.
+- [x] **`gs testa` parte 2** — flag `--vm` (roda a suíte na VM, com
+      contagem de asserts via `vm.NovaComInterp`), filtro por nome
+      (`gs testa -so aquele_teste`) e cobertura de linhas:
+      `gs testa --cobertura` (resumo por arquivo + total),
+      `--cobertura-perfil arq` (`arquivo:linha contagem`) e
+      `--cobertura-html arq`. Em cima de um **gancho de linha** comum aos dois
+      engines (`object.GanchoLinha`, chamado antes de cada statement
+      executável; `ast.StatementsExecutaveis` é a regra única): o tree-walker
+      testa um nil por statement; a VM só paga com `compiler.Instrumentar`,
+      que emite `OpLinha` — o bytecode normal fica idêntico (sem bump do
+      `.gsc`, e instrumentado nunca vai pro cache). Paridade de linhas e
+      contagens testada (ramos, laços, funções não chamadas, métodos de
+      treta, módulos, bora, exemplos). Base pro depurador (breakpoint/passo).
 - [x] **`gs formata -w .`** — aceita diretório e varre recursivamente todos
       os `.gs` (helper `coletaArquivosGs`).
 - [x] **`gs doc`** — novo subcomando: extrai a assinatura de cada `gambiarra`

@@ -87,6 +87,12 @@ type VM struct {
 	// modulos e o cache do importa: cada modulo roda uma vez so por processo.
 	// Compartilhado com os clones (bora, sub-VMs) — vive junto com as globais.
 	modulos *object.Modulos
+
+	// gancho de linha (object/gancho.go) e a tabela de sitios do bytecode
+	// instrumentado. So o OpLinha le os dois — e ele so existe com
+	// compiler.Instrumentar, entao o caminho normal nem olha pra ca.
+	gancho object.GanchoLinha
+	sitios []*object.SitioLinha
 }
 
 func New(bytecode *compiler.Bytecode, out io.Writer) *VM {
@@ -114,6 +120,7 @@ func NovaComInterp(bytecode *compiler.Bytecode, out io.Writer, interp *interpret
 		builtinIdx: bidx,
 		builtins:   interp.BuiltinsVisiveis(),
 		out:        out,
+		sitios:     bytecode.Sitios,
 	}
 	// gancho: os builtins de ordem superior (mapeia, filtra, reduz...) vem do
 	// interpreter e chamam applyFunction — que delega pra ca quando a funcao
@@ -121,6 +128,18 @@ func NovaComInterp(bytecode *compiler.Bytecode, out io.Writer, interp *interpret
 	interp.ChamaCompilada = vm.chamaCompilada
 	return vm
 }
+
+// disparaLinha chama o gancho com o sitio do operando do OpLinha.
+func (vm *VM) disparaLinha(operando []byte) {
+	if vm.gancho != nil {
+		vm.gancho(vm.sitios[code.ReadUint16(operando)])
+	}
+}
+
+// DefinirGancho liga o gancho de linha (nil desliga). Chama antes do Run: os
+// clones (bora, sub-VMs de mapeia/importa) copiam o gancho quando nascem. So
+// dispara em bytecode compilado com compiler.Instrumentar.
+func (vm *VM) DefinirGancho(g object.GanchoLinha) { vm.gancho = g }
 
 // chamaCompilada executa uma CompiledFunction de forma SINCRONA numa VM
 // clonada (compartilha globals/constants/builtins). Erros de runtime viram
@@ -363,6 +382,8 @@ func (vm *VM) clone() *VM {
 		builtinIdx: vm.builtinIdx,
 		builtins:   vm.builtins,
 		out:        vm.out,
+		gancho:     vm.gancho,
+		sitios:     vm.sitios,
 	}
 }
 
@@ -1389,6 +1410,13 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			vm.execPOO(op, int(code.ReadUint16(fn.Bytecode[ip+1:])))
 			ip += 3
 		default:
+			// OpLinha (gancho de linha) so aparece em bytecode instrumentado:
+			// fica no default pra o switch quente nao mudar nada
+			if op == code.OpLinha {
+				vm.disparaLinha(fn.Bytecode[ip+1:])
+				ip += 3
+				continue
+			}
 			return fmt.Errorf("opcode desconhecido: %d", op)
 		}
 	}

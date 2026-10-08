@@ -2,31 +2,60 @@ package main
 
 import "testing"
 
+func parseOK(t *testing.T, args ...string) opcoesTesta {
+	t.Helper()
+	op, err := parseArgsTesta(args)
+	if err != nil {
+		t.Fatalf("parseArgsTesta(%v): %v", args, err)
+	}
+	return op
+}
+
 func TestParseArgsTesta(t *testing.T) {
-	dir, usarVM, filtro := parseArgsTesta([]string{"--vm", "-so", "soma", "./testes"})
-	if !usarVM {
+	op := parseOK(t, "--vm", "-so", "soma", "./testes")
+	if !op.usarVM {
 		t.Fatalf("--vm nao reconhecido")
 	}
-	if filtro != "soma" {
-		t.Fatalf("filtro errado: %q", filtro)
+	if op.filtro != "soma" {
+		t.Fatalf("filtro errado: %q", op.filtro)
 	}
-	if dir != "./testes" {
-		t.Fatalf("dir errado: %q", dir)
+	if op.dir != "./testes" {
+		t.Fatalf("dir errado: %q", op.dir)
+	}
+	if op.cobertura {
+		t.Fatalf("cobertura ligou sozinha")
 	}
 }
 
 func TestParseArgsTestaDefaults(t *testing.T) {
 	// sem flag = VM: a suite tem que validar o engine que roda em producao.
-	dir, usarVM, filtro := parseArgsTesta(nil)
-	if dir != "." || !usarVM || filtro != "" {
-		t.Fatalf("defaults errados: dir=%q vm=%v filtro=%q", dir, usarVM, filtro)
+	op := parseOK(t)
+	if op.dir != "." || !op.usarVM || op.filtro != "" || op.cobertura {
+		t.Fatalf("defaults errados: %+v", op)
 	}
 }
 
 func TestParseArgsTestaTree(t *testing.T) {
-	_, usarVM, _ := parseArgsTesta([]string{"--tree"})
-	if usarVM {
+	if parseOK(t, "--tree").usarVM {
 		t.Fatalf("--tree devia voltar pro tree-walker")
+	}
+}
+
+func TestParseArgsTestaCobertura(t *testing.T) {
+	op := parseOK(t, "--cobertura", "pasta")
+	if !op.cobertura || op.dir != "pasta" || op.perfil != "" || op.html != "" {
+		t.Fatalf("--cobertura: %+v", op)
+	}
+	// perfil e html ligam a cobertura sozinhos, com espaco ou com =
+	op = parseOK(t, "--cobertura-perfil", "c.out", "--cobertura-html=c.html", "--tree")
+	if !op.cobertura || op.perfil != "c.out" || op.html != "c.html" || op.usarVM || op.dir != "." {
+		t.Fatalf("perfil/html: %+v", op)
+	}
+	if _, err := parseArgsTesta([]string{"--cobertura-perfil"}); err == nil {
+		t.Fatalf("--cobertura-perfil sem arquivo devia dar erro")
+	}
+	if _, err := parseArgsTesta([]string{"--cobertora"}); err == nil {
+		t.Fatalf("flag desconhecida devia dar erro")
 	}
 }
 

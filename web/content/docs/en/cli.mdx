@@ -14,6 +14,7 @@ gs repl                                          modo interativo (multiline)
 gs check <arquivo.gs>...                         parse + lint (erros e avisos)
 gs formata [-w] <arquivo.gs | diretorio>...      formata (imprime ou sobrescreve)
 gs testa [--tree] [-so nome] [<dir>]             roda os *_test.gs e soma os asserts
+gs testa --cobertura [<dir>]                     + % de linhas que rodaram (perfil/HTML)
 gs doc [<arquivo.gs | diretorio>...]             gera markdown das gambiarras documentadas
 gs init [nome]                                   cria gambiarra.json + principal.gs
 gs get <url | github.com/u/repo/mod.gs@tag>      baixa um modulo pra gs_modulos/ (+ lock)
@@ -125,7 +126,7 @@ file as it was. More in [Editor and formatter](/docs/en/ferramentas#formatter-gs
 ## `gs testa`
 
 ```bash
-gs testa [--tree] [-so nome] [<dir>]
+gs testa [--tree] [-so nome] [--cobertura] [<dir>]
 ```
 
 Runs every `*_test.gs` in the directory (default: the current one; it doesn't
@@ -151,6 +152,84 @@ rodando 1 arquivo(s) no VM:
 
 Resumo (VM): 1 arquivos, 2/2 asserts passaram, 0 com perrengue
 ```
+
+### Coverage (`--cobertura`)
+
+```bash
+gs testa --cobertura [--tree] [<dir>]
+gs testa --cobertura-perfil cobertura.out [<dir>]   # + file:line count profile
+gs testa --cobertura-html cobertura.html [<dir>]    # + colored HTML report
+```
+
+Runs the suite instrumented and, at the end, prints the % of **executable
+lines** that ran, per file and in total. An executable line is a line where a
+statement starts (including `gambiarra`, `treta`, methods and `importa`, which
+run when execution passes through them); comments, blank lines,
+`acabou_finalmente`, `treta` fields and `combinado` signatures don't count. It
+works on both engines (VM by default, `--tree` too) and both report exactly the
+same lines and counts.
+
+The report includes every `.gs` that ran during the tests (imported modules, in
+any folder) plus the `.gs` files in the tested directory that no test imported
+(they show up at 0%). `*_test.gs` files and anything under `gs_modulos/` are
+left out (dependencies aren't your code) — just like `go test -cover`.
+
+- `--cobertura-perfil file` writes the machine-readable profile: a
+  `modo: contagem` header and one `file:line count` line per executable line
+  (`0` = didn't run).
+- `--cobertura-html file` writes a single self-contained page with the file
+  index and the source with painted lines: green ran (with how many times), red
+  didn't run.
+- Both turn coverage on by themselves; they accept `--flag file` or
+  `--flag=file`.
+- Coverage never changes the exit code: only the asserts do.
+
+```gambiarrascript
+# calc.gs
+gambiarra divide(a, b)
+    se_colar b == 0
+        quebra("divisao por zero")
+    acabou_finalmente
+    funciona a / b
+acabou_finalmente
+
+gambiarra dobra(x)
+    funciona x * 2
+acabou_finalmente
+```
+
+```gambiarrascript
+# calc_test.gs
+importa "calc.gs"
+
+espera(divide(10, 2), 5)
+```
+
+```bash
+$ gs testa --cobertura-perfil cobertura.out
+rodando 1 arquivo(s) no VM:
+  OK  calc_test.gs  (1/1 asserts)
+
+Resumo (VM): 1 arquivos, 1/1 asserts passaram, 0 com perrengue
+
+cobertura (VM):
+  calc.gs      4/6     linhas   66.7%
+  total        4/6     linhas   66.7%
+perfil gravado em cobertura.out
+
+$ cat cobertura.out
+modo: contagem
+calc.gs:1 1
+calc.gs:2 1
+calc.gs:3 0
+calc.gs:5 1
+calc.gs:8 1
+calc.gs:9 0
+```
+
+Running instrumented has a cost: on the VM the compiler emits one extra opcode
+before each statement (only when coverage is on — the normal bytecode, the one
+`gs roda` uses, is the same as always and never goes into the `.gsc` cache).
 
 ## `gs doc`
 

@@ -127,6 +127,11 @@ const (
 	// OpInstancia: descritor object.DescLiteral; pop N valores, pop treta;
 	// empilha a instancia (`Ponto{x: 1}`).
 	OpInstancia // descIdx (2)
+	// --- instrumentacao (gancho de linha; veja object/gancho.go) ---
+	// OpLinha: chama o gancho de linha da VM com o sitio (arquivo:linha) do
+	// statement que comeca aqui. So existe em bytecode compilado com
+	// compiler.Instrumentar: o bytecode normal nunca tem OpLinha.
+	OpLinha // sitioIdx (2)
 )
 
 type Definition struct {
@@ -222,6 +227,8 @@ var definitions = map[Opcode]*Definition{
 	OpCombinado: {"OpCombinado", []int{2}},
 	OpMetodo:    {"OpMetodo", []int{2}},
 	OpInstancia: {"OpInstancia", []int{2}},
+	// instrumentacao
+	OpLinha: {"OpLinha", []int{2}},
 }
 
 func Lookup(op byte) (*Definition, error) {

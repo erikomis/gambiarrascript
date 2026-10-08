@@ -49,6 +49,9 @@ type Interpreter struct {
 	// mostra/escreve/escreve_erro/espera/afirma concorrentemente. Sem o lock
 	// a saida fica intercalada e podem vir pedaços pela metade.
 	muOut sync.Mutex
+
+	// gancho de linha (gancho.go); nil = desligado
+	gancho *ganchoLinha
 }
 
 func New(out io.Writer) *Interpreter {
@@ -157,6 +160,9 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		// na compilacao): assim os dois engines reclamam dos mesmos casos.
 		if errs := ast.ChecaCravadas(node, env.Cravadas()); len(errs) > 0 {
 			return newError(errs[0].Linha, "%s", errs[0].Msg)
+		}
+		if i.gancho != nil {
+			i.gancho.registraSitios(node, i.arquivo)
 		}
 		return i.evalProgram(node, env)
 	case *ast.ExpressionStatement:
@@ -378,6 +384,9 @@ func (i *Interpreter) evalBora(node *ast.BoraExpression, env *object.Environment
 func (i *Interpreter) evalProgram(prog *ast.Program, env *object.Environment) object.Object {
 	var result object.Object = NADA
 	for _, stmt := range prog.Statements {
+		if i.gancho != nil {
+			i.gancho.dispara(stmt)
+		}
 		result = i.Eval(stmt, env)
 		switch r := result.(type) {
 		case *object.Retorno:
@@ -954,6 +963,9 @@ func iguaisRec(a, b object.Object, prof int, vistos map[[2]object.Object]bool) b
 func (i *Interpreter) evalBlock(block *ast.BlockStatement, env *object.Environment) object.Object {
 	var result object.Object = NADA
 	for _, stmt := range block.Statements {
+		if i.gancho != nil {
+			i.gancho.dispara(stmt)
+		}
 		result = i.Eval(stmt, env)
 		if ehDesvio(result) {
 			return result
@@ -1173,6 +1185,9 @@ func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Enviro
 		}
 		modEnv := object.NewEnvironment()
 		modEnv.MarcaModulo(abs)
+		if i.gancho != nil {
+			i.gancho.registraSitios(prog, abs)
+		}
 		res := i.evalProgram(prog, modEnv)
 		if isError(res) {
 			return nil, nil, res

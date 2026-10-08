@@ -163,7 +163,8 @@ func uso() {
 	fmt.Println("  gs build <arquivo.gs> [-o saida]       # gera binario standalone com o script")
 	fmt.Println("  gs build <arq.gs> --alvo linux/amd64   # standalone pra outra plataforma (ou --gs-base gs-do-alvo)")
 	fmt.Println("  gs repl                                # abre o modo interativo (multiline)")
-	fmt.Println("  gs testa [--tree] [<dir>]              # roda os testes (*_test.gs) e soma os asserts")
+	fmt.Println("  gs testa [--tree] [-so nome] [<dir>]   # roda os testes (*_test.gs) e soma os asserts")
+	fmt.Println("  gs testa --cobertura [<dir>]           # + % de linhas rodadas (--cobertura-perfil/--cobertura-html arq)")
 	fmt.Println("  gs doc <arquivo.gs|dir>                # gera markdown com as gambiarras e cravas documentadas")
 	fmt.Println("  gs disasm <arquivo.gs>                 # disassembla o bytecode (VM)")
 	fmt.Println("  gs lsp                                 # inicia o language server (usado pela extensao do VSCode)")
@@ -259,52 +260,6 @@ func reportaErroVM(err error) {
 	fmt.Println(err.Error())
 	if eo := vm.ErroDoRun(err); eo != nil && len(eo.Stack) > 0 {
 		fmt.Fprint(os.Stderr, "Traço de pilha:\n"+eo.Traco())
-	}
-}
-
-// rodarTestes procura arquivos *_test.gs (no dir informado, default ".") e
-// roda cada um num interpretador fresco. Contabiliza total/ok de asserts
-// (espera()/afirma()) somando os contadores do Interpreter, e conta arquivos
-// cuja execucao retornou Erro como "com perrengue". Exit 0 sse todos os
-// asserts passarem e nenhum arquivo deu Erro.
-func rodarTestes(args []string) {
-	dir, usarVM, filtro := parseArgsTesta(args)
-	arquivos, err := filepath.Glob(filepath.Join(dir, "*_test.gs"))
-	if err != nil {
-		fmt.Printf("nao conseguir achar testes: %v\n", err)
-		os.Exit(1)
-	}
-	arquivos = filtraTestes(arquivos, filtro)
-	if len(arquivos) == 0 {
-		if filtro != "" {
-			fmt.Printf("nenhum *_test.gs casa com %q em %s\n", filtro, dir)
-		} else {
-			fmt.Println("nada de *_test.gs aqui, parca. cria um arquivo tipo `meu_test.gs` com `espera(1, 1)`.")
-		}
-		os.Exit(0)
-	}
-
-	engine := "tree-walker"
-	if usarVM {
-		engine = "VM"
-	}
-	fmt.Printf("rodando %d arquivo(s) no %s:\n", len(arquivos), engine)
-
-	totalAsserts, totalOk, falhas := 0, 0, 0
-	for _, arq := range arquivos {
-		total, ok, nota := rodaUmTeste(arq, usarVM)
-		totalAsserts += total
-		totalOk += ok
-		if nota != "OK" {
-			falhas++
-		}
-		fmt.Printf("  %s  %s  (%d/%d asserts)\n", nota, filepath.Base(arq), ok, total)
-	}
-
-	fmt.Printf("\nResumo (%s): %d arquivos, %d/%d asserts passaram, %d com perrengue\n",
-		engine, len(arquivos), totalOk, totalAsserts, falhas)
-	if falhas > 0 || totalAsserts != totalOk {
-		os.Exit(1)
 	}
 }
 

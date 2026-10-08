@@ -180,6 +180,15 @@ type Compiler struct {
 	// cravadas: nomes cravados no escopo global ate o ponto da compilacao
 	// (sobrevive entre entradas do REPL e recebe o que os modulos cravam).
 	cravadas map[string]bool
+
+	// Instrumentar liga o gancho de linha (object/gancho.go): antes de cada
+	// statement executavel (ast.StatementsExecutaveis) do principal e dos
+	// modulos sai um OpLinha com o indice do sitio em Bytecode.Sitios. Fica
+	// desligado no caminho normal — ai o bytecode e byte a byte o de sempre
+	// e a VM nao paga nada. Liga antes do Compile.
+	Instrumentar bool
+	sitios       []*object.SitioLinha
+	sitioDe      map[ast.Statement]int // statement do usuario -> indice do sitio
 }
 
 type compiledFn struct {
@@ -306,6 +315,9 @@ type Bytecode struct {
 	// MaxStack e o teto da pilha de operandos do fluxo principal (as
 	// gambiarras levam o delas na CompiledFunction). 0 = desconhecido.
 	MaxStack int
+	// Sitios: so com Instrumentar — o operando de cada OpLinha indexa aqui.
+	// nil no bytecode normal (e bytecode com sitio nunca vai pro .gsc).
+	Sitios []*object.SitioLinha
 }
 
 func (c *Compiler) Bytecode() *Bytecode {
@@ -317,7 +329,31 @@ func (c *Compiler) Bytecode() *Bytecode {
 		NumGlobals:   c.scope.NumGlobais(),
 		Modulos:      c.caminhosModulos(),
 		MaxStack:     MaxPilha(c.instructions, c.constants),
+		Sitios:       c.sitios,
 	}
+}
+
+// maxSitios e o teto de statements instrumentados (operando de 2 bytes).
+const maxSitios = 1 << 16
+
+// registraSitios cria um sitio pra cada statement executavel do programa (o
+// principal ou um modulo). Os nodes sao a chave: statement sintetico de
+// desugar nao esta na arvore do parser, entao nunca dispara o gancho.
+func (c *Compiler) registraSitios(prog *ast.Program, arquivo string) error {
+	if c.sitioDe == nil {
+		c.sitioDe = map[ast.Statement]int{}
+	}
+	for _, s := range ast.StatementsExecutaveis(prog) {
+		if _, ok := c.sitioDe[s]; ok {
+			continue
+		}
+		if len(c.sitios) >= maxSitios {
+			return fmt.Errorf("instrumentacao: programa grande demais (mais de %d statements)", maxSitios)
+		}
+		c.sitioDe[s] = len(c.sitios)
+		c.sitios = append(c.sitios, &object.SitioLinha{Arquivo: arquivo, Linha: ast.LinhaDoStatement(s)})
+	}
+	return nil
 }
 
 // caminhosModulos lista (ordenado) os modulos compilados de verdade — o
@@ -403,8 +439,20 @@ func (c *Compiler) compile(node ast.Node) error {
 	if l := linhaDe(node); l > 0 {
 		c.linhaAtual = l
 	}
+	if c.sitioDe != nil {
+		if s, ok := node.(ast.Statement); ok {
+			if id, ok := c.sitioDe[s]; ok {
+				c.emit(code.OpLinha, id)
+			}
+		}
+	}
 	switch node := node.(type) {
 	case *ast.Program:
+		if c.Instrumentar && c.moduloAtual == "" {
+			if err := c.registraSitios(node, c.arquivoPrincipal()); err != nil {
+				return err
+			}
+		}
 		// crava: checa pelo texto antes de compilar (a mesma regra que o
 		// tree-walker usa). Se a entrada falhar, o que ela cravou nao fica.
 		if errs := ast.ChecaCravadas(node, copiaCravadas(c.cravadas)); len(errs) > 0 {
@@ -1903,6 +1951,11 @@ func (c *Compiler) compilaCorpoModulo(info *moduloInfo, prog *ast.Program) error
 	c.cravadas = map[string]bool{}
 	c.DirBase, c.moduloAtual = filepath.Dir(abs), abs
 	c.declaraNoTopo(prog.Statements)
+	if c.Instrumentar {
+		if err := c.registraSitios(prog, abs); err != nil {
+			return err
+		}
+	}
 
 	for _, s := range prog.Statements {
 		if err := c.compile(s); err != nil {

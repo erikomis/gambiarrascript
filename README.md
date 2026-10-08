@@ -344,6 +344,7 @@ Além de `roda`, `repl` e `lsp`, o CLI tem:
 | `gs check <arq.gs>...`   | parse + lint (erros e avisos) sem rodar |
 | `gs formata [-w] <arq.gs>...` | formata o código (`-w` sobrescreve no disco) |
 | `gs testa [<dir>]`       | roda os `*_test.gs` e soma os asserts |
+| `gs testa --cobertura [<dir>]` | idem + % de linhas que rodaram por arquivo (`--cobertura-perfil arq` grava `arquivo:linha contagem`, `--cobertura-html arq` gera o relatório colorido) |
 | `gs init [nome]`         | cria o esqueleto do projeto (`gambiarra.json` + `principal.gs`) |
 | `gs bench [--vm] <arq.gs> [n]` | mede o tempo de execução em `n` rodadas |
 | `gs get <url \| github.com/u/repo/mod.gs@tag> [nome.gs]` | baixa um módulo `.gs` pra `gs_modulos/` e fixa no `gambiarra.lock` (URL + sha256) |
