@@ -51,10 +51,14 @@ jobs:
           if ($saida -ne 'salve do windows: 36') { throw "saida errada: $saida" }
 
       - name: GS_DIR e GS_VERSAO
+        env:
+          # so pro teste achar a versao esperada: a API sem login tem limite
+          # por IP e o runner compartilha IP (o instalador em si nao usa token)
+          GH_TOKEN: ${{ github.token }}
         run: |
           $env:GS_DIR = "$env:RUNNER_TEMP\gs-fixo"
           $env:GS_SEM_PATH = '1'
-          $versao = (Invoke-RestMethod https://api.github.com/repos/erikomis/gambiarrascript/releases/latest).tag_name.TrimStart('v')
+          $versao = (Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:GH_TOKEN" } https://api.github.com/repos/erikomis/gambiarrascript/releases/latest).tag_name.TrimStart('v')
           $env:GS_VERSAO = $versao
           Get-Content -Raw .\install.ps1 | Invoke-Expression
           $v = & "$env:GS_DIR\gs.exe" --version
