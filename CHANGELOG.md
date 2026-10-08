@@ -4,7 +4,7 @@ Mudanças de cada versão do GambiarraScript que importam pra quem usa a
 linguagem. O detalhe (o porquê de cada decisão) está nas mensagens de commit e
 no [ROADMAP](ROADMAP.md).
 
-## Não lançado
+## v0.7.1 — 2026-10-08
 
 - **Playground com metade do tamanho**: o runtime baixa 1,9 MB em vez de
   4,0 MB (16,3 → 7,2 MB sem compressão). Rede, servidor, TLS e processo saem
