@@ -12,13 +12,13 @@ import (
 // thunkDoPadrao embrulha o valor padrao de um campo: literal simples vira o
 // valor (nao muda nunca); o resto vira uma gambiarra sem parametro que roda
 // a cada instancia (`xs = []` da uma lista nova pra cada um). A VM faz igual.
-func (i *Interpreter) thunkDoPadrao(expr ast.Expression, env *object.Environment) object.Object {
+func (i *Interpreter) thunkDoPadrao(expr ast.Expression, env *object.Environment, nome string) object.Object {
 	switch n := expr.(type) {
 	case *ast.NumeroLiteral, *ast.TextoLiteral, *ast.BooleanoLiteral, *ast.NadaLiteral:
 		return i.Eval(n, env)
 	}
 	corpo := &ast.BlockStatement{Statements: []ast.Statement{&ast.FuncionaStatement{Token: token.Token{Literal: "funciona"}, Value: expr}}}
-	return &object.Funcao{Body: corpo, Env: env}
+	return &object.Funcao{Body: corpo, Env: env, Nome: nome}
 }
 
 func (i *Interpreter) evalTretaDecl(node *ast.TretaDecl, env *object.Environment) object.Object {
@@ -39,7 +39,7 @@ func (i *Interpreter) evalTretaDecl(node *ast.TretaDecl, env *object.Environment
 			continue
 		}
 		if c.Padrao != nil {
-			v := i.thunkDoPadrao(c.Padrao, env)
+			v := i.thunkDoPadrao(c.Padrao, env, node.Nome.Value+"."+c.Nome.Value+"(padrao)")
 			if isError(v) {
 				return v
 			}
@@ -90,7 +90,7 @@ func (i *Interpreter) evalMetodoDecl(node *ast.MetodoDecl, env *object.Environme
 	if !ok {
 		return newError(node.Token.Line, "metodo %s: %s", node.Nome.Value, object.MsgNaoETreta(node.Tipo.Value, v))
 	}
-	fn := &object.Funcao{Parametros: node.ParametrosComReceptor(), Body: node.Body, Env: env}
+	fn := &object.Funcao{Parametros: node.ParametrosComReceptor(), Body: node.Body, Env: env, Nome: node.Tipo.Value + "." + node.Nome.Value}
 	if msg := t.DefineMetodo(node.Nome.Value, fn); msg != "" {
 		return newError(node.Token.Line, "%s", msg)
 	}

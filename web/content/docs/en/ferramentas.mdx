@@ -8,7 +8,7 @@ any modern editor can use) and a command-line formatter.
 
 ## VSCode extension (recommended)
 
-The extension bundles everything: highlighting, snippets, a run command, LSP.
+The extension bundles everything: highlighting, snippets, a run command, a debugger, LSP.
 
 ### Installing
 
@@ -49,8 +49,13 @@ point it at `gambiarrascript-0.1.0.vsix`.
 - **Snippets** (`snippets/gambiarrascript.json`) for the most used blocks and
   builtins: `gambiarra`, `se_colar`, `pra_cada`, `pra_cada_em`, `enquanto`,
   `arruma`, `importa`, `busca`, `rota`, `bora`, `cano`...
-- **Run file**: `F5` or `cmd/Ctrl+R`, or the command palette entry
-  `GambiarraScript: Rodar arquivo`.
+- **Run file**: `cmd/Ctrl+R`, the command palette entry
+  `GambiarraScript: Rodar arquivo` or the play button in the editor corner.
+- **Debugger**: `F5` on a `.gs` debugs the open file — breakpoints (click
+  the gutter; conditional breakpoints and logpoints too), stepping, call
+  stack, expandable variables, an evaluation console and one thread per
+  `bora`. Under the hood it runs `gs debug --dap`; details and the
+  `launch.json` in [Debugger](/docs/en/debug).
 - **Open REPL**: the `GambiarraScript: Abrir REPL` command.
 - **Built-in LSP**: diagnostics, autocomplete, hover, go to definition
   (`F12`), find references (`Shift+F12`), rename (`F2`), file outline,
@@ -202,4 +207,5 @@ shiki) for code blocks tagged `gambiarrascript` (or `gs`). The
 ## Next step
 
 - [Command line](/docs/en/cli) — the full `gs` reference.
+- [Debugger](/docs/en/debug) — breakpoints and stepping (`gs debug`).
 - [Standard library](/docs/en/biblioteca) — every builtin.

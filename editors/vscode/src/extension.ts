@@ -31,8 +31,60 @@ function rodarGs(args: string[]): void {
   term.sendText(cmd, true);
 }
 
+// Depurador: o VSCode sobe `gs debug --dap` (Debug Adapter Protocol no
+// stdio) pra cada sessao. Respeita o gambiarrascript.caminhoDoGs.
+class FabricaAdapter implements vscode.DebugAdapterDescriptorFactory {
+  createDebugAdapterDescriptor(
+    _sessao: vscode.DebugSession
+  ): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
+    return new vscode.DebugAdapterExecutable(caminhoDoGs(), ['debug', '--dap']);
+  }
+}
+
+// Sem launch.json (F5 direto num .gs): depura o arquivo aberto.
+class ProvedorConfig implements vscode.DebugConfigurationProvider {
+  resolveDebugConfiguration(
+    _pasta: vscode.WorkspaceFolder | undefined,
+    config: vscode.DebugConfiguration
+  ): vscode.ProviderResult<vscode.DebugConfiguration> {
+    if (!config.type && !config.request && !config.name) {
+      const ed = vscode.window.activeTextEditor;
+      if (ed && ed.document.languageId === 'gambiarrascript') {
+        config.type = 'gambiarrascript';
+        config.name = 'Depurar arquivo atual';
+        config.request = 'launch';
+        config.program = '${file}';
+      }
+    }
+    if (!config.program) {
+      vscode.window.showWarningMessage('Abre um arquivo .gs (ou poe o `program` no launch.json), parca.');
+      return undefined;
+    }
+    return config;
+  }
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
+    vscode.debug.registerDebugAdapterDescriptorFactory('gambiarrascript', new FabricaAdapter()),
+    vscode.debug.registerDebugConfigurationProvider('gambiarrascript', new ProvedorConfig()),
+    vscode.commands.registerCommand('gambiarrascript.depurar', async () => {
+      const ed = vscode.window.activeTextEditor;
+      if (!ed || ed.document.languageId !== 'gambiarrascript') {
+        vscode.window.showWarningMessage('Abre um arquivo .gs primeiro, parca.');
+        return;
+      }
+      await ed.document.save();
+      await vscode.debug.startDebugging(
+        vscode.workspace.getWorkspaceFolder(ed.document.uri),
+        {
+          type: 'gambiarrascript',
+          name: 'Depurar arquivo atual',
+          request: 'launch',
+          program: ed.document.fileName,
+        }
+      );
+    }),
     vscode.commands.registerCommand('gambiarrascript.rodar', async () => {
       const ed = vscode.window.activeTextEditor;
       if (!ed || ed.document.languageId !== 'gambiarrascript') {

@@ -121,6 +121,8 @@ func main() {
 		rodarTestes(os.Args[2:])
 	case "disasm":
 		disassemblar(os.Args[2:])
+	case "debug":
+		cmdDebug(os.Args[2:])
 	case "check":
 		cmdCheck(os.Args[2:])
 	case "init":
@@ -166,6 +168,8 @@ func uso() {
 	fmt.Println("  gs testa [--tree] [-so nome] [<dir>]   # roda os testes (*_test.gs) e soma os asserts")
 	fmt.Println("  gs testa --cobertura [<dir>]           # + % de linhas rodadas (--cobertura-perfil/--cobertura-html arq)")
 	fmt.Println("  gs doc <arquivo.gs|dir>                # gera markdown com as gambiarras e cravas documentadas")
+	fmt.Println("  gs debug [--tree] <arquivo.gs> [args]  # depurador: breakpoints, passo a passo, variaveis")
+	fmt.Println("  gs debug --dap                         # depurador no protocolo DAP (usado pela extensao do VSCode)")
 	fmt.Println("  gs disasm <arquivo.gs>                 # disassembla o bytecode (VM)")
 	fmt.Println("  gs lsp                                 # inicia o language server (usado pela extensao do VSCode)")
 	fmt.Println("  gs --version  (ou gs versao)           # mostra a versao")

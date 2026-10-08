@@ -1,7 +1,7 @@
 {
   "name": "gambiarrascript",
   "displayName": "GambiarraScript",
-  "description": "Suporte a GambiarraScript: highlight, snippets, rodar e language server.",
+  "description": "Suporte a GambiarraScript: highlight, snippets, rodar, depurador (breakpoints) e language server.",
   "version": "0.1.0",
   "publisher": "local",
   "license": "MIT",
@@ -9,10 +9,18 @@
     "type": "git",
     "url": "https://github.com/erikomis/gambiarrascript"
   },
-  "engines": { "vscode": "^1.75.0" },
-  "categories": ["Programming Languages"],
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Debuggers"
+  ],
   "main": "./out/extension.js",
-  "activationEvents": ["onLanguage:gambiarrascript"],
+  "activationEvents": [
+    "onLanguage:gambiarrascript",
+    "onDebugResolve:gambiarrascript"
+  ],
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./"
@@ -26,16 +34,26 @@
     "vscode-languageclient": "^9.0.1"
   },
   "capabilities": {
-    "untrustedWorkspaces": { "supported": false }
+    "untrustedWorkspaces": {
+      "supported": false
+    }
   },
   "contributes": {
     "languages": [
       {
         "id": "gambiarrascript",
-        "aliases": ["GambiarraScript", "gambiarrascript"],
-        "extensions": [".gs"],
+        "aliases": [
+          "GambiarraScript",
+          "gambiarrascript"
+        ],
+        "extensions": [
+          ".gs"
+        ],
         "configuration": "./language-configuration.json",
-        "icon": { "light": "./icons/gs.svg", "dark": "./icons/gs.svg" }
+        "icon": {
+          "light": "./icons/gs.svg",
+          "dark": "./icons/gs.svg"
+        }
       }
     ],
     "grammars": [
@@ -46,24 +64,48 @@
       }
     ],
     "snippets": [
-      { "language": "gambiarrascript", "path": "./snippets/gambiarrascript.json" }
+      {
+        "language": "gambiarrascript",
+        "path": "./snippets/gambiarrascript.json"
+      }
     ],
     "commands": [
-      { "command": "gambiarrascript.rodar", "title": "GambiarraScript: Rodar arquivo", "icon": "$(play)" },
-      { "command": "gambiarrascript.repl", "title": "GambiarraScript: Abrir REPL" }
+      {
+        "command": "gambiarrascript.rodar",
+        "title": "GambiarraScript: Rodar arquivo",
+        "icon": "$(play)"
+      },
+      {
+        "command": "gambiarrascript.depurar",
+        "title": "GambiarraScript: Depurar arquivo",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "gambiarrascript.repl",
+        "title": "GambiarraScript: Abrir REPL"
+      }
     ],
     "menus": {
       "editor/title/run": [
         {
           "command": "gambiarrascript.rodar",
           "when": "editorLangId == gambiarrascript",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "gambiarrascript.depurar",
+          "when": "editorLangId == gambiarrascript",
+          "group": "navigation@2"
         }
       ]
     },
     "keybindings": [
-      { "command": "gambiarrascript.rodar", "key": "f5", "when": "editorLangId == gambiarrascript" },
-      { "command": "gambiarrascript.rodar", "key": "ctrl+r", "mac": "cmd+r", "when": "editorLangId == gambiarrascript" }
+      {
+        "command": "gambiarrascript.rodar",
+        "key": "ctrl+r",
+        "mac": "cmd+r",
+        "when": "editorLangId == gambiarrascript"
+      }
     ],
     "configuration": {
       "title": "GambiarraScript",
@@ -74,6 +116,104 @@
           "description": "Caminho do binario gs (no PATH ou absoluto)."
         }
       }
-    }
+    },
+    "breakpoints": [
+      {
+        "language": "gambiarrascript"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "gambiarrascript",
+        "label": "GambiarraScript",
+        "languages": [
+          "gambiarrascript"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "O .gs pra depurar.",
+                "default": "${file}"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Argumentos do script (argumentos()/opcoes()).",
+                "default": []
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Diretorio de trabalho do programa.",
+                "default": "${workspaceFolder}"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Para antes da primeira linha.",
+                "default": false
+              },
+              "engine": {
+                "type": "string",
+                "enum": [
+                  "vm",
+                  "tree"
+                ],
+                "enumDescriptions": [
+                  "VM de bytecode (padrao, igual o gs roda)",
+                  "tree-walker (igual o gs roda --tree)"
+                ],
+                "description": "Engine que roda o programa.",
+                "default": "vm"
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "gambiarrascript",
+            "request": "launch",
+            "name": "Depurar arquivo atual",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "engine": "vm"
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "GambiarraScript: Depurar arquivo atual",
+            "description": "Depura o .gs aberto no editor.",
+            "body": {
+              "type": "gambiarrascript",
+              "request": "launch",
+              "name": "Depurar arquivo atual",
+              "program": "^\"\\${file}\"",
+              "cwd": "^\"\\${workspaceFolder}\"",
+              "stopOnEntry": false
+            }
+          },
+          {
+            "label": "GambiarraScript: Depurar programa",
+            "description": "Depura um .gs fixo, com argumentos e engine.",
+            "body": {
+              "type": "gambiarrascript",
+              "request": "launch",
+              "name": "Depurar ${1:principal.gs}",
+              "program": "^\"\\${workspaceFolder}/${1:principal.gs}\"",
+              "args": [],
+              "cwd": "^\"\\${workspaceFolder}\"",
+              "stopOnEntry": true,
+              "engine": "${2|vm,tree|}"
+            }
+          }
+        ]
+      }
+    ]
   }
 }

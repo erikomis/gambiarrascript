@@ -9,7 +9,7 @@ comando.
 
 ## Extensao VSCode (recomendado)
 
-A extensao empacota tudo: highlight, snippets, comando de rodar, LSP.
+A extensao empacota tudo: highlight, snippets, comando de rodar, depurador, LSP.
 
 ### Instalar
 
@@ -50,8 +50,13 @@ aponta o `gambiarrascript-0.1.0.vsix`.
 - **Snippets** (`snippets/gambiarrascript.json`) pros blocos e builtins mais
   usados: `gambiarra`, `se_colar`, `pra_cada`, `pra_cada_em`, `enquanto`,
   `arruma`, `importa`, `busca`, `rota`, `bora`, `cano`...
-- **Rodar arquivo**: tecla `F5` ou `cmd/Ctrl+R`, command palette
-  `GambiarraScript: Rodar arquivo`.
+- **Rodar arquivo**: `cmd/Ctrl+R`, command palette
+  `GambiarraScript: Rodar arquivo` ou o botao de play no canto do editor.
+- **Depurador**: `F5` num `.gs` depura o arquivo aberto — breakpoints
+  (clica na margem; condicional e logpoint tambem), passo a passo, pilha,
+  variaveis expandiveis, console de avaliacao e um `bora` por thread. Por
+  baixo roda `gs debug --dap`; detalhes e o `launch.json` em
+  [Depurador](/docs/debug).
 - **Abrir REPL**: command `GambiarraScript: Abrir REPL`.
 - **LSP integrado**: diagnosticos, autocomplete, hover, ir pra definicao
   (`F12`), achar referencias (`Shift+F12`), renomear (`F2`), outline do
@@ -200,4 +205,5 @@ usa (via shiki) nos blocos de codigo marcados como `gambiarrascript` (ou
 ## Proximo passo
 
 - [Linha de comando](/docs/cli) — referencia completa do `gs`.
+- [Depurador](/docs/debug) — breakpoints e passo a passo (`gs debug`).
 - [Biblioteca padrao](/docs/biblioteca) — todos os builtins.

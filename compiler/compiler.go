@@ -189,6 +189,10 @@ type Compiler struct {
 	Instrumentar bool
 	sitios       []*object.SitioLinha
 	sitioDe      map[ast.Statement]int // statement do usuario -> indice do sitio
+	// globaisDep: com Instrumentar, a tabela de globais (pro depurador) de
+	// cada arquivo compilado ("" = principal). As gambiarras guardam o
+	// ponteiro; os nomes entram no fim da compilacao do arquivo.
+	globaisDep map[string]*object.TabelaGlobais
 }
 
 type compiledFn struct {
@@ -318,10 +322,20 @@ type Bytecode struct {
 	// Sitios: so com Instrumentar — o operando de cada OpLinha indexa aqui.
 	// nil no bytecode normal (e bytecode com sitio nunca vai pro .gsc).
 	Sitios []*object.SitioLinha
+	// Depura: so com Instrumentar — arquivo e globais do fluxo principal pro
+	// depurador (as gambiarras levam o delas na CompiledFunction).
+	Depura *object.InfoDepuracao
 }
 
 func (c *Compiler) Bytecode() *Bytecode {
+	var dep *object.InfoDepuracao
+	if c.Instrumentar {
+		tab := c.tabelaGlobais("")
+		preencheGlobais(tab, c.scopes[0])
+		dep = &object.InfoDepuracao{Arquivo: c.arquivoPrincipal(), Globais: tab}
+	}
 	return &Bytecode{
+		Depura:       dep,
 		Instructions: c.instructions,
 		Constants:    c.constants,
 		Functions:    c.compiledFns,
@@ -1340,6 +1354,10 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body
 	c.instructions = savedInst // restaura fluxo principal
 	c.linhas = savedLinhas
 	free := newScope.free
+	var dep *object.InfoDepuracao
+	if c.Instrumentar {
+		dep = c.infoFuncao(newScope)
+	}
 	c.scope = outer
 
 	cf := compiledFn{
@@ -1365,6 +1383,7 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body
 		Linhas:    fnLinhas,
 		Variadic:  cf.variadic,
 		MaxStack:  MaxPilha(cf.bytecode, c.constants),
+		Depura:    dep,
 	})
 	// pra cada freevar, empilha a CELULA dela antes do OpClosure: o local do
 	// escopo dono (se e quem esta criando a closure) ou a freevar que este
@@ -1979,6 +1998,11 @@ func (c *Compiler) compilaCorpoModulo(info *moduloInfo, prog *ast.Program) error
 		slots[i] = tab.symbols[nome].Index
 	}
 	info.desc.Nomes, info.desc.Slots = nomes, slots
+	if c.Instrumentar {
+		tg := c.tabelaGlobais(abs)
+		tg.Nomes, tg.Slots = nomes, slots
+		info.desc.Corpo.Depura = &object.InfoDepuracao{Arquivo: abs, Globais: tg}
+	}
 	info.nomes = nomes
 	info.cravadas = c.cravadas
 	return nil

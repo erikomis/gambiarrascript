@@ -225,7 +225,7 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		return i.evalInfix(node, env)
 	case *ast.FuncaoLiteral:
 		// lambda anonima: closure sobre o env atual, igual gambiarra nomeada.
-		return &object.Funcao{Parametros: node.Parameters, Body: node.Body, Env: env}
+		return &object.Funcao{Parametros: node.Parameters, Body: node.Body, Env: env, Nome: "<anonima>"}
 	case *ast.DesestruturaStatement:
 		return i.evalDesestrutura(node, env)
 	case *ast.EscolheStatement:
@@ -294,7 +294,7 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 	case *ast.PraCadaListStatement:
 		return i.evalPraCadaList(node, env)
 	case *ast.GambiarraStatement:
-		fn := &object.Funcao{Parametros: node.Parameters, Body: node.Body, Env: env}
+		fn := &object.Funcao{Parametros: node.Parameters, Body: node.Body, Env: env, Nome: node.Name.Value}
 		env.Set(node.Name.Value, fn)
 		return NADA
 	case *ast.ArrumaStatement:
@@ -385,7 +385,7 @@ func (i *Interpreter) evalProgram(prog *ast.Program, env *object.Environment) ob
 	var result object.Object = NADA
 	for _, stmt := range prog.Statements {
 		if i.gancho != nil {
-			i.gancho.dispara(stmt)
+			i.gancho.dispara(stmt, env)
 		}
 		result = i.Eval(stmt, env)
 		switch r := result.(type) {
@@ -964,7 +964,7 @@ func (i *Interpreter) evalBlock(block *ast.BlockStatement, env *object.Environme
 	var result object.Object = NADA
 	for _, stmt := range block.Statements {
 		if i.gancho != nil {
-			i.gancho.dispara(stmt)
+			i.gancho.dispara(stmt, env)
 		}
 		result = i.Eval(stmt, env)
 		if ehDesvio(result) {
@@ -1185,10 +1185,20 @@ func (i *Interpreter) evalImporta(node *ast.ImportaStatement, env *object.Enviro
 		}
 		modEnv := object.NewEnvironment()
 		modEnv.MarcaModulo(abs)
+		var res object.Object
 		if i.gancho != nil {
 			i.gancho.registraSitios(prog, abs)
 		}
-		res := i.evalProgram(prog, modEnv)
+		if i.gancho != nil && i.gancho.dep != nil {
+			// o corpo do modulo e um quadro no fluxo de quem importou (a VM
+			// roda o corpo como a gambiarra "<modulo>")
+			dep := i.gancho.dep
+			fio, gid := dep.entra(&quadroTree{nome: "<modulo>", arquivo: abs, env: modEnv, chamada: linha, topo: true})
+			res = i.evalProgram(prog, modEnv)
+			dep.sai(fio, gid)
+		} else {
+			res = i.evalProgram(prog, modEnv)
+		}
 		if isError(res) {
 			return nil, nil, res
 		}
@@ -1447,7 +1457,17 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 			escopo.Set(p.Nome.Value, NADA)
 		}
 	}
-	avaliado := i.evalBlock(funcao.Body, escopo)
+	var avaliado object.Object
+	if i.gancho != nil && i.gancho.dep != nil {
+		// depurador: o quadro da chamada fica na pilha do fluxo enquanto o
+		// corpo roda (o tree-walker nao tem pilha explicita)
+		dep := i.gancho.dep
+		fio, gid := dep.entra(i.quadroDaFuncao(funcao, nome, escopo, linha))
+		avaliado = i.evalBlock(funcao.Body, escopo)
+		dep.sai(fio, gid)
+	} else {
+		avaliado = i.evalBlock(funcao.Body, escopo)
+	}
 	if s, ok := avaliado.(*object.Sair); ok {
 		return s // sai() desenrola a funcao inteira ate o topo
 	}

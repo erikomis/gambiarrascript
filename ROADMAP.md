@@ -16,7 +16,7 @@ Tiers 1–5, 5b e 8 (POO estilo Go) estão entregues. O backlog vivo:
 
 | Onde | O que sobra |
 |---|---|
-| Tier 2/3 | DAP (debug) — item grande, leva própria (FFI decidido: não vai ter; multi-catch ✅) |
+| Tier 2/3 | ✅ depurador (`gs debug` + DAP no VSCode) entregue (FFI decidido: não vai ter; multi-catch ✅) |
 | Bugs abertos | overflow, `importa`, erro entre engines |
 | Tier 6 | Homebrew, cobertura (`gs instala` + lock, `build --alvo` e lint de sombreamento ✅) |
 | Tier 7 | ✅ MaxStack por função entregue (ganho dentro do ruído, medido) — nada aberto |
@@ -105,7 +105,29 @@ Tiers 1–5, 5b e 8 (POO estilo Go) estão entregues. O backlog vivo:
       versionamento/lockfile ainda.
 - [x] **Enums de `erro_tipo` padronizados** — constantes `runtime`, `builtin`,
       `io`, `rede`, `parse`, `usuario` (ver `interpreter/errors.go`).
-- [ ] Debug com breakpoints (DAP no LSP + `gs debug`) — grande; fica pra uma leva própria.
+- [x] **Debug com breakpoints** — `gs debug [--tree] arq.gs [args]` (terminal,
+      comandos em português com apelido de gdb: `para`/`b`, `segue`/`c`,
+      `proximo`/`n`, `entra`/`s`, `sai`/`o`, `pilha`/`bt`, `ve`/`p`, `vars`,
+      `lista`/`l`, `fluxos`, `quadro`, `tira`, `ajuda`; Ctrl+C pausa) e
+      `gs debug --dap` (Debug Adapter Protocol no stdio; a extensão do VSCode
+      registra o debugger `gambiarrascript` e sobe ele respeitando o
+      `gambiarrascript.caminhoDoGs`). Decisões: o adapter é um processo
+      separado do `gs lsp` (DAP e LSP são protocolos distintos; o VSCode sobe
+      um por sessão de debug); a API de inspeção (`object.Depurador`/`Fluxo`:
+      quadros com nome+linha, locais por quadro, globais do arquivo, avaliar
+      no quadro) mora nos dois engines, em cima do gancho de linha da
+      cobertura — sem depurador o caminho quente não muda (VM só paga com
+      bytecode instrumentado); cada fluxo (principal, `bora`, handler do
+      servidor, tarefa do paralelo) é uma thread do DAP e para sozinho
+      (`allThreadsStopped: false`); breakpoint anda pra próxima linha
+      executável (sem nenhuma: `verified: false`), com condição e logpoint nos
+      dois engines; stopOnEntry, next/stepIn/stepOut/pause; lista, dicionário,
+      conjunto e instância de treta expandem. Limitações: na VM o avaliar é só
+      expressão e os locais vão por valor (statement/atribuir só no
+      `--tree`); no `--dap` o programa lê stdin vazio; pausa só pega o
+      próximo statement (fluxo preso em builtin espera ele voltar); sem
+      breakpoint de exceção/função/hit count. Teste de ponta a ponta sobe o
+      `gs debug --dap` de verdade e roda o cenário completo nos dois engines.
 - [x] **multi-catch** — vários `quebrou NOME [se CONDICAO]` no mesmo `arruma`,
       tentados em ordem; o primeiro cujo filtro colar pega. Nenhum colou: o
       erro sobe depois do `finalmente`. `quebrou` sem filtro só como o último

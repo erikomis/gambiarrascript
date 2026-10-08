@@ -22,6 +22,8 @@ gs instala [--atualiza]                          instala as dependencias, confer
 gs build <arquivo.gs> [-o saida]                 gera binario standalone com o script
 gs build <arquivo.gs> --alvo linux/amd64         standalone pra outra plataforma
 gs bench [--tree] <arquivo.gs> [n]               mede o tempo de execucao (n rodadas)
+gs debug [--tree] <arquivo.gs> [args]            depurador no terminal (breakpoints, passo a passo)
+gs debug --dap                                   depurador no protocolo DAP (usado pelo VSCode)
 gs disasm <arquivo.gs>                           mostra o bytecode da VM
 gs lsp                                           language server (usado pelo editor)
 gs --version  (ou gs versao)                     mostra a versao
@@ -350,6 +352,25 @@ gs bench [--tree] arquivo.gs [n]
 
 Roda o script `n` vezes (default 10), descartando a saida, e mostra
 min/mediana/media/max.
+
+## `gs debug`
+
+```bash
+gs debug [--tree] <arquivo.gs> [args...]   # terminal interativo
+gs debug --dap                             # adapter DAP no stdio (VSCode)
+```
+
+Roda o script com o depurador ligado. No terminal ele comeca parado na
+primeira linha e espera comando: `para 12` (ou `b 12`) poe breakpoint,
+`segue` (`c`) vai ate ele, `proximo` (`n`), `entra` (`s`) e `sai` (`o`) andam
+linha a linha, `pilha` (`bt`), `vars` e `ve EXPR` (`p`) inspecionam, `lista`
+(`l`) mostra o codigo em volta. Breakpoint condicional:
+`para 12 se total > 100`. Ctrl+C com o programa rodando pausa.
+
+`--tree` depura no tree-walker (o padrao e a VM, igual o `gs roda`). Os
+argumentos depois do arquivo vao pro script. O `--dap` e o que a extensao do
+VSCode chama — voce nao roda na mao. Referencia completa em
+[Depurador](/docs/debug).
 
 ## `gs disasm`
 

@@ -47,6 +47,10 @@ func NewEnclosedEnvironment(outer *Environment) *Environment {
 	return env
 }
 
+// Externo devolve o escopo de fora (nil na raiz). O depurador usa pra separar
+// locais de globais.
+func (e *Environment) Externo() *Environment { return e.outer }
+
 // Get caminha pela cadeia de escopos. Seguro pra chamada concorrente.
 func (e *Environment) Get(name string) (Object, bool) {
 	obj, ok := e.buscaLocal(name)

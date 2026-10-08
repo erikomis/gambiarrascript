@@ -93,6 +93,14 @@ type VM struct {
 	// compiler.Instrumentar, entao o caminho normal nem olha pra ca.
 	gancho object.GanchoLinha
 	sitios []*object.SitioLinha
+
+	// depurador (depuracao.go): nil = desligado (compartilhado com os
+	// clones). pai/fluxoID ligam a VM ao fluxo (goroutine) onde ela roda;
+	// depMain e o arquivo/globais do principal (Bytecode.Depura).
+	dep     *depuraVM
+	pai     *VM
+	fluxoID int64
+	depMain *object.InfoDepuracao
 }
 
 func New(bytecode *compiler.Bytecode, out io.Writer) *VM {
@@ -121,6 +129,7 @@ func NovaComInterp(bytecode *compiler.Bytecode, out io.Writer, interp *interpret
 		builtins:   interp.BuiltinsVisiveis(),
 		out:        out,
 		sitios:     bytecode.Sitios,
+		depMain:    bytecode.Depura,
 	}
 	// gancho: os builtins de ordem superior (mapeia, filtra, reduz...) vem do
 	// interpreter e chamam applyFunction — que delega pra ca quando a funcao
@@ -130,9 +139,21 @@ func NovaComInterp(bytecode *compiler.Bytecode, out io.Writer, interp *interpret
 }
 
 // disparaLinha chama o gancho com o sitio do operando do OpLinha.
+// Fica pequeno de proposito: e inlinado no laco da VM, e qualquer coisa a
+// mais aqui muda o codigo do execDesde (deu ~10% de diferenca no bench).
 func (vm *VM) disparaLinha(operando []byte) {
+	if vm.gancho != nil || vm.dep != nil {
+		vm.disparaLinhaDe(vm.sitios[code.ReadUint16(operando)])
+	}
+}
+
+// disparaLinhaDe chama o gancho de linha e o depurador.
+func (vm *VM) disparaLinhaDe(s *object.SitioLinha) {
 	if vm.gancho != nil {
-		vm.gancho(vm.sitios[code.ReadUint16(operando)])
+		vm.gancho(s)
+	}
+	if vm.dep != nil {
+		vm.dep.d.Linha(s, &fluxoVM{vm: vm, sitio: s})
 	}
 }
 
@@ -153,6 +174,11 @@ func (vm *VM) chamaCompilada(cf *object.CompiledFunction, args []object.Object) 
 	}
 	sub := vm.pegaSubVM()
 	defer vm.devolveSubVM(sub)
+	if sub.dep != nil {
+		// depurador: a sub-VM roda no fluxo de quem chamou o builtin
+		gid := sub.dep.entra(sub)
+		defer sub.dep.sai(sub, gid)
+	}
 	topo := cf.NumLocals
 	if topo < len(args) {
 		topo = len(args)
@@ -384,6 +410,8 @@ func (vm *VM) clone() *VM {
 		out:        vm.out,
 		gancho:     vm.gancho,
 		sitios:     vm.sitios,
+		dep:        vm.dep,
+		depMain:    vm.depMain,
 	}
 }
 
@@ -449,6 +477,11 @@ func (vm *VM) execBoraCall(argc int) {
 			quadroBora.Line = fr.fn.LinhaDoPC(fr.ip)
 		}
 		go func(c *VM, f *object.Futuro) {
+			if c.dep != nil {
+				// depurador: cada bora e um fluxo novo
+				gid := c.dep.entra(c)
+				defer c.dep.sai(c, gid)
+			}
 			defer func() {
 				if r := recover(); r != nil {
 					if vme, ok := r.(VMError); ok {
@@ -570,6 +603,12 @@ func (vm *VM) ajustaArgs(cf *object.CompiledFunction, bp, argc int) *object.Erro
 // Run executa o bytecode. frame e ip reciclados entre chamadas via execFrame.
 func (vm *VM) Run() error {
 	main := &object.CompiledFunction{Name: "<main>", Bytecode: vm.inst, NumLocals: 0, Linhas: vm.linhas, MaxStack: vm.maxStack}
+	if vm.dep != nil {
+		// depurador: o principal e o fluxo 1
+		main.Depura = vm.depMain
+		gid := vm.dep.entra(vm)
+		defer vm.dep.sai(vm, gid)
+	}
 	vm.garanteEspaco(folga(main))
 	fr0 := vm.frameEm(0)
 	fr0.fn = main

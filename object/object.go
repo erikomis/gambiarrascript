@@ -221,6 +221,9 @@ type Funcao struct {
 	Parametros []*ast.Parametro
 	Body       *ast.BlockStatement
 	Env        *Environment
+	// Nome da definicao (gambiarra nomeada, "Tipo.metodo", "<anonima>"): o
+	// depurador mostra no quadro, igual o Name da CompiledFunction na VM.
+	Nome string
 }
 
 func (f *Funcao) Type() ObjectType { return FUNCAO_OBJ }
@@ -259,6 +262,9 @@ type CompiledFunction struct {
 	// reserva NumLocals+MaxStack uma vez por frame e o push nao checa mais
 	// capacidade. 0 = desconhecida: a VM cai no caminho checado.
 	MaxStack int
+	// Depura: nomes de locais/freevars/globais pro depurador. So no bytecode
+	// instrumentado (compiler.Instrumentar); nil no normal.
+	Depura *InfoDepuracao
 }
 
 func (f *CompiledFunction) Type() ObjectType { return FUNCAO_OBJ }

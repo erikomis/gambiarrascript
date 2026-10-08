@@ -349,6 +349,7 @@ Além de `roda`, `repl` e `lsp`, o CLI tem:
 | `gs testa --cobertura [<dir>]` | idem + % de linhas que rodaram por arquivo (`--cobertura-perfil arq` grava `arquivo:linha contagem`, `--cobertura-html arq` gera o relatório colorido) |
 | `gs init [nome]`         | cria o esqueleto do projeto (`gambiarra.json` + `principal.gs`) |
 | `gs bench [--vm] <arq.gs> [n]` | mede o tempo de execução em `n` rodadas |
+| `gs debug [--tree] <arq.gs> [args]` | depurador no terminal: breakpoints (com condição), passo a passo, pilha e variáveis (`gs debug --dap` é o adapter que a extensão do VSCode usa) |
 | `gs get <url \| github.com/u/repo/mod.gs@tag> [nome.gs]` | baixa um módulo `.gs` pra `gs_modulos/` e fixa no `gambiarra.lock` (URL + sha256) |
 | `gs instala [--atualiza]` | instala tudo do `gambiarra.json`; com lock, recusa conteúdo que não bate (`--atualiza` re-resolve) |
 | `gs build <arq.gs> [-o saida]` | gera um binário standalone com o script embutido |

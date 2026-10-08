@@ -1,0 +1,174 @@
+---
+title: Debugger
+description: gs debug — breakpoints, stepping and variables in the terminal and in VSCode.
+---
+
+A print in the middle of the code solves a lot, but sometimes you want to
+**stop the program** on a line, look at the variables and walk one line at a
+time. `gs debug` does that in two ways:
+
+- **In the terminal**: `gs debug file.gs` opens a gdb-style prompt, with
+  commands in Portuguese (and short gdb-like aliases).
+- **In VSCode**: the extension talks to `gs debug --dap` (Debug Adapter
+  Protocol) — click the gutter for a breakpoint, `F5`, call stack and
+  variables in the debug panel.
+
+Both work on **both engines** (the VM, the default, and the tree-walker with
+`--tree`) and show the same thing.
+
+## In the terminal
+
+```bash
+gs debug conta.gs            # VM (default)
+gs debug --tree conta.gs     # tree-walker
+gs debug conta.gs a b c      # whatever comes after the file goes to the script
+```
+
+The program starts **stopped on the first line**. From there:
+
+```
+$ gs debug conta.gs
+gs debug: conta.gs (engine vm). `ajuda` lista os comandos.
+parado na entrada: conta.gs:1 (em <principal>)
+   1 | bota xs = [1, 2, 3]
+(gs) para 9
+breakpoint 1 em conta.gs:9
+(gs) segue
+parou no breakpoint 1: conta.gs:9 (em soma)
+   9 |     bota r = a + b
+(gs) pilha
+=> #0 soma  conta.gs:9
+   #1 dobra  conta.gs:14
+   #2 <principal>  conta.gs:17
+(gs) ve a + b
+8
+(gs) sai
+conta.gs:15 (em dobra)
+  15 |     funciona t
+```
+
+### Commands
+
+| command | alias | what it does |
+| --- | --- | --- |
+| `para [file.gs:]LINE [se COND]` | `b` | sets a breakpoint; with no argument, lists them |
+| `tira N` | `d` | removes breakpoint N |
+| `segue` | `c` | continues to the next breakpoint (or the end) |
+| `proximo` | `n` | next line, stepping over calls |
+| `entra` | `s` | next line, stepping into the call |
+| `sai` | `o` | runs until the current function returns |
+| `pilha` | `bt` | shows the call stack |
+| `quadro N` | `f` | selects frame N (for `ve`, `vars` and `lista`) |
+| `ve EXPR` | `p` | evaluates the expression in the selected frame |
+| `vars` | `v` | locals and globals of the frame |
+| `lista` | `l` | the code around the line (`=>` where it stopped, `*` breakpoint) |
+| `fluxos` | `th` | lists the live flows (main, each `bora`...) |
+| `ajuda` | `h` | lists the commands |
+| `fim` | `q` | aborts the program and quits |
+
+An empty Enter repeats the last `proximo`/`entra`/`sai`. **Ctrl+C** while the
+program runs pauses it on the next statement (handy for infinite loops).
+
+### Breakpoints
+
+- The requested line moves to the **next line that runs something**: a
+  breakpoint on a comment, a blank line or an `acabou_finalmente` moves down.
+  If there is none from there on, the breakpoint is marked invalid.
+- `para module.gs:4` sets a breakpoint in a file loaded with `importa`.
+- **Conditional**: `para 12 se total > 100` only stops when the condition is
+  `deu_bom` — it is evaluated in the frame of that line, so it sees the
+  locals. A condition that errors stops the program and shows the error
+  (better than silently ignoring it).
+
+## In VSCode
+
+With the [extension](/docs/en/ferramentas) installed, open a `.gs` and press
+**F5** (or the debug button in the editor corner). Without a `launch.json`,
+it debugs the open file. You can:
+
+- click the gutter for a breakpoint — right click gives **conditional**
+  breakpoints and **logpoints** (they print to the console without stopping;
+  each `{expr}` in the message is replaced by its value);
+- continue, step over, step into, step out and pause;
+- see the call stack and the variables (Locals and Globals), expanding
+  lists, dictionaries, sets and `treta` instances;
+- evaluate expressions in the Debug Console, in Watch and on hover;
+- every `bora` (and every `servidor` request) becomes a **thread** in the
+  panel: stopping one doesn't stop the others.
+
+Whatever the program prints shows up in the Debug Console.
+
+### launch.json
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "gambiarrascript",
+      "request": "launch",
+      "name": "Debug main",
+      "program": "${workspaceFolder}/principal.gs",
+      "args": ["--verbose"],
+      "cwd": "${workspaceFolder}",
+      "stopOnEntry": false,
+      "engine": "vm"
+    }
+  ]
+}
+```
+
+| field | what it is |
+| --- | --- |
+| `program` | the `.gs` to debug (required) |
+| `args` | script arguments (`argumentos()` / `opcoes()`) |
+| `cwd` | the program's working directory |
+| `stopOnEntry` | `true` stops before the first line |
+| `engine` | `vm` (default) or `tree` |
+
+The extension runs the `gs` on your `PATH`, or the one in the
+`gambiarrascript.caminhoDoGs` setting.
+
+### Other editors
+
+Any editor that speaks DAP works: the adapter is the `gs debug --dap` command
+(stdin/stdout, `Content-Length` framed messages). In Neovim with `nvim-dap`:
+
+```lua
+local dap = require('dap')
+dap.adapters.gambiarrascript = { type = 'executable', command = 'gs', args = { 'debug', '--dap' } }
+dap.configurations.gambiarrascript = {
+  { type = 'gambiarrascript', request = 'launch', name = 'Debug file', program = '${file}' },
+}
+```
+
+## How it works
+
+The debugger uses the same line hook as the [coverage](/docs/en/cli) of
+`gs testa`: before each statement the engine calls the debugger, which
+decides whether to stop there. Stopping just **holds the goroutine** of that
+flow — that is why each `bora` stops on its own while the others keep running.
+
+On the VM the program is compiled **instrumented** (a line opcode before each
+statement, plus the local names to show the variables). Normal bytecode
+doesn't change at all: no debugger, zero cost.
+
+## Limitations
+
+- **Evaluating on the VM is expressions only**: `ve total * 2` works;
+  `ve bota x = 1` only with `--tree`. Locals are passed by value — changing a
+  local from the console doesn't change the program on the VM.
+- With `--dap` the program **can't read the keyboard** (stdin is the
+  protocol channel): `pergunta()` gets empty input. For interactive programs,
+  use `gs debug` in the terminal.
+- **Pause** stops at the flow's next statement. A flow waiting on a builtin
+  (`espera_ms`, `espera`, a connection) only stops when the builtin returns.
+- There are no exception breakpoints (stop on an uncaught `vaza`), function
+  breakpoints or hit counts — just lines, conditions and logpoints.
+- With the debugger on, the program runs slower (the instrumented VM doesn't
+  use the `.gsc` cache).
+
+## Next step
+
+- [Command line](/docs/en/cli) — the full `gs` reference.
+- [Editor and formatter](/docs/en/ferramentas) — the VSCode extension and LSP.

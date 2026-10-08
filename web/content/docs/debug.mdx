@@ -1,0 +1,175 @@
+---
+title: Depurador
+description: gs debug — breakpoints, passo a passo e variaveis no terminal e no VSCode.
+---
+
+Print no meio do codigo resolve muita coisa, mas tem hora que voce quer
+**parar o programa** numa linha, olhar as variaveis e andar uma linha por vez.
+O `gs debug` faz isso de dois jeitos:
+
+- **No terminal**: `gs debug arquivo.gs` abre um prompt estilo gdb, com
+  comandos em portugues.
+- **No VSCode**: a extensao fala com o `gs debug --dap` (Debug Adapter
+  Protocol) — breakpoint clicando na margem, `F5`, pilha e variaveis no painel
+  de debug.
+
+Os dois rodam nos **dois engines** (VM, o padrao, e o tree-walker com
+`--tree`) e mostram a mesma coisa.
+
+## No terminal
+
+```bash
+gs debug conta.gs            # VM (padrao)
+gs debug --tree conta.gs     # tree-walker
+gs debug conta.gs a b c      # o que vem depois do arquivo vai pro script
+```
+
+O programa comeca **parado na primeira linha**. Dai e com voce:
+
+```
+$ gs debug conta.gs
+gs debug: conta.gs (engine vm). `ajuda` lista os comandos.
+parado na entrada: conta.gs:1 (em <principal>)
+   1 | bota xs = [1, 2, 3]
+(gs) para 9
+breakpoint 1 em conta.gs:9
+(gs) segue
+parou no breakpoint 1: conta.gs:9 (em soma)
+   9 |     bota r = a + b
+(gs) pilha
+=> #0 soma  conta.gs:9
+   #1 dobra  conta.gs:14
+   #2 <principal>  conta.gs:17
+(gs) ve a + b
+8
+(gs) sai
+conta.gs:15 (em dobra)
+  15 |     funciona t
+```
+
+### Comandos
+
+| comando | apelido | o que faz |
+| --- | --- | --- |
+| `para [arq.gs:]LINHA [se COND]` | `b` | poe breakpoint; sem argumento, lista os que tem |
+| `tira N` | `d` | tira o breakpoint N |
+| `segue` | `c` | continua ate o proximo breakpoint (ou o fim) |
+| `proximo` | `n` | proxima linha, passando por cima das chamadas |
+| `entra` | `s` | proxima linha, entrando na chamada |
+| `sai` | `o` | roda ate a gambiarra atual voltar |
+| `pilha` | `bt` | mostra a pilha de chamadas |
+| `quadro N` | `f` | escolhe o quadro N da pilha (pro `ve`, `vars` e `lista`) |
+| `ve EXPR` | `p` | avalia a expressao no quadro escolhido |
+| `vars` | `v` | locais e globais do quadro |
+| `lista` | `l` | o codigo em volta da linha (`=>` onde parou, `*` breakpoint) |
+| `fluxos` | `th` | lista os fluxos vivos (principal, cada `bora`...) |
+| `ajuda` | `h` | lista os comandos |
+| `fim` | `q` | aborta o programa e sai |
+
+Enter vazio repete o ultimo `proximo`/`entra`/`sai`. **Ctrl+C** com o programa
+rodando pausa ele no proximo statement (bom pra laco infinito).
+
+### Breakpoints
+
+- A linha pedida anda pra **proxima linha que roda alguma coisa**: breakpoint
+  num comentario, linha em branco ou `acabou_finalmente` vai pra linha de
+  baixo. Se nao tem nenhuma dali pra baixo, o breakpoint fica marcado como
+  invalido.
+- `para modulo.gs:4` poe breakpoint num arquivo importado com `importa`.
+- **Condicional**: `para 12 se total > 100` so para quando a condicao da
+  `deu_bom` — ela e avaliada no quadro da linha, entao enxerga os locais.
+  Condicao que da erro para o programa e mostra o erro (melhor que ignorar
+  calado).
+
+## No VSCode
+
+Com a [extensao](/docs/ferramentas) instalada, abre um `.gs` e aperta **F5**
+(ou o botao de debug no canto do editor). Sem `launch.json`, ela depura o
+arquivo aberto. Da pra:
+
+- clicar na margem pra por breakpoint — botao direito da breakpoint
+  **condicional** e **logpoint** (escreve a mensagem no console sem parar;
+  cada `{expr}` da mensagem e trocado pelo valor);
+- continuar, passar por cima, entrar, sair e pausar;
+- ver a pilha e as variaveis (Locais e Globais), expandindo listas,
+  dicionarios, conjuntos e instancias de `treta`;
+- avaliar expressoes no Debug Console, no Watch e passando o mouse;
+- cada `bora` (e cada request do `servidor`) vira uma **thread** no painel:
+  parar uma nao para as outras.
+
+O que o programa escreve aparece no Debug Console.
+
+### launch.json
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "gambiarrascript",
+      "request": "launch",
+      "name": "Depurar principal",
+      "program": "${workspaceFolder}/principal.gs",
+      "args": ["--verbose"],
+      "cwd": "${workspaceFolder}",
+      "stopOnEntry": false,
+      "engine": "vm"
+    }
+  ]
+}
+```
+
+| campo | o que e |
+| --- | --- |
+| `program` | o `.gs` a depurar (obrigatorio) |
+| `args` | argumentos do script (`argumentos()` / `opcoes()`) |
+| `cwd` | diretorio de trabalho do programa |
+| `stopOnEntry` | `true` para antes da primeira linha |
+| `engine` | `vm` (padrao) ou `tree` |
+
+A extensao roda o `gs` do `PATH`, ou o que estiver no setting
+`gambiarrascript.caminhoDoGs`.
+
+### Outros editores
+
+Qualquer editor que fale DAP serve: o adapter e o comando `gs debug --dap`
+(stdin/stdout, mensagens com `Content-Length`). No Neovim com `nvim-dap`:
+
+```lua
+local dap = require('dap')
+dap.adapters.gambiarrascript = { type = 'executable', command = 'gs', args = { 'debug', '--dap' } }
+dap.configurations.gambiarrascript = {
+  { type = 'gambiarrascript', request = 'launch', name = 'Depurar arquivo', program = '${file}' },
+}
+```
+
+## Como funciona
+
+O depurador usa o mesmo gancho de linha da [cobertura](/docs/cli) do
+`gs testa`: antes de cada statement o engine chama o depurador, que decide se
+para ali. Parar e so **segurar a goroutine** daquele fluxo — por isso cada
+`bora` para sozinho, e os outros seguem rodando.
+
+Na VM o programa e compilado **instrumentado** (um opcode de linha antes de
+cada statement, e os nomes dos locais pra mostrar as variaveis). O bytecode
+normal nao muda nada: sem depurador, custo zero.
+
+## Limitacoes
+
+- **Avaliar na VM e so expressao**: `ve total * 2` funciona; `ve bota x = 1`
+  so no `--tree`. E os locais entram por valor — mudar um local pelo console
+  nao muda o programa na VM.
+- O programa no `--dap` **nao le do teclado** (o stdin e o canal do
+  protocolo): `pergunta()` recebe vazio. Pra programa interativo, usa o
+  `gs debug` no terminal.
+- **Pausar** para no proximo statement do fluxo. Um fluxo esperando um
+  builtin (`espera_ms`, `espera`, uma conexao) so para quando o builtin voltar.
+- Nao tem breakpoint de erro (parar quando um `vaza` nao e pego), nem de
+  funcao, nem contagem de hits — so linha, condicao e logpoint.
+- Com o depurador ligado o programa roda mais devagar (a VM instrumentada
+  nao usa o cache `.gsc`).
+
+## Proximo passo
+
+- [Linha de comando](/docs/cli) — referencia completa do `gs`.
+- [Editor e formata](/docs/ferramentas) — extensao do VSCode e LSP.

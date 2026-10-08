@@ -22,6 +22,8 @@ gs instala [--atualiza]                          instala as dependencias, confer
 gs build <arquivo.gs> [-o saida]                 gera binario standalone com o script
 gs build <arquivo.gs> --alvo linux/amd64         standalone pra outra plataforma
 gs bench [--tree] <arquivo.gs> [n]               mede o tempo de execucao (n rodadas)
+gs debug [--tree] <arquivo.gs> [args]            depurador no terminal (breakpoints, passo a passo)
+gs debug --dap                                   depurador no protocolo DAP (usado pelo VSCode)
 gs disasm <arquivo.gs>                           mostra o bytecode da VM
 gs lsp                                           language server (usado pelo editor)
 gs --version  (ou gs versao)                     mostra a versao
@@ -358,6 +360,26 @@ gs bench [--tree] arquivo.gs [n]
 
 Runs the script `n` times (default 10), discarding the output, and shows
 min/median/mean/max.
+
+## `gs debug`
+
+```bash
+gs debug [--tree] <arquivo.gs> [args...]   # interactive terminal
+gs debug --dap                             # DAP adapter over stdio (VSCode)
+```
+
+Runs the script with the debugger on. In the terminal it starts stopped on
+the first line and waits for commands (they are in Portuguese, with short
+gdb-style aliases): `para 12` (or `b 12`) sets a breakpoint, `segue` (`c`)
+runs to it, `proximo` (`n`), `entra` (`s`) and `sai` (`o`) step over, into
+and out, `pilha` (`bt`), `vars` and `ve EXPR` (`p`) inspect, `lista` (`l`)
+shows the surrounding code. Conditional breakpoint:
+`para 12 se total > 100`. Ctrl+C while the program runs pauses it.
+
+`--tree` debugs on the tree-walker (the default is the VM, same as
+`gs roda`). Arguments after the file go to the script. `--dap` is what the
+VSCode extension calls — you don't run it by hand. Full reference in
+[Debugger](/docs/en/debug).
 
 ## `gs disasm`
 
