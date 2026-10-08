@@ -518,6 +518,7 @@ SQLite, MySQL/MariaDB e Postgres. Nao funciona no playground (wasm).
 | `consulta(con, sql, params...)` | `(conexao, texto, valores ou lista)` | `lista` de dicionarios (`coluna: valor`) |
 | `executa(con, sql, params...)` | `(conexao, texto, valores ou lista)` | `numero` de linhas afetadas |
 | `fecha(con)` | `(conexao)` | `nada` |
+| `migra(con, [pasta])` | `(conexao, [texto])` | `lista` das versoes aplicadas agora (vazia = banco em dia) |
 
 Os params podem vir soltos ou numa lista; o placeholder e o do driver (`?` no
 sqlite/mysql, `$1` no postgres).
@@ -532,6 +533,81 @@ pra_cada linha em consulta(c, "SELECT nome, idade FROM gente ORDER BY idade")
 acabou_finalmente
 fecha(c)
 ```
+
+### Migracoes: migra()
+
+`migra(con, [pasta])` aplica as migracoes pendentes da pasta (padrao
+`"migracoes"`) — os mesmos arquivos `NNN_descricao.sobe.sql` do
+[`gs migra`](/docs/cli#gs-migra), anotados na mesma tabela `gs_migracoes`.
+Feita pro servidor deixar o banco em dia na subida:
+
+```gambiarrascript
+bota db = conecta(env("GS_BANCO") ?? "sqlite:app.db")
+bota novas = migra(db)                 # [1, 2] na primeira vez, [] depois
+se_colar tamanho(novas) > 0
+    log_info("migracoes aplicadas", {"versoes": novas})
+acabou_finalmente
+escuta(8080)
+```
+
+Arquivo ja aplicado que mudou, migracao que falhou ou pasta que nao existe:
+quebra com o motivo (e nada daquela migracao fica — roda numa transacao).
+Desfazer (`desce`) e listar (`status`) sao so pelo `gs migra`.
+
+## Validacao
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `valida(valor, esquema)` | `(qualquer, dicionario ou texto)` | `lista` de textos com os erros; vazia = passou |
+
+Cada erro vem com o caminho do campo na frente: `"idade: tem que ser numero,
+veio texto"`, `"itens[2].preco: obrigatorio"`. Feito pro corpo de pedido —
+exemplo completo em [Validando o corpo](/docs/servidor#validando-o-corpo).
+
+```gambiarrascript
+bota esquema = {
+    "nome": {"tipo": "texto", "min": 2, "max": 80},
+    "idade": {"tipo": "inteiro", "min": 0},
+    "email": "email",
+    "apelido": "texto?",
+    "plano": {"opcoes": ["gratis", "pro"]},
+    "itens": {"tipo": "lista", "itens": {"preco": "numero", "qtd": "inteiro"}},
+}
+mostra valida({"nome": "Jurandir", "idade": "trinta", "email": "jurandir", "plano": "pro",
+               "itens": [{"preco": 10, "qtd": 1}, {"qtd": 2}]}, esquema)
+# [idade: tem que ser inteiro, veio texto, email: tem que ser email valido, veio "jurandir", itens[1].preco: obrigatorio]
+```
+
+O esquema e um dicionario **campo → regra**. A regra pode ser:
+
+- **um nome de tipo**: `"texto"`, `"numero"`, `"inteiro"`, `"booleano"`,
+  `"lista"`, `"dicionario"`, `"email"`, `"data"` (ISO: `2024-05-01` ou
+  `2024-05-01T10:00:00Z`) ou `"qualquer"`. Com `?` no fim (`"texto?"`) o
+  campo e opcional.
+- **um dicionario de regras**:
+
+| Regra | O que faz |
+| --- | --- |
+| `"tipo"` | um dos nomes acima (aceita o `?` tambem); sem ele, qualquer tipo |
+| `"obrigatorio"` | `deu_ruim` deixa faltar (padrao `deu_bom`). Faltar = nao ter a chave ou valer `nada` |
+| `"min"` / `"max"` | numero: o valor; texto: quantos caracteres; lista e dicionario: quantos itens |
+| `"padrao"` | regex que o texto tem que casar (em qualquer lugar: use `^` e `$` pra casar inteiro) |
+| `"opcoes"` | lista dos valores aceitos |
+| `"itens"` | a regra de cada item da lista (caminho `campo[i]`) |
+| `"campos"` | o esquema do dicionario de dentro (caminho `campo.sub`) |
+
+Um dicionario que tem alguma chave fora dessa tabela e atalho pra
+`"campos"`: `"endereco": {"rua": "texto", "cep": "texto"}` e o mesmo que
+`"endereco": {"tipo": "dicionario", "campos": {"rua": "texto", "cep": "texto"}}`.
+
+Campo a mais passa batido; `"_estrito": deu_bom` no esquema (ou na regra com
+`"campos"`) faz cada um virar o erro `"campo: campo nao esperado"`. Esquema com
+texto no lugar do dicionario valida o valor inteiro (`valida(5, "texto")` da
+`["tem que ser texto, veio numero"]`).
+
+Esquema mal escrito (tipo que nao existe, regex que nao compila, `"min"` que
+nao e numero) nao e erro de validacao: **quebra** na hora, pra voce ver no
+primeiro teste.
 
 ## Erros
 

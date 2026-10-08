@@ -746,6 +746,26 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
 - [x] **multi-catch** — entregue no Tier 2 do jeito sugerido aqui:
       `quebrou erro se erro_tipo(erro) == "rede"`.
 
+**API de verdade (banco + entrada)**
+
+- [x] **Migrações de banco** — `gs migra [sobe | desce [n] | status | novo
+      nome]` com `migracoes/NNN_nome.sobe.sql` e `.desce.sql` opcional
+      (pacote `migracao`). Tabela `gs_migracoes(versao, nome, checksum,
+      aplicada_em)`; cada migração numa transação junto com a anotação
+      (SQLite/Postgres desfazem até DDL; no MySQL roda comando a comando,
+      separado fora de string/comentário). Arquivo aplicado que mudou
+      (sha256) ou sumiu trava `sobe`/`desce` com o nome do arquivo; `status`
+      marca `[!]`. Banco por `--banco` (url do `conecta`) ou `GS_BANCO`.
+      Builtin `migra(conexao, [pasta])` pro servidor migrar na subida
+      (stub no wasm).
+- [x] **Validação de entrada** — `valida(valor, esquema)` → lista de erros
+      com caminho (`"itens[2].preco: obrigatorio"`). Tipo por nome
+      (`"texto?"` = opcional) ou regra `{tipo, obrigatorio, min, max, padrao,
+      opcoes, itens, campos}`; dicionário com chave que não é regra vira
+      atalho de `campos`; `"_estrito"` recusa campo a mais. Esquema errado
+      quebra (não vira item da lista). Pura, mesma função nos 2 engines;
+      `examples/api_rest.gs` responde `400` com a lista.
+
 **Editor / LSP**
 
 - [x] **Ir pra definição** e **achar referências** — resolve igual ao runtime

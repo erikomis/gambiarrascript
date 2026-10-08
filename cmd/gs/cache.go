@@ -53,7 +53,8 @@ func init() {
 // CompiledFunction) e do fluxo principal (cacheGSC.MaxStack). Cache velho
 // viria com 0 em tudo e cairia no caminho checado da VM — funciona, mas
 // invalida pra nao rodar lento a toa.
-const formatoGSC = 14
+// 15 = builtins migra e valida no fim da lista.
+const formatoGSC = 15
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

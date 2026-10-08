@@ -111,7 +111,10 @@ ou dicionario (viram JSON), `responde_json(valor, status)` ou
 o servidor e desliga com calma no ctrl+c; `escuta(porta, {"tls": {"cert":
 "cert.pem", "chave": "chave.pem"}})` sobe em HTTPS (e `wss://`). Erro no handler vira `500`
 generico pro cliente e o detalhe vai pro stderr. Cada requisicao roda na
-propria goroutine. Exemplos: `examples/api_rest.gs` e `examples/chat_ws.gs`;
+propria goroutine. O corpo se confere com `valida(pedido.json, esquema)`, que
+devolve a lista de erros com o caminho de cada um (`"itens[2].preco:
+obrigatorio"`) pra responder `400`; o banco fica em dia na subida com
+`migra(conexao)` (ou `gs migra` na linha de comando). Exemplos: `examples/api_rest.gs` e `examples/chat_ws.gs`;
 doc completa em [Servidor HTTP](https://erikomis.github.io/gambiarrascript/docs/servidor/).
 
 ## Rede crua (TCP/UDP)
@@ -354,6 +357,7 @@ Além de `roda`, `repl` e `lsp`, o CLI tem:
 | `gs instala [--atualiza]` | instala tudo do `gambiarra.json`; com lock, recusa conteúdo que não bate (`--atualiza` re-resolve) |
 | `gs build <arq.gs> [-o saida]` | gera um binário standalone com o script embutido |
 | `gs build <arq.gs> --alvo linux/amd64` | standalone pra outra plataforma (baixa o `gs` da release e confere o checksum; `--gs-base` pra usar um local) |
+| `gs migra [sobe \| desce [n] \| status \| novo nome]` | migrações SQL de `migracoes/NNN_nome.sobe.sql` (e `.desce.sql`), anotadas em `gs_migracoes` com checksum; banco por `--banco URL` ou `GS_BANCO`, pasta por `--pasta` |
 
 Roda `gs` sem argumentos (ou `gs --help`) pra ver a ajuda completa.
 

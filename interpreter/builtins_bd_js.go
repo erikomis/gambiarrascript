@@ -24,3 +24,7 @@ func builtinConsulta(args []object.Object) object.Object {
 func builtinExecuta(args []object.Object) object.Object {
 	return erroBuiltin("executa() nao funciona no navegador (wasm) — banco de dados so roda no gs nativo")
 }
+
+func builtinMigra(args []object.Object) object.Object {
+	return erroBuiltin("migra() nao funciona no navegador (wasm) — banco de dados so roda no gs nativo")
+}

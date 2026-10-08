@@ -283,6 +283,8 @@ var nomesBuiltins = []string{
 	"gera_certificado",
 	// POO (Tier 8): satisfacao de combinado e type assertion
 	"satisfaz", "como_tipo",
+	// banco: migracoes; validacao de entrada
+	"migra", "valida",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que

@@ -4,6 +4,24 @@ Mudanças de cada versão do GambiarraScript que importam pra quem usa a
 linguagem. O detalhe (o porquê de cada decisão) está nas mensagens de commit e
 no [ROADMAP](ROADMAP.md).
 
+## Não lançado
+
+- **Migrações de banco**: `gs migra [sobe | desce [n] | status | novo nome]`
+  aplica os arquivos `migracoes/NNN_nome.sobe.sql` (e desfaz com o
+  `.desce.sql`) em SQLite, Postgres e MySQL/MariaDB. Cada migração roda numa
+  transação, fica anotada em `gs_migracoes` com o checksum e arquivo já
+  aplicado que mudou trava tudo com aviso claro. Banco por `--banco URL` (a
+  mesma do `conecta`) ou `GS_BANCO`. A builtin `migra(conexao, [pasta])` faz
+  o mesmo de dentro do script (servidor migrando na subida).
+- **Validação de entrada**: `valida(valor, esquema)` devolve a lista de erros
+  com o caminho de cada um (`"idade: tem que ser numero, veio texto"`,
+  `"itens[2].preco: obrigatorio"`). Tipos `texto`, `numero`, `inteiro`,
+  `booleano`, `lista`, `dicionario`, `email`, `data`; regras `obrigatorio`,
+  `min`, `max`, `padrao`, `opcoes`, `itens`, `campos`; `"texto?"` = opcional e
+  `"_estrito"` recusa campo a mais. O `examples/api_rest.gs` responde `400`
+  com a lista.
+- Cache `.gsc` antigo é descartado sozinho (formato 15: builtins novas).
+
 ## v0.7.1 — 2026-10-08
 
 - **Playground com metade do tamanho**: o runtime baixa 1,9 MB em vez de

@@ -117,6 +117,49 @@ servidor: GET /usuarios/abc estourou em <rota GET /usuarios/:id>
   deu ruim na linha 12: nao da pra dividir por zero, parca — nem na gambiarra
 ```
 
+## Validando o corpo
+
+O `pedido.json` chega parseado, mas do jeito que o cliente mandou. O
+`valida(valor, esquema)` confere o formato e devolve a **lista de erros**,
+cada um com o caminho do campo — vazia quando ta tudo certo. Responde `400`
+com ela e o cliente sabe exatamente o que arrumar:
+
+```gambiarrascript
+crava ESQUEMA_TAREFA = {
+    "titulo": {"tipo": "texto", "min": 1, "max": 200},
+    "feita": "booleano?",
+    "prazo": "data?",
+    "etiquetas": {"tipo": "lista", "obrigatorio": deu_ruim, "itens": "texto"},
+    "_estrito": deu_bom,
+}
+
+rota("POST", "/tarefas", gambiarra(pedido)
+    bota erros = valida(pedido.json, ESQUEMA_TAREFA)
+    se_colar tamanho(erros) > 0
+        funciona responde_json({"erros": erros}, 400)
+    acabou_finalmente
+    # daqui pra baixo o corpo tem o formato certo
+    funciona responde_json({"titulo": pedido.json.titulo}, 201)
+acabou_finalmente)
+```
+
+```bash
+curl -X POST localhost:8080/tarefas -H "Content-Type: application/json" \
+     -d '{"titulo": 3, "etiquetas": ["casa", 7], "cor": "azul"}'
+# 400 {"erros":["titulo: tem que ser texto, veio numero","etiquetas[1]: tem que ser texto, veio numero","cor: campo nao esperado"]}
+```
+
+- Corpo vazio (`pedido.json` e `nada`) da `["obrigatorio"]`; JSON quebrado
+  nem chega no handler (o servidor ja responde `400`).
+- `"texto?"` e opcional; sem `?` o campo e obrigatorio (faltar ou vir `null`
+  conta como faltando).
+- `"_estrito": deu_bom` recusa campo que o esquema nao conhece — bom pra
+  pegar erro de digitacao do cliente (`"titlo"`).
+- As regras (`min`, `max`, `padrao`, `opcoes`, `itens`, `campos`) estao em
+  [Biblioteca → Validacao](/docs/biblioteca#validacao).
+
+O `examples/api_rest.gs` valida o POST e o PUT desse jeito.
+
 ## Middleware: antes() e depois()
 
 `antes(gambiarra(pedido) ...)` roda antes de **toda rota** (inclusive

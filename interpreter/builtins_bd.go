@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"gambiarrascript/migracao"
 	"gambiarrascript/object"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -72,22 +73,33 @@ func builtinConecta(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("conecta() espera a url como texto, veio %s", args[0].Type())
 	}
-	driver, dsn, err := urlParaDriver(urlObj.Value)
+	db, driver, err := AbreBanco(urlObj.Value)
 	if err != nil {
 		return erroBuiltin("%v", err)
 	}
+	return &object.Nativo{Rotulo: "conexao " + driver, Valor: &conexaoBD{db: db, driver: driver}}
+}
+
+// AbreBanco abre e testa (ping) a conexao a partir da url do conecta()
+// ("sqlite:arquivo.db", "postgres://...", "mysql://..."). Devolve o nome do
+// driver database/sql junto. Usado tambem pelo `gs migra`.
+func AbreBanco(bruta string) (*sql.DB, string, error) {
+	driver, dsn, err := urlParaDriver(bruta)
+	if err != nil {
+		return nil, "", err
+	}
 	db, err := sql.Open(driver, dsn)
 	if err != nil {
-		return erroBuiltin("nao consegui abrir o banco: %v", err)
+		return nil, "", fmt.Errorf("nao consegui abrir o banco: %v", err)
 	}
 	if driver == "sqlite" {
 		db.SetMaxOpenConns(1)
 	}
 	if err := db.Ping(); err != nil {
 		db.Close()
-		return erroBuiltin("nao consegui conectar no banco: %v", err)
+		return nil, "", fmt.Errorf("nao consegui conectar no banco: %v", err)
 	}
-	return &object.Nativo{Rotulo: "conexao " + driver, Valor: &conexaoBD{db: db, driver: driver}}
+	return db, driver, nil
 }
 
 func builtinFecha(args []object.Object) object.Object {
@@ -193,6 +205,36 @@ func builtinExecuta(args []object.Object) object.Object {
 		return NADA
 	}
 	return object.NumInt(n)
+}
+
+// builtinMigra aplica as migracoes pendentes da pasta (padrao "migracoes")
+// e devolve a lista de versoes aplicadas agora (vazia = banco ja estava em
+// dia). Feito pro servidor migrar na subida: migra(con) antes do escuta().
+func builtinMigra(args []object.Object) object.Object {
+	if len(args) < 1 || len(args) > 2 {
+		return erroBuiltin("migra() quer conexao e, opcional, a pasta; veio %d argumento(s)", len(args))
+	}
+	con, e := pegaConexao(args[0])
+	if e != nil {
+		return e
+	}
+	pasta := migracao.PastaPadrao
+	if len(args) == 2 {
+		t, ok := args[1].(*object.Texto)
+		if !ok {
+			return erroBuiltin("migra() espera a pasta como texto, veio %s", object.NomeTipo(args[1]))
+		}
+		pasta = t.Value
+	}
+	feitas, err := migracao.Novo(con.db, con.driver, pasta).Sobe()
+	if err != nil {
+		return erroBuiltin("migra(): %v", err)
+	}
+	out := make([]object.Object, len(feitas))
+	for i, m := range feitas {
+		out[i] = object.NumInt(m.Versao)
+	}
+	return object.NovaLista(out)
 }
 
 // argParaGo converte argumentos variaveis da chamada. Aceita dois formatos:

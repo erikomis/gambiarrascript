@@ -6,6 +6,8 @@
 #   curl localhost:8080/tarefas
 #   curl -X POST localhost:8080/tarefas -H "Authorization: Bearer segredo" \
 #        -H "Content-Type: application/json" -d '{"titulo": "lavar a louca"}'
+#   curl -X POST localhost:8080/tarefas -H "Authorization: Bearer segredo" \
+#        -H "Content-Type: application/json" -d '{"titulo": 3}'   # 400 + {"erros": [...]}
 #   curl localhost:8080/tarefas/1
 #   curl -X PUT localhost:8080/tarefas/1 -H "Authorization: Bearer segredo" \
 #        -H "Content-Type: application/json" -d '{"feita": true}'
@@ -22,6 +24,19 @@ bota contador = {"proximo": 1}
 # atomica, mas "le o proximo id e soma 1" e conta composta — com_trava garante
 # que dois POST nao peguem o mesmo id
 bota trava_ids = trava()
+
+# o formato do corpo, conferido pelo valida(): devolve a lista de erros (com o
+# caminho de cada um) e lista vazia quando ta tudo certo
+crava ESQUEMA_NOVA = {
+    "titulo": {"tipo": "texto", "min": 1, "max": 200},
+    "feita": "booleano?",
+    "_estrito": deu_bom,
+}
+crava ESQUEMA_MUDA = {
+    "titulo": {"tipo": "texto?", "min": 1, "max": 200},
+    "feita": "booleano?",
+    "_estrito": deu_bom,
+}
 
 gambiarra erro_json(status, msg)
     funciona responde_json({"erro": msg}, status)
@@ -71,11 +86,12 @@ acabou_finalmente)
 
 rota("POST", "/tarefas", gambiarra(pedido)
     bota dados = pedido.json # ja vem parseado (json quebrado nem chega aqui: 400)
-    se_colar tipo(dados) != "dicionario" ou tipo(dados["titulo"]) != "texto"
-        funciona erro_json(422, "manda um json tipo {\"titulo\": \"...\"}")
+    bota erros = valida(dados, ESQUEMA_NOVA)
+    se_colar tamanho(erros) > 0
+        funciona responde_json({"erros": erros}, 400)
     acabou_finalmente
     bota t = com_trava(trava_ids, gambiarra()
-        bota nova = {"id": contador["proximo"], "titulo": dados["titulo"], "feita": deu_ruim, "dono": pedido.usuario}
+        bota nova = {"id": contador["proximo"], "titulo": dados["titulo"], "feita": dados["feita"] ?? deu_ruim, "dono": pedido.usuario}
         bota contador["proximo"] = contador["proximo"] + 1
         adiciona(tarefas, nova)
         funciona nova
@@ -91,6 +107,10 @@ rota("PUT", "/tarefas/:id", gambiarra(pedido)
         funciona erro_json(404, "tarefa ${pedido.params.id} nao existe")
     acabou_finalmente
     bota dados = pedido.json ?? {}
+    bota erros = valida(dados, ESQUEMA_MUDA)
+    se_colar tamanho(erros) > 0
+        funciona responde_json({"erros": erros}, 400)
+    acabou_finalmente
     se_colar tem(dados, "titulo")
         bota t["titulo"] = dados["titulo"]
     acabou_finalmente

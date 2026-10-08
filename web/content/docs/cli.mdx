@@ -22,6 +22,7 @@ gs instala [--atualiza]                          instala as dependencias, confer
 gs build <arquivo.gs> [-o saida]                 gera binario standalone com o script
 gs build <arquivo.gs> --alvo linux/amd64         standalone pra outra plataforma
 gs bench [--tree] <arquivo.gs> [n]               mede o tempo de execucao (n rodadas)
+gs migra [sobe | desce [n] | status | novo nome] migracoes de banco em SQL (--banco, --pasta)
 gs debug [--tree] <arquivo.gs> [args]            depurador no terminal (breakpoints, passo a passo)
 gs debug --dap                                   depurador no protocolo DAP (usado pelo VSCode)
 gs disasm <arquivo.gs>                           mostra o bytecode da VM
@@ -343,6 +344,50 @@ segunda vez em diante sai do cache, sem rede.
 Os modulos importados (inclusive os de `gs_modulos/`) vao dentro do binario,
 nativo ou `--alvo`: nao precisa mandar os `.gs` junto. So `importa` com
 caminho que nao e texto literal (tree-walker) ainda le do disco.
+
+## `gs migra`
+
+```bash
+gs migra novo cria usuarios          # cria migracoes/001_cria_usuarios.sobe.sql e .desce.sql
+gs migra --banco sqlite:app.db       # aplica o que estiver pendente (= gs migra sobe)
+gs migra status                      # o que ja foi e o que falta (banco vem do GS_BANCO)
+gs migra desce                       # desfaz a ultima; desce 3 desfaz as 3 ultimas
+```
+
+Migracoes de banco em SQL puro. Cada uma e um par de arquivos na pasta
+(`migracoes/` por padrao, troca com `--pasta`):
+
+```
+migracoes/
+  001_cria_usuarios.sobe.sql    # o que aplica (obrigatorio)
+  001_cria_usuarios.desce.sql   # como desfazer (opcional; sem ele o desce recusa)
+  002_poe_email.sobe.sql
+```
+
+O numero e a versao (ordem numerica; o `novo` usa 3 digitos e o proximo
+livre), o resto do nome e a descricao. Um arquivo pode ter varios comandos
+separados por `;`. Arquivo `.sql` com nome fora do padrao e erro — melhor do
+que pular calado uma migracao.
+
+- `--banco URL`: a mesma url do `conecta()` — `sqlite:app.db`,
+  `postgres://user:senha@host/db`, `mysql://user:senha@host:3306/db` (ou
+  `mariadb://`). Sem a flag vale a variavel **`GS_BANCO`**.
+- O que ja rodou fica na tabela **`gs_migracoes`** (`versao`, `nome`,
+  `checksum`, `aplicada_em`), criada sozinha.
+- Cada migracao roda **numa transacao** junto com a anotacao dela: deu erro
+  no meio, nada daquela migracao fica (as anteriores ficam). No SQLite e no
+  Postgres isso vale ate pra `CREATE`/`ALTER`; no MySQL/MariaDB DDL faz
+  commit sozinho, entao la os comandos rodam um por um e o que rodou antes da
+  falha fica.
+- **Arquivo aplicado nao se edita**: o `checksum` (sha256 do `.sobe.sql`) e
+  conferido a cada `sobe`/`desce`. Mudou? Nada roda, com o aviso de qual
+  arquivo foi — volta a mudanca e cria uma migracao nova. O `status` marca
+  com `[!]` (e sai com codigo 1).
+- `desce [n]` desfaz as `n` aplicadas de versao mais alta (padrao 1), rodando
+  o `.desce.sql` de cada e tirando da tabela.
+
+Pra o servidor migrar sozinho na subida tem a builtin `migra(conexao, [pasta])`
+(veja [Biblioteca](/docs/biblioteca#banco-de-dados)).
 
 ## `gs bench`
 

@@ -116,6 +116,10 @@ var builtins = map[string]*object.Builtin{
 	"fecha":    {Nome: "fecha", Fn: builtinFecha},
 	"consulta": {Nome: "consulta", Fn: builtinConsulta},
 	"executa":  {Nome: "executa", Fn: builtinExecuta},
+	"migra":    {Nome: "migra", Fn: builtinMigra},
+
+	// validacao de entrada (corpo de pedido, config...)
+	"valida": {Nome: "valida", Fn: builtinValida},
 
 	// erros
 	"quebra":       {Nome: "quebra", Fn: builtinQuebra},

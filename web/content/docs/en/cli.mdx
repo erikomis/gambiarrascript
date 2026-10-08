@@ -22,6 +22,7 @@ gs instala [--atualiza]                          instala as dependencias, confer
 gs build <arquivo.gs> [-o saida]                 gera binario standalone com o script
 gs build <arquivo.gs> --alvo linux/amd64         standalone pra outra plataforma
 gs bench [--tree] <arquivo.gs> [n]               mede o tempo de execucao (n rodadas)
+gs migra [sobe | desce [n] | status | novo nome] migracoes de banco em SQL (--banco, --pasta)
 gs debug [--tree] <arquivo.gs> [args]            depurador no terminal (breakpoints, passo a passo)
 gs debug --dap                                   depurador no protocolo DAP (usado pelo VSCode)
 gs disasm <arquivo.gs>                           mostra o bytecode da VM
@@ -351,6 +352,50 @@ From the second time on it comes from the cache, no network needed.
 Imported modules (including the ones in `gs_modulos/`) go inside the binary,
 native or `--alvo`: no need to ship the `.gs` files with it. Only an `importa`
 whose path isn't a literal string (tree-walker) still reads from disk.
+
+## `gs migra`
+
+```bash
+gs migra novo cria usuarios          # creates migracoes/001_cria_usuarios.sobe.sql and .desce.sql
+gs migra --banco sqlite:app.db       # applies whatever is pending (= gs migra sobe)
+gs migra status                      # what has run and what is missing (database from GS_BANCO)
+gs migra desce                       # reverts the last one; desce 3 reverts the last 3
+```
+
+Database migrations in plain SQL. Each one is a pair of files in the folder
+(`migracoes/` by default, change it with `--pasta`):
+
+```
+migracoes/
+  001_cria_usuarios.sobe.sql    # what it applies ("sobe" = up; required)
+  001_cria_usuarios.desce.sql   # how to undo it ("desce" = down; optional, without it desce refuses)
+  002_poe_email.sobe.sql
+```
+
+The number is the version (numeric order; `novo` uses 3 digits and the next
+free number), the rest of the name is the description. A file can hold
+several statements separated by `;`. A `.sql` file whose name doesn't follow
+the pattern is an error — better than silently skipping a migration.
+
+- `--banco URL`: the same url as `conecta()` — `sqlite:app.db`,
+  `postgres://user:pass@host/db`, `mysql://user:pass@host:3306/db` (or
+  `mariadb://`). Without the flag the **`GS_BANCO`** variable is used.
+- What has run is recorded in the **`gs_migracoes`** table (`versao`, `nome`,
+  `checksum`, `aplicada_em`), created automatically.
+- Each migration runs **in a transaction** together with its record: an error
+  halfway leaves nothing of that migration behind (earlier ones stay). On
+  SQLite and Postgres that holds even for `CREATE`/`ALTER`; on MySQL/MariaDB
+  DDL commits on its own, so there the statements run one by one and whatever
+  ran before the failure stays.
+- **An applied file is never edited**: the `checksum` (sha256 of the
+  `.sobe.sql`) is checked on every `sobe`/`desce`. Changed? Nothing runs, and
+  the message says which file — revert the change and create a new migration.
+  `status` flags it with `[!]` (and exits with code 1).
+- `desce [n]` reverts the `n` applied migrations with the highest versions
+  (default 1), running each `.desce.sql` and removing it from the table.
+
+For the server to migrate on its own at startup there's the builtin
+`migra(conexao, [pasta])` (see [Library](/docs/en/biblioteca#database)).
 
 ## `gs bench`
 

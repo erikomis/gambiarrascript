@@ -135,6 +135,8 @@ func main() {
 		cmdInstala(os.Args[2:])
 	case "build":
 		cmdBuild(os.Args[2:])
+	case "migra":
+		cmdMigra(os.Args[2:])
 	case "--version", "-v", "version", "versao":
 		fmt.Println("gs (GambiarraScript) " + Versao)
 	case "--help", "-h", "ajuda":
@@ -164,6 +166,7 @@ func uso() {
 	fmt.Println("  gs instala [--atualiza]                # instala as dependencias, conferindo o gambiarra.lock")
 	fmt.Println("  gs build <arquivo.gs> [-o saida]       # gera binario standalone com o script")
 	fmt.Println("  gs build <arq.gs> --alvo linux/amd64   # standalone pra outra plataforma (ou --gs-base gs-do-alvo)")
+	fmt.Println("  gs migra [sobe|desce [n]|status|novo nome] # migracoes SQL (--banco URL ou $GS_BANCO, --pasta)")
 	fmt.Println("  gs repl                                # abre o modo interativo (multiline)")
 	fmt.Println("  gs testa [--tree] [-so nome] [<dir>]   # roda os testes (*_test.gs) e soma os asserts")
 	fmt.Println("  gs testa --cobertura [<dir>]           # + % de linhas rodadas (--cobertura-perfil/--cobertura-html arq)")

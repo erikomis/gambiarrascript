@@ -122,6 +122,49 @@ servidor: GET /usuarios/abc estourou em <rota GET /usuarios/:id>
   deu ruim na linha 12: nao da pra dividir por zero, parca — nem na gambiarra
 ```
 
+## Validating the body
+
+`pedido.json` arrives parsed, but exactly as the client sent it.
+`valida(valor, esquema)` checks the shape and returns the **list of errors**,
+each one prefixed with the field path — empty when everything is fine. Answer
+`400` with it and the client knows exactly what to fix:
+
+```gambiarrascript
+crava ESQUEMA_TAREFA = {
+    "titulo": {"tipo": "texto", "min": 1, "max": 200},
+    "feita": "booleano?",
+    "prazo": "data?",
+    "etiquetas": {"tipo": "lista", "obrigatorio": deu_ruim, "itens": "texto"},
+    "_estrito": deu_bom,
+}
+
+rota("POST", "/tarefas", gambiarra(pedido)
+    bota erros = valida(pedido.json, ESQUEMA_TAREFA)
+    se_colar tamanho(erros) > 0
+        funciona responde_json({"erros": erros}, 400)
+    acabou_finalmente
+    # from here on the body has the right shape
+    funciona responde_json({"titulo": pedido.json.titulo}, 201)
+acabou_finalmente)
+```
+
+```bash
+curl -X POST localhost:8080/tarefas -H "Content-Type: application/json" \
+     -d '{"titulo": 3, "etiquetas": ["casa", 7], "cor": "azul"}'
+# 400 {"erros":["titulo: tem que ser texto, veio numero","etiquetas[1]: tem que ser texto, veio numero","cor: campo nao esperado"]}
+```
+
+- An empty body (`pedido.json` is `nada`) gives `["obrigatorio"]`; broken
+  JSON never reaches the handler (the server already answers `400`).
+- `"texto?"` is optional; without `?` the field is required (missing or
+  `null` counts as missing).
+- `"_estrito": deu_bom` rejects fields the schema doesn't know — good for
+  catching client typos (`"titlo"`).
+- The rules (`min`, `max`, `padrao`, `opcoes`, `itens`, `campos`) are in
+  [Library → Validation](/docs/en/biblioteca#validation).
+
+`examples/api_rest.gs` validates POST and PUT this way.
+
 ## Middleware: antes() and depois()
 
 `antes(gambiarra(pedido) ...)` ("before") runs before **every route**
