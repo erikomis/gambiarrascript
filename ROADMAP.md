@@ -18,7 +18,6 @@ TLS, pacotes com lock e instaladores pros três sistemas). O que sobra:
 | Onde | O que sobra |
 |---|---|
 | Precisa de conta do mantenedor | publicar a extensão no VS Marketplace / Open VSX (hoje instala pelo `.vsix` de cada release) |
-| Site / playground | testar Firefox e Safari; wasm menor |
 | Fora de escopo (decidido) | método em tipo não-struct, visibilidade, `//`, FFI/cgo, keywords em inglês |
 
 Histórico por versão no [CHANGELOG](CHANGELOG.md).
@@ -793,12 +792,17 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       do programa, cada `pergunta` consome uma linha (ecoada na saída) e o
       fim devolve texto vazio como no nativo. Vai junto no link (`&e=`);
       exemplo "Quiz" no playground.
-- [ ] **Testar Firefox e Safari** — só o Chromium foi exercitado (worker,
-      `DecompressionStream`, compartilhar).
+- [x] **Testar Firefox e Safari** — `web/e2e/navegadores.cjs` (Playwright)
+      roda o playground em Chromium, Firefox e WebKit: exemplo, `busca`
+      avisando na hora, Parar num laço infinito, entrada (`pergunta`) e o
+      botão "Rodar no playground" da doc. Job `navegadores` no CI.
 - [x] **Doc em inglês completa** — todas as 22 páginas em `docs/en/` (POO incluída).
-- [ ] **Wasm menor** — 13,8 MB cru / 3,4 MB gzip; o grosso deve ser
-      `net/http` dos builtins de rede, que nem funcionam no navegador. Build
-      tag pra tirar rede/banco/processo do `cmd/wasm`.
+- [x] **Wasm menor** — rede, servidor, TLS e processo ficam fora do build
+      do navegador (`//go:build !js` + versões que avisam "isso não roda no
+      navegador", mesmos nomes e ordem pra VM). 16,3 MB → 7,2 MB cru e
+      4,0 MB → 1,9 MB gzip. De quebra o `busca` parou de travar o playground
+      até o timeout: o `net/http` do Go no navegador espera uma promessa do JS
+      que nunca resolve com o evaluate síncrono no worker.
 
 ---
 

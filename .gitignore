@@ -32,3 +32,7 @@ web/public/wasm_exec.js
 
 # macOS
 .DS_Store
+# dependencias do teste de navegadores (o CI instala na hora)
+web/e2e/node_modules/
+web/e2e/package.json
+web/e2e/package-lock.json

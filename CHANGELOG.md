@@ -6,6 +6,13 @@ no [ROADMAP](ROADMAP.md).
 
 ## Não lançado
 
+- **Playground com metade do tamanho**: o runtime baixa 1,9 MB em vez de
+  4,0 MB (16,3 → 7,2 MB sem compressão). Rede, servidor, TLS e processo saem
+  do build do navegador, onde não funcionam; os builtins continuam existindo e
+  avisam na hora.
+- No playground o `busca` travava até o timeout de 10 s; agora responde na
+  hora que não roda no navegador.
+- Playground testado no Chromium, Firefox e WebKit (Safari), também no CI.
 - Código Go formatado com `gofmt` e o CI passa a barrar código desformatado.
 - Teste de broadcast do WebSocket deixou de ser instável (o bug era do teste,
   não do servidor).

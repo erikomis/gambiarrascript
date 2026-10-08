@@ -1,3 +1,5 @@
+//go:build !js
+
 // TLS: configuracao compartilhada pelo escuta (HTTPS/wss), escuta_tcp,
 // conecta_tcp, busca e conecta_ws, mais o gera_certificado (so pra dev).
 //

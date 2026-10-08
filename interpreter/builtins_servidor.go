@@ -1,3 +1,5 @@
+//go:build !js
+
 package interpreter
 
 import (
@@ -70,16 +72,6 @@ func novoServidorEstado(i *Interpreter) *servidorEstado {
 		wsAtivos: map[desligavel]struct{}{},
 		desliga:  make(chan struct{}),
 	}
-}
-
-// ehChamavel diz se o valor da pra chamar como gambiarra: `*object.Funcao` no
-// tree-walker, `*object.CompiledFunction` na VM, `*object.Builtin` pros nativos.
-func ehChamavel(o object.Object) bool {
-	switch o.(type) {
-	case *object.Funcao, *object.CompiledFunction, *object.Builtin, *object.MetodoLigado:
-		return true
-	}
-	return false
 }
 
 // chamaAdaptado chama a gambiarra do usuario cortando os argumentos que ela

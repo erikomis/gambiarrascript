@@ -60,3 +60,40 @@ jobs:
         env:
           NEXT_PUBLIC_BASE_PATH: /gambiarrascript
         run: ./scripts/build-web --site
+
+  # Playground de verdade em Chromium, Firefox e WebKit (Safari): exemplo,
+  # busca avisando na hora, Parar num laco infinito, entrada (pergunta) e o
+  # botao "Rodar no playground" da doc.
+  navegadores:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: wasm + site estatico
+        env:
+          NEXT_PUBLIC_BASE_PATH: /gambiarrascript
+        run: ./scripts/build-web --site
+
+      - name: playwright + navegadores
+        working-directory: web/e2e
+        run: |
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1
+          npx playwright install --with-deps chromium firefox webkit
+
+      - name: testa nos tres motores
+        run: |
+          mkdir -p /tmp/site && ln -s "$PWD/web/out" /tmp/site/gambiarrascript
+          (cd /tmp/site && python3 -m http.server 8765 >/dev/null 2>&1 &)
+          sleep 2
+          cd web/e2e && BASE=http://localhost:8765/gambiarrascript node navegadores.cjs
