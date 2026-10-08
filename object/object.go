@@ -254,6 +254,11 @@ type CompiledFunction struct {
 	Free      []Object
 	Linhas    []LinhaPC // tabela pc->linha pra erros com posicao
 	Variadic  bool      // true: ultimo param e ...resto (coleta args extras)
+	// MaxStack e a profundidade maxima da pilha de operandos do corpo, acima
+	// dos locals (calculada pelo compilador, igual o max_stack da JVM). A VM
+	// reserva NumLocals+MaxStack uma vez por frame e o push nao checa mais
+	// capacidade. 0 = desconhecida: a VM cai no caminho checado.
+	MaxStack int
 }
 
 func (f *CompiledFunction) Type() ObjectType { return FUNCAO_OBJ }

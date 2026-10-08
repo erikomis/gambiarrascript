@@ -303,6 +303,9 @@ type Bytecode struct {
 	// Modulos: caminhos absolutos dos modulos compilados junto (o cache .gsc
 	// confere se nenhum mudou; o `gs build` embute as fontes).
 	Modulos []string
+	// MaxStack e o teto da pilha de operandos do fluxo principal (as
+	// gambiarras levam o delas na CompiledFunction). 0 = desconhecido.
+	MaxStack int
 }
 
 func (c *Compiler) Bytecode() *Bytecode {
@@ -313,6 +316,7 @@ func (c *Compiler) Bytecode() *Bytecode {
 		Linhas:       c.linhas,
 		NumGlobals:   c.scope.NumGlobais(),
 		Modulos:      c.caminhosModulos(),
+		MaxStack:     MaxPilha(c.instructions, c.constants),
 	}
 }
 
@@ -1312,6 +1316,7 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body
 		Free:      nil,
 		Linhas:    fnLinhas,
 		Variadic:  cf.variadic,
+		MaxStack:  MaxPilha(cf.bytecode, c.constants),
 	})
 	// pra cada freevar, empilha a CELULA dela antes do OpClosure: o local do
 	// escopo dono (se e quem esta criando a closure) ou a freevar que este
@@ -1906,7 +1911,8 @@ func (c *Compiler) compilaCorpoModulo(info *moduloInfo, prog *ast.Program) error
 		}
 	}
 	c.emit(code.OpReturnNada)
-	info.desc.Corpo = &object.CompiledFunction{Name: "<modulo>", Bytecode: c.instructions, Linhas: c.linhas}
+	info.desc.Corpo = &object.CompiledFunction{Name: "<modulo>", Bytecode: c.instructions, Linhas: c.linhas,
+		MaxStack: MaxPilha(c.instructions, c.constants)}
 
 	nomes := make([]string, 0, len(tab.symbols))
 	for nome, sym := range tab.symbols {

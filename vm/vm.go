@@ -15,9 +15,10 @@ import (
 
 const (
 	// StackInicial e o tamanho com que a pilha NASCE; ela cresce sob demanda
-	// (append no push, dobrando no garanteEspaco). Antes toda VM ja nascia com os
-	// 16k slots — 256 KB por VM — o que fazia cada goroutine do `bora` e cada
-	// chamada de gambiarra vinda de mapeia/filtra custar um quarto de mega.
+	// (dobrando no garanteEspaco, na reserva de cada frame). Antes toda VM ja
+	// nascia com os 16k slots — 256 KB por VM — o que fazia cada goroutine do
+	// `bora` e cada chamada de gambiarra vinda de mapeia/filtra custar um
+	// quarto de mega.
 	StackInicial = 512
 	// GlobalsMin e o piso do array de globais. O tamanho real vem do
 	// compilador (Bytecode.NumGlobals): reservar MaxGlobals de cara custava
@@ -57,6 +58,7 @@ type VM struct {
 	constants []object.Object
 	inst      code.Instructions
 	linhas    []object.LinhaPC // tabela pc->linha do fluxo principal
+	maxStack  int              // teto da pilha do fluxo principal (Bytecode.MaxStack)
 	stack     []object.Object
 	sp        int
 	globals   []object.Object
@@ -103,6 +105,7 @@ func NovaComInterp(bytecode *compiler.Bytecode, out io.Writer, interp *interpret
 		constants:  bytecode.Constants,
 		inst:       bytecode.Instructions,
 		linhas:     bytecode.Linhas,
+		maxStack:   bytecode.MaxStack,
 		stack:      make([]object.Object, StackInicial),
 		globals:    make([]object.Object, tamanhoGlobals(bytecode.NumGlobals)),
 		frames:     novosFrames(),
@@ -135,7 +138,7 @@ func (vm *VM) chamaCompilada(cf *object.CompiledFunction, args []object.Object) 
 	if topo < len(args) {
 		topo = len(args)
 	}
-	sub.garanteEspaco(topo)
+	sub.garanteEspaco(topo + folga(cf))
 	for i, a := range args {
 		sub.stack[i] = a
 	}
@@ -238,19 +241,36 @@ func (vm *VM) LastPoppedStackElem() object.Object {
 	return vm.stack[vm.sp]
 }
 
-// push empilha um valor, crescendo a pilha quando ela enche. O crescimento usa
-// append DE PROPOSITO: o Go trata append como builtin (custo 30 no orcamento de
-// inline), enquanto chamar um metodo de crescimento custa 57 e levava o corpo a
-// 81 — um ponto acima do limite de 80. Com isso o push, que e o hot path da VM,
-// deixava de ser inlinado e o fib ficava ~30% mais lento.
+// push empilha um valor SEM checar capacidade: quem entra num frame ja
+// reservou NumLocals+MaxStack (o teto que o compilador calculou, ver
+// compiler.MaxPilha), entao a pilha nunca enche no meio do frame. Funcao sem
+// teto conhecido (MaxStack 0) passa pelo caminho checado: a reserva vira
+// folgaSemTeto e e refeita a cada volta de laco (OpJump pra tras). Com a tag
+// gsdebugpilha o push confere o teto a cada empilhada (checaPilha).
 func (vm *VM) push(o object.Object) {
-	if vm.sp >= len(vm.stack) {
-		vm.stack = append(vm.stack, o)
-		vm.sp++
-		return
+	if checaPilha {
+		vm.confereTeto()
 	}
 	vm.stack[vm.sp] = o
 	vm.sp++
+}
+
+// folga e quantos slots de trabalho reservar acima dos locals de um frame de
+// fn: o MaxStack calculado pelo compilador ou, sem ele, a folgaSemTeto.
+func folga(fn *object.CompiledFunction) int {
+	if fn.MaxStack > 0 {
+		return fn.MaxStack
+	}
+	return folgaSemTeto(fn)
+}
+
+// folgaSemTeto e a reserva do caminho checado. Nenhum opcode empilha mais de
+// 1 alem do que tira (o espalhaArgs e o abreMetodo reservam o proprio
+// espaco), e sem voltar pra tras cada instrucao roda no maximo uma vez — entao
+// 2 slots por byte de bytecode cobrem tudo ate o proximo OpJump pra tras, onde
+// a reserva e refeita.
+func folgaSemTeto(fn *object.CompiledFunction) int {
+	return 2*len(fn.Bytecode) + 2
 }
 
 // tamanhoGlobals decide o tamanho do array de globais a partir do que o
@@ -269,10 +289,11 @@ func tamanhoGlobals(n int) int {
 	return n
 }
 
-// garanteEspaco cresce a pilha (dobrando) ate caber `topo` slots — usado pelos
-// pontos que sobem o sp de uma vez (reserva dos locals num OpCall/OpTailCall e
-// o unwind pos-catch), onde o push nao passa. Nao tem teto rigido: quem limita
-// recursao infinita e o MaxFrames, que ja da erro limpo.
+// garanteEspaco cresce a pilha (dobrando) ate caber `topo` slots. E a UNICA
+// forma de a pilha crescer: a reserva de cada frame (locals + MaxStack, no
+// OpCall/OpTailCall/chamaCompilada/bora/Run e no unwind pos-catch) e os pontos
+// que abrem argumentos de uma vez (espalhaArgs, abreMetodo). Nao tem teto
+// rigido: quem limita recursao infinita e o MaxFrames, que ja da erro limpo.
 func (vm *VM) garanteEspaco(topo int) {
 	if topo <= len(vm.stack) {
 		return
@@ -332,6 +353,7 @@ func (vm *VM) clone() *VM {
 		constants:  vm.constants,
 		inst:       vm.inst,
 		linhas:     vm.linhas,
+		maxStack:   vm.maxStack,
 		stack:      make([]object.Object, StackInicial),
 		sp:         0,
 		globals:    vm.globals, // slice compartilhado — pagadores por concorrencia
@@ -506,7 +528,7 @@ func (vm *VM) ajustaArgs(cf *object.CompiledFunction, bp, argc int) *object.Erro
 	if topo < bp+argc {
 		topo = bp + argc
 	}
-	vm.garanteEspaco(topo)
+	vm.garanteEspaco(topo + folga(cf))
 	if cf.Variadic && argc >= cf.NumArgs {
 		variadicIdx := cf.NumArgs - 1
 		resto := make([]object.Object, argc-variadicIdx)
@@ -526,7 +548,8 @@ func (vm *VM) ajustaArgs(cf *object.CompiledFunction, bp, argc int) *object.Erro
 
 // Run executa o bytecode. frame e ip reciclados entre chamadas via execFrame.
 func (vm *VM) Run() error {
-	main := &object.CompiledFunction{Name: "<main>", Bytecode: vm.inst, NumLocals: 0, Linhas: vm.linhas}
+	main := &object.CompiledFunction{Name: "<main>", Bytecode: vm.inst, NumLocals: 0, Linhas: vm.linhas, MaxStack: vm.maxStack}
+	vm.garanteEspaco(folga(main))
 	fr0 := vm.frameEm(0)
 	fr0.fn = main
 	fr0.ip = 0
@@ -704,6 +727,11 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			}
 		case code.OpJump:
 			pos := int(code.ReadUint16(fn.Bytecode[ip+1:]))
+			if pos < ip && fn.MaxStack == 0 {
+				// caminho checado (funcao sem teto): refaz a reserva a cada
+				// volta de laco, ver folgaSemTeto
+				vm.garanteEspaco(vm.sp + folgaSemTeto(fn))
+			}
 			ip = pos
 		case code.OpJumpIfFalse:
 			pos := int(code.ReadUint16(fn.Bytecode[ip+1:]))
@@ -969,6 +997,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				Name: cf.Name, NumArgs: cf.NumArgs, NumLocals: cf.NumLocals,
 				MinArgs: cf.MinArgs, Variadic: cf.Variadic,
 				Bytecode: cf.Bytecode, Free: free, Linhas: cf.Linhas,
+				MaxStack: cf.MaxStack,
 			})
 		case code.OpCall:
 			opPos := ip // offset do OpCall (call site) pro traço de pilha
@@ -995,7 +1024,9 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 					}
 				}
 				bp := vm.sp - 1 - argc
-				vm.garanteEspaco(bp + cf.NumLocals)
+				// a reserva do frame inteiro sai aqui, uma vez: locals + o teto
+				// da pilha de operandos do chamado
+				vm.garanteEspaco(bp + cf.NumLocals + folga(cf))
 				// varargs: coleta extras numa lista (antes de ajustar sp)
 				if cf.Variadic && argc >= cf.NumArgs {
 					variadicIdx := cf.NumArgs - 1
@@ -1103,7 +1134,7 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				// corrente e troca a funcao, sem empilhar. Recursao em cauda roda em
 				// profundidade constante de frames.
 				bp := frame.basePointer
-				vm.garanteEspaco(bp + cf.NumLocals)
+				vm.garanteEspaco(bp + cf.NumLocals + folga(cf))
 				copy(vm.stack[bp:bp+cf.NumArgs], vm.stack[bpCall:bpCall+cf.NumArgs])
 				vm.limpaLocais(bp, cf)
 				vm.sp = bp + cf.NumLocals
@@ -1410,7 +1441,7 @@ func (vm *VM) handleVMError(e *object.Erro, quadro *object.StackFrame) {
 	}
 	alvo := vm.currentFrame()
 	// descarta operandos pendentes e restabelece o espaco de locals
-	vm.garanteEspaco(alvo.basePointer + alvo.fn.NumLocals)
+	vm.garanteEspaco(alvo.basePointer + alvo.fn.NumLocals + folga(alvo.fn))
 	vm.sp = alvo.basePointer + alvo.fn.NumLocals
 	// pego: dali pra frente e so um valor (igual o tree-walker) — passar pra
 	// builtin, devolver de gambiarra ou o erro_causa nao relancam.

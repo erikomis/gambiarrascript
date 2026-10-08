@@ -19,7 +19,7 @@ Tiers 1–5, 5b e 8 (POO estilo Go) estão entregues. O backlog vivo:
 | Tier 2/3 | DAP (debug) — item grande, leva própria (FFI decidido: não vai ter; multi-catch ✅) |
 | Bugs abertos | overflow, `importa`, erro entre engines |
 | Tier 6 | Homebrew, cobertura (`gs instala` + lock, `build --alvo` e lint de sombreamento ✅) |
-| Tier 7 | MaxStack por função |
+| Tier 7 | ✅ MaxStack por função entregue (ganho dentro do ruído, medido) — nada aberto |
 | Tier 8 | ✅ POO no estilo Go (`treta`/`combinado`) entregue — sobra método em tipo não-struct e visibilidade (fora de escopo) |
 | Tier 9 | sugestões novas: publicar a extensão no marketplace (`//` decidido: não vai ter; playground com entrada ✅) |
 
@@ -584,12 +584,40 @@ contra o binario do inicio da leva:
 propósito) e como rede quando a VM não compila algo. Todo caminho padrão —
 `gs roda`, `build`, `testa`, `bench`, REPL e o playground WASM — roda na VM.
 
-Falta nesse tier:
+- [x] **Max stack por funcao** — o compilador publica o `MaxStack` de cada
+      gambiarra, do fluxo principal e do corpo de modulo (`compiler.MaxPilha`,
+      igual o max_stack da JVM): simula o efeito de cada opcode na pilha por
+      TODOS os caminhos (jumps, cadeia `OpGet*Ou`, catch do arruma entrando com
+      a pilha zerada + o erro), com maximo nos pontos de juncao. A VM reserva
+      `NumLocals + MaxStack` uma vez por frame (OpCall, tail call, metodo,
+      `chamaCompilada`, clone do `bora`, `Run`, unwind pos-catch) e o `push`
+      virou `stack[sp] = o; sp++` (custo de inline 30 -> 11). Opcode de aridade
+      variavel le o operando/descritor; o que o `espalhaArgs`/`abreMetodo`
+      abrem a mais eles mesmos reservam. Sem teto garantido (opcode sem efeito
+      conhecido, jump torto, pilha negativa, laco que cresce a pilha) o
+      `MaxStack` fica 0 e a funcao cai no caminho checado (reserva de 2 slots
+      por byte de bytecode, refeita a cada `OpJump` pra tras). Nenhum exemplo
+      nem teste cai nele (`TestMaxPilhaExemplos`), e todo opcode novo tem que
+      ganhar efeito (`TestEfeitoPilhaCobreTodoOpcode`). Com
+      `go test -tags gsdebugpilha ./...` o push confere o teto a cada empilhada
+      — a suite inteira passa assim. `.gsc` formato 13.
 
-- [ ] **Max stack por função** — hoje o `push` checa capacidade a cada
-      empilhada. Se o compilador publicasse o `MaxStack` de cada função (igual
-      a JVM), a reserva sairia uma vez por frame no `OpCall` e o `push` viraria
-      duas instruções.
+      **Resultado medido: ganho dentro do ruido.** A/B contra o commit
+      anterior, binarios de teste alternados, mediana de 9 rodadas de 1s
+      (ns/op, antes -> depois): fib 1.519.933 -> 1.539.523 (+1,3%), loop
+      9.319.072 -> 9.327.766 (+0,1%), loop local 8.917.850 -> 8.959.110
+      (+0,5%), sort 162.221 -> 163.969 (+1,1%), json 305.477 -> 313.676
+      (+2,7%), mapeia 642.268 -> 648.312 (+0,9%), NovaVM 137.704 -> 136.031
+      (-1,2%). Fim a fim (`gs roda`, mediana, duas sessoes com a ordem
+      trocada): `fib(30)` 0,078s -> 0,078s e 0,082s -> 0,077s; laco de 5
+      milhoes 0,239s -> 0,227s e 0,236s -> 0,246s; `mapeia` sobre 200 mil
+      0,032s -> 0,033s e 0,033s -> 0,033s. O sinal troca entre sessoes: e
+      ruido, nao ganho nem regressao. Faz sentido: o Go continua fazendo o
+      bounds check do `stack[sp]`, entao o `if sp >= len` do push antigo
+      ja era praticamente o mesmo teste. Ficou mesmo assim porque nao
+      regride e deixa a pilha com uma regra so (cresce so na reserva do
+      frame) e um invariante conferivel — o modo `gsdebugpilha` pega pilha
+      desbalanceada no codegen, que antes passava calada.
 
 ### Tier 8 — POO no modelo do Go (structs + métodos + interfaces, SEM herança) ✅ entregue
 

@@ -49,7 +49,11 @@ func init() {
 // builtins satisfaz/como_tipo no fim da lista.
 // 13 = multi-catch: varios `quebrou NOME se COND` (temporario do erro +
 // OpJumpIfFalse por filtro e OpThrow quando nenhum cola).
-const formatoGSC = 13
+// 14 = MaxStack: teto da pilha de operandos de cada gambiarra (campo novo na
+// CompiledFunction) e do fluxo principal (cacheGSC.MaxStack). Cache velho
+// viria com 0 em tudo e cairia no caminho checado da VM — funciona, mas
+// invalida pra nao rodar lento a toa.
+const formatoGSC = 14
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)
@@ -60,6 +64,7 @@ type cacheGSC struct {
 	Instructions []byte
 	Linhas       []object.LinhaPC // tabela pc->linha do fluxo principal
 	NumGlobals   int              // quantas globais o programa declara
+	MaxStack     int              // teto da pilha do fluxo principal
 	// HashModulos: sha256 da fonte de cada modulo importado (caminho
 	// absoluto). Modulo que mudou (ou sumiu) invalida o cache — antes so a
 	// fonte principal contava e o .gsc rodava o modulo velho.
@@ -98,6 +103,7 @@ func carregaCache(caminhoGSC string, fonte []byte) *compiler.Bytecode {
 		Constants:    c.Constants,
 		Linhas:       c.Linhas,
 		NumGlobals:   c.NumGlobals,
+		MaxStack:     c.MaxStack,
 		Modulos:      modulos,
 	}
 }
@@ -128,6 +134,7 @@ func gravaCache(caminhoGSC string, fonte []byte, bc *compiler.Bytecode) {
 		Instructions: []byte(bc.Instructions),
 		Linhas:       bc.Linhas,
 		NumGlobals:   bc.NumGlobals,
+		MaxStack:     bc.MaxStack,
 		HashModulos:  hashModulos,
 	}
 	if err := gob.NewEncoder(f).Encode(&c); err != nil {
