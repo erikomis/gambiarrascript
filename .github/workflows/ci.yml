@@ -1,5 +1,4 @@
-# CI leve: vet + testes a cada push/PR na main.
-# (gofmt ainda nao e gate: a arvore atual nao esta gofmt-limpa.)
+# CI leve: gofmt + vet + testes a cada push/PR na main.
 name: ci
 
 on:
@@ -24,6 +23,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: gofmt (codigo formatado)
+        run: |
+          naoformatados=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$naoformatados" ]; then
+            echo "::error::rode gofmt -w nesses arquivos:"
+            echo "$naoformatados"
+            exit 1
+          fi
 
       - name: go vet
         run: go vet ./...

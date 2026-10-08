@@ -12,16 +12,16 @@ fatias, dot access), **tooling** (`gs check/init/bench/get/build/testa/doc/
 formata -w`, cache `.gsc`) e **distribuição** (release com binários,
 `install.sh`, playground + doc no GitHub Pages).
 
-Tiers 1–5, 5b e 8 (POO estilo Go) estão entregues. O backlog vivo:
+Todos os tiers estão entregues (1–9, incluindo POO estilo Go, depurador,
+TLS, pacotes com lock e instaladores pros três sistemas). O que sobra:
 
 | Onde | O que sobra |
 |---|---|
-| Tier 2/3 | ✅ depurador (`gs debug` + DAP no VSCode) entregue (FFI decidido: não vai ter; multi-catch ✅) |
-| Bugs abertos | overflow, `importa`, erro entre engines |
-| Tier 6 | Homebrew, cobertura (`gs instala` + lock, `build --alvo` e lint de sombreamento ✅) |
-| Tier 7 | ✅ MaxStack por função entregue (ganho dentro do ruído, medido) — nada aberto |
-| Tier 8 | ✅ POO no estilo Go (`treta`/`combinado`) entregue — sobra método em tipo não-struct e visibilidade (fora de escopo) |
-| Tier 9 | sugestões novas: publicar a extensão no marketplace (`//` decidido: não vai ter; playground com entrada ✅) |
+| Precisa de conta do mantenedor | publicar a extensão no VS Marketplace / Open VSX (hoje instala pelo `.vsix` de cada release) |
+| Site / playground | testar Firefox e Safari; wasm menor |
+| Fora de escopo (decidido) | método em tipo não-struct, visibilidade, `//`, FFI/cgo, keywords em inglês |
+
+Histórico por versão no [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -778,10 +778,10 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
 - [x] **Automatizar o tap** — o `release.yml` dá push da fórmula preenchida
       no tap a cada tag estável, com uma deploy key de escrita só no repo do
       tap (secret `TAP_DEPLOY_KEY`), sem token pessoal.
-- [ ] **gofmt na árvore + gate no CI** — `ast.go`, `vm.go`, `parser.go`,
-      `object.go` e outros não estão formatados; formatar num commit só de
-      formatação e ligar `gofmt -l` no `ci.yml`.
-- [ ] **CHANGELOG** a partir dos commits, publicado nas notas da release.
+- [x] **gofmt na árvore + gate no CI** — árvore formatada num commit só de
+      formatação; o `ci.yml` barra arquivo `.go` desformatado.
+- [x] **CHANGELOG** — `CHANGELOG.md` por versão, escrito pra quem usa a
+      linguagem (não é a lista crua de commits).
 
 **Site / playground**
 
