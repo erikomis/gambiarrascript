@@ -201,7 +201,12 @@ func (n *Numero) Inspect() string {
 	return FormatNumero(n.Value)
 }
 
-type Texto struct{ Value string }
+type Texto struct {
+	Value string
+	// buf: buffer com folga de onde Value e um prefixo, quando o texto veio
+	// de Concatena (nil no resto). Ver concatena.go.
+	buf *bufTexto
+}
 
 func (t *Texto) Type() ObjectType { return TEXTO_OBJ }
 func (t *Texto) Inspect() string  { return t.Value }

@@ -1,0 +1,189 @@
+---
+title: Performance
+description: How GambiarraScript stacks up against Python and Node.js — measured numbers, how to measure again and where it loses.
+---
+
+Short answer: `gs` runs in **CPython** territory — it ties or wins on
+recursion, loops, string building, sorting and JSON, loses a little on dicts
+and method calls, and loses badly to **Node.js** (which has a JIT) on anything
+that is a tight loop. As an HTTP server it uses every core and, on the read
+routes, serves more requests per second than single-process Node and Python;
+on the route that writes under `com_trava`, Node pulls ahead.
+
+Everything here is measured, not guessed, and you can repeat it on your
+machine with one command (see [How to reproduce](#how-to-reproduce)).
+
+## The machine
+
+- **Machine**: Apple M4 Pro (12 cores), 24 GB, macOS (Darwin arm64)
+- **gs** 0.7.1 built with Go 1.26.4 (the VM, the default engine; `--tree` is
+  the tree-walker)
+- **Python** 3.9.6 (CPython) and **Node.js** 24.14.0
+- Lua was not installed on this machine, so it is left out
+
+## Language against language
+
+Wall-clock time of the **whole process** (startup included), median of 5
+runs, in seconds. Lower is better. The last column is the `gs` time divided by
+the Python time: below 1 means `gs` won.
+
+| workload | gs (VM) | gs --tree | Python | Node | gs/Python |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| ola | 0.009 | 0.009 | 0.022 | 0.026 | 0.4x |
+| fib | 0.095 | 0.831 | 0.171 | 0.032 | 0.6x |
+| laco | 0.575 | 1.191 | 0.579 | 0.035 | 1.0x |
+| texto | 0.020 | 0.031 | 0.040 | 0.030 | 0.5x |
+| dicionario | 0.121 | 0.180 | 0.107 | 0.066 | 1.1x |
+| ordena | 0.082 | 0.147 | 0.108 | 0.124 | 0.8x |
+| json_volta | 0.238 | 0.229 | 0.255 | 0.087 | 0.9x |
+| mapeia | 0.238 | 0.609 | 0.084 | 0.056 | 2.8x |
+| metodo | 0.172 | 0.548 | 0.146 | 0.028 | 1.2x |
+
+Noise: on a rerun every number moves about 5%. In one session Node did
+`dicionario` in 0.19s instead of 0.07s — hence the median, and hence it is
+worth running more than once before drawing conclusions.
+
+What each workload does (the program is the same in all three languages, in
+`bench/programas/`):
+
+| workload | what it measures |
+| --- | --- |
+| `ola` | startup time: just a hello world |
+| `fib` | recursive `fib(30)` — function call cost |
+| `laco` | 10 million iterations adding `i % 7` |
+| `texto` | `s += texto(i % 10)` 100 thousand times |
+| `dicionario` | 200 thousand string keys inserted and read back |
+| `ordena` | 300 thousand pseudo-random integers (same generator in all 3) and a sort |
+| `json_volta` | 10 rounds of parse + serialize on a ~1 MB document |
+| `mapeia` | build 1 million items, map (x * 2) and filter (multiple of 3) |
+| `metodo` | 1 million method calls on a `treta` (a `class` in Python/JS) |
+
+**Every workload prints a checksum** (the result, the string length, the
+start and end of the sorted list...). The script checks that Python and Node
+printed exactly what `gs` printed before putting the time in the table — if
+it does not match, the cell is marked with `!=`. Comparing programs that do
+different things is not fair.
+
+## HTTP server
+
+The same JSON API in all three (`bench/http/`): `GET /ping`,
+`GET /itens/:id` reading an in-memory dict and `POST /itens` with a JSON body
+(`gs` uses `com_trava` to generate the id). Node with plain `http`, no
+framework; Python with **aiohttp** (the standard library `http.server` is a
+toy, it would be unfair). Load: 50 keep-alive connections for 10 seconds on
+each route, after 1 second of warm-up.
+
+| server | route | requests/s | p50 (ms) | p99 (ms) |
+| --- | --- | ---: | ---: | ---: |
+| gs (VM) | `GET /ping` | 88,639 | 0.48 | 1.89 |
+| gs (VM) | `GET /itens/:id` | 85,389 | 0.48 | 2.15 |
+| gs (VM) | `POST /itens` | 42,170 | 0.90 | 4.75 |
+| gs --tree | `GET /ping` | 75,814 | 0.50 | 3.05 |
+| gs --tree | `GET /itens/:id` | 80,472 | 0.49 | 2.69 |
+| gs --tree | `POST /itens` | 29,863 | 1.05 | 10.09 |
+| Node (http) | `GET /ping` | 46,583 | 0.70 | 6.97 |
+| Node (http) | `GET /itens/:id` | 65,708 | 0.69 | 2.45 |
+| Node (http) | `POST /itens` | 64,077 | 0.76 | 1.68 |
+| Python (aiohttp) | `GET /ping` | 21,902 | 2.02 | 10.80 |
+| Python (aiohttp) | `GET /itens/:id` | 23,061 | 2.15 | 4.16 |
+| Python (aiohttp) | `POST /itens` | 20,590 | 2.39 | 3.23 |
+
+No failures in any run. Node varies a lot between sessions on `/ping` (30 to
+47 thousand) even with warm-up.
+
+Read it carefully:
+
+- `escuta` in `gs` runs **each request on a goroutine**, on every core. Node
+  and Python here are **one process, one core**. In production they run
+  several processes (cluster, gunicorn) and the math changes — the fair
+  comparison is "what you get for free, configuring nothing".
+- The load generator runs **on the same machine** and competes with the
+  server for CPU. The absolute number is not production capacity; it is for
+  comparing one against the other.
+- On the read routes `gs` spends almost all its time in the operating system
+  (reading and writing the socket): the profile shows the handler at ~2% of
+  the CPU.
+
+## Where gs loses, and why
+
+- **Tight loops and function calls: 3 to 16x slower than Node.** (`fib` 3x, `laco` 16x) Node
+  compiles JavaScript to machine code (JIT) while it runs; `gs` interprets
+  bytecode in a VM written in Go, one instruction at a time. Against CPython,
+  which also interprets, `gs` ties or wins.
+- **`mapeia`/`filtra`: ~2.8x slower than a Python list comprehension.** Each
+  element is a full gambiarra call (take a VM from the pool, set up the frame,
+  run, give it back). Python's comprehension runs the body inline, with no
+  call. In Node, `map` with an arrow function is optimized by the JIT.
+- **`com_trava` under load.** To give a clear error instead of hanging
+  forever when the same goroutine asks for the lock twice, `com_trava` looks
+  up the goroutine id — and the only way Go offers goes through a global
+  runtime lock. With 50 requests in parallel that becomes a queue: the
+  `POST /itens` route would do about 76 thousand requests per second without
+  that cost, against the ~42 thousand measured. If the operation is simple,
+  prefer designs that need no lock (each request touching only its own data).
+- **Dicts: 1.1 to 1.2x Python.** The `gs` dict keeps insertion order and
+  locks when the program is concurrent; CPython's dict is one of the most
+  optimized data structures around.
+- **`--tree` (the tree-walker) is the fallback, not the engine.** It is in the
+  table to show the size of the gap: up to 9x slower than the VM on
+  recursion.
+
+## What got better by measuring
+
+Building this comparison found five real bottlenecks, all fixed and measured
+end to end (median of 9, before and after, two sessions in swapped order):
+
+| workload | before | after | gain |
+| --- | --- | --- | --- |
+| `s += x` 100 thousand times | 0.70s | 0.02s | ~34x |
+| `ordena` 300 thousand integers | 0.41s | 0.08s | ~5x |
+| `mapeia` + `filtra` 1 million | 0.36s | 0.23s | 1.6x |
+| 1 million method calls | 0.24s | 0.17s | 1.45x |
+
+- **String concatenation was quadratic**: every `s += piece` copied the whole
+  string. Now a large string built by concatenation keeps a buffer with spare
+  room and the next `+=` writes into the free space (the same trick as Go's
+  `append`) — faster than Python, which has a similar optimization.
+- **`ordena`** on a list of only numbers or only strings uses an O(n log n)
+  sort without reflection, with the same (stable) result as before.
+- **Gambiarra calls coming from builtins** (`mapeia`, `filtra`, the server
+  handler) cleared the whole VM stack on every call; now they clear only what
+  was used.
+- **Methods** no longer build the `"Treta.method"` name on every call, and
+  assigning an own field skips the embedding lookup.
+- **Builtins** are looked up by index instead of by name in a map.
+
+## How to reproduce
+
+You need Go (to build `gs` and the helpers), plus `python3` and `node` on the
+`PATH` for them to show up in the table — whatever is not installed is left
+out.
+
+```bash
+sh bench/roda.sh                 # language table (about 2 minutes)
+SEM_TREE=1 N=9 sh bench/roda.sh  # without the tree-walker, median of 9
+CARGAS="fib texto" sh bench/roda.sh
+sh bench/http.sh                 # HTTP load test (about 2 minutes)
+C=100 D=5s sh bench/http.sh      # 100 connections, 5s per route
+```
+
+`bench/roda.sh` builds `gs` from the current tree (or uses `GS=/path/gs`),
+generates the 1 MB JSON with `gs` itself and measures each workload with
+`bench/cronometro` (runs it N times, takes the median and checks the
+checksum). `bench/http.sh` starts each server on a port, hammers it with
+`bench/carga` (a load generator in Go, in the spirit of `hey`) and stops it.
+
+To hunt for bottlenecks in your own program, `gs roda` writes a CPU profile
+when the `GS_PPROF` variable points to a file:
+
+```bash
+GS_PPROF=cpu.out gs roda my_program.gs
+go tool pprof -top cpu.out
+```
+
+It works for servers too: the profile is closed when `escuta` shuts down on
+Ctrl+C.
+
+Numbers from another machine will be different. What should hold is the
+**ratio** between the languages — and to catch a regression between two
+versions of `gs`, run both in the same session, alternating.

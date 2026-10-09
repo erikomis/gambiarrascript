@@ -650,6 +650,85 @@ propósito) e como rede quando a VM não compila algo. Todo caminho padrão —
       frame) e um invariante conferivel — o modo `gsdebugpilha` pega pilha
       desbalanceada no codegen, que antes passava calada.
 
+- [x] **Bench contra Python e Node + os gargalos que ele achou** — `bench/`
+      tem os mesmos 9 programas em gs, Python 3 e Node.js (fib(30), laco de
+      10 milhoes, texto de 100 mil caracteres, dicionario de 200 mil chaves,
+      ordena 300 mil inteiros, JSON de ~1 MB ida e volta, mapeia+filtra sobre
+      1 milhao, 1 milhao de chamadas de metodo e ola mundo). Cada um imprime
+      um checksum e o `bench/cronometro` confere que as tres linguagens deram
+      a mesma saida antes de comparar tempo. `sh bench/roda.sh` mede (mediana
+      de 5, processo inteiro) e cospe a tabela; `sh bench/http.sh` sobe a
+      mesma API JSON em gs, Node (`http` puro) e Python (aiohttp) e martela
+      com o `bench/carga` (gerador de carga em Go, 50 conexoes por 10s). Pra
+      cacar gargalo sem montar benchmark: `GS_PPROF=cpu.out gs roda x.gs`
+      (variavel escondida, perfil de CPU do `gs roda`, servidor incluso).
+      Resultado e metodologia em `web/content/docs/desempenho.mdx`.
+
+      O profile achou cinco gargalos; os cinco foram corrigidos e medidos FIM
+      A FIM (`gs roda`, mediana de 9, duas sessoes com a ordem trocada):
+
+      | carga | antes | depois | ganho |
+      |---|---|---|---|
+      | `s += x` 100 mil vezes | 0,703s / 0,692s | 0,020s / 0,021s | **~34x** |
+      | `ordena` 300 mil inteiros | 0,406s / 0,416s | 0,077s / 0,083s | **~5x** |
+      | `mapeia`+`filtra` 1 milhao | 0,362s / 0,367s | 0,224s / 0,233s | **1,6x** |
+      | 1 milhao de `c.soma(k)` | 0,241s / 0,236s | 0,160s / 0,171s | **1,45x** |
+      | 3 milhoes de builtin (so o item 5) | 0,611s / 0,610s | 0,568s / 0,565s | 1,08x |
+
+      1. **Concatenacao era O(n²)** — cada `s += pedaco` copiava o texto
+         inteiro, e com o texto crescendo o GC rodava a cada punhado de
+         voltas (o processo passava 90% do tempo no GC). `object.Concatena`
+         (os dois engines) faz o truque do append do Go: texto de 256+ bytes
+         vindo de concatenacao guarda um buffer com folga (o dobro), e quem
+         concatena no FIM dele escreve no espaco livre. Seguro porque os
+         bytes ja escritos nunca mudam (cada `*Texto` le so o prefixo dele) e
+         a reserva do espaco e um CompareAndSwap — dois fluxos esticando o
+         mesmo texto, um ganha e o outro copia (teste com `-race`).
+      2. **`ordena` era O(n log² n) com reflection** — `sort.SliceStable` com
+         comparador generico. Lista so de numeros ou so de textos agora
+         extrai a chave uma vez e ordena pares (chave, posicao) com o
+         `slices.SortFunc` (pdqsort); desempatar pela posicao deixa estavel e
+         IDENTICO ao caminho geral (teste compara objeto a objeto, com `1` e
+         `1.0` empatados). Mistura/NaN cai no caminho de sempre.
+      3. **A sub-VM limpava a pilha inteira a cada chamada** — o
+         `devolveSubVM` (toda gambiarra chamada por builtin: `mapeia`,
+         `filtra`, handler do servidor...) zerava os 512+ slots, ~1/4 do
+         tempo do `mapeia`. Agora a VM anota a marca d'agua no
+         `garanteEspaco` (que continua inlinavel) e limpa so ate ali.
+      4. **Metodo alocava o nome a cada chamada** — `obj.metodo` montava
+         `"Treta.metodo"` (pro traco de pilha) toda vez; agora a treta guarda
+         o nome pronto. E `c.n = ...` em campo proprio pula a busca de
+         puxadinho (que alocava 4 slices por atribuicao).
+      5. **Builtin achada por nome a cada chamada** — o `OpCallBuiltin`
+         hasheava o nome num map; agora e um slice pelo indice do operando.
+
+      fib, laco, dicionario e JSON ficaram no ruido (e o bench do Go,
+      `go test -bench ./vm/`, nao mostrou regressao: Sort 2,2x, Mapeia 1,8x,
+      o resto igual).
+
+      Contra as outras linguagens (mediana de 5, M4 Pro), o gs ficou em 0,4x
+      a 1,2x do tempo do CPython em tudo menos `mapeia` (2,8x). Contra o Node
+      perde de 3x a 16x no que e laco/chamada, mas ganha em `texto` e
+      `ordena` (o JIT nao ajuda quando o trabalho e no runtime). No HTTP
+      (50 conexoes, gerador na mesma maquina) a VM fez ~88 mil req/s no
+      `GET /ping` e ~85 mil no `GET /itens/:id` (Node ~47 e ~66 mil,
+      aiohttp ~22 e ~23 mil), mas so ~42 mil no `POST` (Node ~64 mil) — por
+      causa do item abaixo.
+
+      **O que o bench mostrou e NAO foi corrigido** (documentado na pagina):
+      - **`com_trava` serializa o servidor.** Pra dar erro claro em vez de
+        deadlock quando a mesma goroutine pede a trava de novo, o `Segura`
+        descobre o id da goroutine pelo cabecalho do `runtime.Stack` — que
+        pega uma trava global do runtime. Com 50 handlers em paralelo, o POST
+        da API faz ~42 mil req/s; sem o id (experimento, nao commitado)
+        faria ~76 mil. Consertar direito pede um "id do fluxo" passado pela
+        VM, que e mudanca de motor maior que essa leva.
+      - **Laco e chamada sao 3 a 16x mais lentos que o Node** — e o preco de
+        interpretar bytecode sem JIT; contra o CPython o gs empata ou ganha
+        (fib 0,6x, laco 1,0x do tempo do Python). `mapeia` segue ~2,8x mais
+        lento que a list comprehension (cada elemento e uma chamada de
+        gambiarra completa; o Python executa a comprehension inline).
+
 ### Tier 8 — POO no modelo do Go (structs + métodos + interfaces, SEM herança) ✅ entregue
 
 POO **copiando o jeito do Go** — composição no lugar de herança, interface

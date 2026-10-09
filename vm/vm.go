@@ -61,6 +61,9 @@ type VM struct {
 	maxStack  int              // teto da pilha do fluxo principal (Bytecode.MaxStack)
 	stack     []object.Object
 	sp        int
+	// altaMar: o maior topo ja reservado pelo garanteEspaco (nenhum slot
+	// acima dele foi escrito). Deixa o devolveSubVM limpar so o que sujou.
+	altaMar   int
 	globals   []object.Object
 	frames    []*Frame
 	framesIdx int
@@ -76,6 +79,11 @@ type VM struct {
 
 	builtinIdx map[string]int
 	builtins   map[string]*object.Builtin
+	// porIdx: os mesmos builtins indexados pelo operando do OpCallBuiltin/
+	// OpGetBuiltin (nil = nao registrado). O map e uma copia que ninguem muda
+	// depois do New, entao o slice e equivalente — e evita hashear o nome a
+	// cada chamada de builtin.
+	porIdx []*object.Builtin
 
 	// num e a arena de Numeros DESTA VM. Fica por valor (nao ponteiro) pra nao
 	// custar indirecao no hot path, e e por-VM porque ArenaNum nao e
@@ -123,6 +131,11 @@ func NovaComInterp(bytecode *compiler.Bytecode, out io.Writer, interp *interpret
 	for i, n := range compiler.BuiltinNomes() {
 		bidx[n] = i
 	}
+	visiveis := interp.BuiltinsVisiveis()
+	porIdx := make([]*object.Builtin, len(compiler.BuiltinNomes()))
+	for i, n := range compiler.BuiltinNomes() {
+		porIdx[i] = visiveis[n]
+	}
 	vm := &VM{
 		constants:  bytecode.Constants,
 		inst:       bytecode.Instructions,
@@ -134,7 +147,8 @@ func NovaComInterp(bytecode *compiler.Bytecode, out io.Writer, interp *interpret
 		subVMs:     &sync.Pool{},
 		modulos:    &object.Modulos{},
 		builtinIdx: bidx,
-		builtins:   interp.BuiltinsVisiveis(),
+		builtins:   visiveis,
+		porIdx:     porIdx,
 		out:        out,
 		sitios:     bytecode.Sitios,
 		depMain:    bytecode.Depura,
@@ -283,11 +297,24 @@ func (vm *VM) pegaSubVM() *VM {
 // devolveSubVM limpa o estado da sub-VM (pra nao segurar referencia viva dos
 // valores da chamada anterior) e devolve pro pool.
 func (vm *VM) devolveSubVM(sub *VM) {
-	clear(sub.stack)
+	// so ate a marca d'agua: limpar a pilha inteira (512+ slots) a cada
+	// chamada era ~1/4 do tempo do mapeia/filtra
+	clear(sub.stack[:min(sub.altaMar, len(sub.stack))])
+	sub.altaMar = 0
 	sub.sp = 0
 	sub.framesIdx = 0
 	sub.errStack = sub.errStack[:0]
 	vm.subVMs.Put(sub)
+}
+
+// builtinNo devolve o builtin do operando idx (nil = nao registrado). VM
+// montada sem porIdx (um construtor novo que esqueceu de copiar) cai no map,
+// mais lento mas certo.
+func (vm *VM) builtinNo(idx int) *object.Builtin {
+	if idx < len(vm.porIdx) {
+		return vm.porIdx[idx]
+	}
+	return vm.builtins[compiler.BuiltinNomes()[idx]]
 }
 
 func (vm *VM) LastPoppedStackElem() object.Object {
@@ -348,6 +375,15 @@ func tamanhoGlobals(n int) int {
 // que abrem argumentos de uma vez (espalhaArgs, abreMetodo). Nao tem teto
 // rigido: quem limita recursao infinita e o MaxFrames, que ja da erro limpo.
 func (vm *VM) garanteEspaco(topo int) {
+	if topo > vm.altaMar {
+		vm.cresce(topo)
+	}
+}
+
+// cresce anota a nova marca d'agua da pilha e, se precisar, realoca. Fora do
+// garanteEspaco pra ele continuar inlinavel (e chamado a cada OpCall).
+func (vm *VM) cresce(topo int) {
+	vm.altaMar = topo
 	if topo <= len(vm.stack) {
 		return
 	}
@@ -420,6 +456,7 @@ func (vm *VM) clone() *VM {
 		modulos:    vm.modulos,
 		builtinIdx: vm.builtinIdx,
 		builtins:   vm.builtins,
+		porIdx:     vm.porIdx,
 		out:        vm.out,
 		gancho:     vm.gancho,
 		sitios:     vm.sitios,
@@ -1262,10 +1299,9 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			args := make([]object.Object, argc)
 			copy(args, vm.stack[vm.sp-argc:vm.sp])
 			vm.sp -= argc
-			nome := compiler.BuiltinNomes()[idx]
-			b := vm.builtins[nome]
+			b := vm.builtinNo(idx)
 			if b == nil {
-				panic(VMError{err: &object.Erro{Message: "builtin " + nome + " nao registrada na VM", Kind: "runtime"}})
+				panic(VMError{err: &object.Erro{Message: "builtin " + compiler.BuiltinNomes()[idx] + " nao registrada na VM", Kind: "runtime"}})
 			}
 			res := b.Fn(args)
 			if s, ok := res.(*object.Sair); ok {
@@ -1434,10 +1470,9 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 		case code.OpGetBuiltin:
 			idx := int(code.ReadUint16(fn.Bytecode[ip+1:]))
 			ip += 3
-			nome := compiler.BuiltinNomes()[idx]
-			b := vm.builtins[nome]
+			b := vm.builtinNo(idx)
 			if b == nil {
-				panic(VMError{err: &object.Erro{Message: "builtin " + nome + " nao registrada", Kind: "runtime"}})
+				panic(VMError{err: &object.Erro{Message: "builtin " + compiler.BuiltinNomes()[idx] + " nao registrada", Kind: "runtime"}})
 			}
 			vm.push(b)
 		case code.OpThrow:
@@ -1611,7 +1646,7 @@ func (vm *VM) binario(op code.Opcode, left, right object.Object) object.Object {
 		return vm.execBinarioNumero(op, ln.Value, rn.Value)
 	}
 	if op == code.OpAdd && (left.Type() == object.TEXTO_OBJ || right.Type() == object.TEXTO_OBJ) {
-		return &object.Texto{Value: left.Inspect() + right.Inspect()}
+		return object.Concatena(left, right)
 	}
 	// mesma mensagem do tree-walker: "nao da pra fazer TEXTO - NUMERO"
 	panic(VMError{err: &object.Erro{Message: fmt.Sprintf("nao da pra fazer %s %s %s", left.Type(), simboloBinario(op), right.Type()), Kind: "runtime"}})

@@ -715,7 +715,7 @@ func (i *Interpreter) evalInfix(node *ast.InfixExpression, env *object.Environme
 	}
 
 	if node.Operator == "+" && (left.Type() == object.TEXTO_OBJ || right.Type() == object.TEXTO_OBJ) {
-		return &object.Texto{Value: left.Inspect() + right.Inspect()}
+		return object.Concatena(left, right)
 	}
 
 	switch node.Operator {

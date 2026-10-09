@@ -74,6 +74,9 @@ func builtinOrdena(args []object.Object) object.Object {
 	if !ok {
 		return erroBuiltin("ordena() espera uma lista, veio %s", args[0].Type())
 	}
+	if l.OrdenaNatural() { // so numeros ou so textos: caminho rapido
+		return NADA
+	}
 	var primeiroErro *object.Erro
 	l.Ordena(func(a, b object.Object) bool {
 		if primeiroErro != nil {

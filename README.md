@@ -376,6 +376,15 @@ finalmente
 acabou_finalmente
 ```
 
+## Desempenho
+
+Na faixa do CPython: empata ou ganha em recursão, laço, texto, ordenação e
+JSON, e perde pro Node.js (que tem JIT) em laço apertado. Servidor HTTP usa
+todos os núcleos. Números medidos (com checksum conferido entre as
+linguagens), metodologia e onde o gs perde em
+[Desempenho](https://erikomis.github.io/gambiarrascript/docs/desempenho/);
+pra rodar na sua máquina: `sh bench/roda.sh` e `sh bench/http.sh`.
+
 ## Instalação e uso
 
 ### Jeito rápido — binário pronto (macOS / Linux)

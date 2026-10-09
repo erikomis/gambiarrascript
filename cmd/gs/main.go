@@ -68,7 +68,9 @@ func main() {
 			fmt.Println("--cache nao se aplica com --tree (bytecode e so da VM); ignorando")
 			usarCache = false
 		}
+		pare := iniciaPprof()
 		rodarArquivoCache(arquivo, usarVM, usarCache, scriptArgs)
+		pare()
 	case "formata":
 		args := os.Args[2:]
 		escreverFlag := false

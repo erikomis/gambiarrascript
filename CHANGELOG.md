@@ -23,7 +23,16 @@ no [ROADMAP](ROADMAP.md).
   O `pra_cada` sobre lista percorre o retrato do começo do laço nos dois
   motores; o erro de `pra_cada` em valor não percorrível agora mostra o tipo
   em minúsculo (`numero`).
-
+- **Desempenho medido contra Python e Node**: `sh bench/roda.sh` roda os
+  mesmos 9 programas em gs, Python 3 e Node.js (conferindo que todos imprimem
+  o mesmo checksum) e `sh bench/http.sh` faz teste de carga numa API JSON
+  igual nas três. Números, metodologia e onde o gs perde em
+  [Desempenho](https://erikomis.github.io/gambiarrascript/docs/desempenho/).
+  `GS_PPROF=cpu.out gs roda x.gs` grava um perfil de CPU.
+- **Mais rápido onde o bench achou gargalo**: `s += pedaco` em laço deixou de
+  ser quadrático (100 mil concatenações: 0,70s → 0,02s), `ordena` de números
+  ou textos ficou ~5x mais rápido (mesmo resultado, estável), `mapeia`/
+  `filtra` 1,6x e chamada de método 1,45x.
 - **Migrações de banco**: `gs migra [sobe | desce [n] | status | novo nome]`
   aplica os arquivos `migracoes/NNN_nome.sobe.sql` (e desfaz com o
   `.desce.sql`) em SQLite, Postgres e MySQL/MariaDB. Cada migração roda numa

@@ -297,6 +297,7 @@ func (f *fluxoVM) Avalia(q int, fonte string) (res object.Object) {
 		modulos:    r.vm.modulos,
 		builtinIdx: r.vm.builtinIdx,
 		builtins:   r.vm.builtins,
+		porIdx:     r.vm.porIdx,
 		out:        r.vm.out,
 	}
 	if err := ev.Run(); err != nil {

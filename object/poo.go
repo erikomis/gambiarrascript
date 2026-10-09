@@ -52,6 +52,9 @@ type Treta struct {
 
 	mu      sync.RWMutex // so com o modo concorrente ligado
 	metodos map[string]Object
+	// nomes: "Treta.metodo" ja montado (o MetodoLigado leva isso a cada
+	// `obj.metodo`; montar na hora era uma alocacao por chamada de metodo)
+	nomes map[string]string
 }
 
 func (t *Treta) Type() ObjectType { return TRETA_OBJ }
@@ -85,6 +88,19 @@ func (t *Treta) Metodo(nome string) (Object, bool) {
 	return m, ok
 }
 
+// metodoComNome e o Metodo devolvendo tambem o nome qualificado.
+func (t *Treta) metodoComNome(nome string) (Object, string, bool) {
+	if concorrencia.Load() {
+		t.mu.RLock()
+		defer t.mu.RUnlock()
+	}
+	m, ok := t.metodos[nome]
+	if !ok {
+		return nil, "", false
+	}
+	return m, t.nomes[nome], true
+}
+
 // NomesMetodos lista os metodos proprios em ordem alfabetica.
 func (t *Treta) NomesMetodos() []string {
 	if concorrencia.Load() {
@@ -109,6 +125,10 @@ func (t *Treta) DefineMetodo(nome string, fn Object) string {
 		defer t.mu.Unlock()
 	}
 	t.metodos[nome] = fn
+	if t.nomes == nil {
+		t.nomes = map[string]string{}
+	}
+	t.nomes[nome] = t.Nome + "." + nome
 	return ""
 }
 
@@ -384,8 +404,8 @@ func (i *Instancia) Membro(nome string) (Object, string) {
 	if k, ok := t.indice[nome]; ok {
 		return i.PegaCampo(k), ""
 	}
-	if m, ok := t.Metodo(nome); ok {
-		return &MetodoLigado{Receptor: i, Fn: m, Nome: t.Nome + "." + nome}, ""
+	if m, qual, ok := t.metodoComNome(nome); ok {
+		return &MetodoLigado{Receptor: i, Fn: m, Nome: qual}, ""
 	}
 	alvo, donos, ok := resolveMembro(t, nome)
 	if !ok {
@@ -404,6 +424,12 @@ func (i *Instancia) Membro(nome string) (Object, string) {
 // PoeMembro escreve `obj.nome = v` (campo proprio ou promovido). Campo novo
 // nao nasce: so os declarados na treta.
 func (i *Instancia) PoeMembro(nome string, v Object) string {
+	// caminho rapido: campo proprio que nao e puxadinho (o caso comum,
+	// `p.x = ...`). Da o mesmo que o resolveMembro, sem as alocacoes da busca.
+	if k, ok := i.Tipo.indice[nome]; ok && i.Tipo.Campos[k].Embutida == nil {
+		i.PoeCampo(k, v)
+		return ""
+	}
 	alvo, donos, ok := resolveMembro(i.Tipo, nome)
 	if !ok {
 		if donos != nil {

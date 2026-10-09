@@ -48,6 +48,7 @@ func (vm *VM) novoGerador(frame *Frame, ipCorpo int) *object.Gerador {
 		modulos:    vm.modulos,
 		builtinIdx: vm.builtinIdx,
 		builtins:   vm.builtins,
+		porIdx:     vm.porIdx,
 		out:        vm.out,
 		gancho:     vm.gancho,
 		sitios:     vm.sitios,
