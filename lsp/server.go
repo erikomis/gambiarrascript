@@ -225,7 +225,7 @@ var docsBuiltin = map[string]string{
 	"com_trava":        "com_trava(trava, gambiarra) -> valor: roda a gambiarra segurando a trava e devolve o resultado. Solta sempre (erro sobe normal). Nao e reentrante: pedir a mesma trava de dentro e erro.",
 	"envia":            "envia(cano_ou_conexao, valor): manda um valor pro cano (bloqueia se cheio/sem receptor) ou um texto pela conexao de rede (modo linha poe \\n no fim).",
 	"recebe":           "recebe(cano_ou_conexao) -> valor: pega o proximo valor do cano ou a proxima mensagem da conexao. Bloqueia; nada quando fechou.",
-	"fecha":            "fecha(cano_ou_conexao): fecha um cano (channel), uma conexao de rede ou de banco. Idempotente.",
+	"fecha":            "fecha(cano_conexao_ou_gerador): fecha um cano (channel), uma conexao de rede ou de banco, ou um gerador (roda os finalmente pendentes do corpo). Idempotente.",
 	"espera":           "espera(futuro|lista_de_futuros) -> valor|lista: aguarda o(s) futuro(s) e devolve o(s) valor(es). Tambem: espera(a, b) = assert de teste.",
 	"afirma":           "afirma(cond, [msg]): assert de teste pra gs testa.",
 	"duracao":          "duracao(dicionario|inst1, inst2) -> numero (ns): constroi duracao de {h,m,s,ms,us,ns} ou devolve a diferenca (t2-t1) em nanossegundos.",

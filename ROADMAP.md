@@ -870,6 +870,25 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       mutex (vale com `bora`); gerador pedindo o próprio valor é erro, não
       deadlock. `finalmente` de gerador abandonado não roda (pegadinha
       documentada).
+- [x] **Fecha de gerador** — `fecha(g)` retoma o corpo pausado com um sinal
+      de fecha (`object.SinalFecha`, kind `fecha_gerador`) no lugar do
+      `rende`: sobe como erro, o `finalmente` roda e o `quebrou` deixa passar
+      (tree-walker: `evalArruma`; VM: `OpRelancaFecha` no começo do quebrou
+      relança pro handler do finalmente). `rende` enquanto fecha = erro
+      "ignorou o fecha"; erro/sai() no finalmente sobe pro `fecha`. O
+      `pra_cada` é dono do gerador que nasceu no cabeçalho (marca
+      `object.SerieGeradores` antes do cabeçalho; a VM empilha com
+      `OpIterMarca`) e fecha na saída antecipada como um `finalmente` em volta
+      do laço. Na VM: `OpIterFim` no fim do laço e no `funciona` (intercalado
+      com os finalmente pelo `saiDosArrumas`; sem tail call dentro de
+      `pra_cada`), e o erro que atravessa o laço fecha pelo `desenrola` (pilha
+      `donos` com quantos handlers estavam armados no começo do laço). No
+      tree-walker o fecha solta a goroutine na hora; `com_trava` de dentro do
+      corpo na trava de quem consome dá o erro de reentrada (registro
+      produtora → gerador e corrente de consumidores com concorrência
+      ligada). Sobra (pegadinha): no `--tree`, gerador pausado guardado num
+      escopo que o próprio corpo enxerga segura a goroutine até `fecha`, fim
+      ou saída do processo.
 - [x] **Protocolo de iteração da treta** — `pra_cada x em inst` (e
       `lista(inst)`) chama o `itera()` da treta (próprio ou promovido), que
       devolve lista, dicionário, conjunto ou gerador; sem `itera()`: "a treta

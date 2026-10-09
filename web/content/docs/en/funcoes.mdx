@@ -278,8 +278,10 @@ mostra pega(naturais(), 5)      # [0, 1, 2, 3, 4]
   out (a `mostra` in there shows up at that moment); the value is kept for the
   next request.
 - **A generator only moves forward**: what came out does not come back. A
-  `vaza` in the middle leaves it paused where it was — the next `pra_cada` (or
-  `proximo`) continues from there. A finished generator stays finished; to
+  `vaza` in the middle of a `pra_cada` over a generator **kept in a variable**
+  leaves it paused where it was — the next `pra_cada` (or `proximo`) continues
+  from there (a generator created in the `pra_cada` itself is closed on the way
+  out: see [Closing](#closing-fecha)). A finished generator stays finished; to
   start over, call the gambiarra again (each call is an independent generator).
 - **`lista(g)`** pulls everything into a list; **`pega(g, n)`** pulls up to `n`
   values. `mapeia`, `filtra` and `reduz` take a generator directly, but
@@ -299,7 +301,64 @@ mostra pega(naturais(), 5)      # [0, 1, 2, 3, 4]
   gambiarra is a syntax error.
 - A generator can be used from several goroutines (`bora`): one request at a
   time, each value comes out once. A generator that asks for its own next value
-  while running is an error (it would never move).
+  while running is an error (it would never move). The body runs in the flow of
+  whoever asked: taking, with `com_trava`, a lock the consumer is holding is
+  the usual re-entrance (an error, not a hang).
+
+### Closing (`fecha`)
+
+`fecha(g)` ends a paused generator **running the body's pending `finalmente`
+blocks** (like Python's `close()`). `pra_cada` does it on its own for a
+generator born in its header:
+
+```gambiarrascript
+gambiarra naturais()
+    bota n = 0
+    arruma
+        enquanto deu_bom
+            rende n
+            n += 1
+        acabou_finalmente
+    finalmente
+        mostra "limpou em " + texto(n)
+    acabou_finalmente
+acabou_finalmente
+
+bota g = naturais()
+mostra proximo(g)        # 0
+mostra proximo(g)        # 1
+fecha(g)                 # limpou em 1
+mostra proximo(g)        # nada (closed = finished)
+
+pra_cada x em naturais() # the loop owns the generator
+    se_colar x == 2
+        vaza             # limpou em 2
+    acabou_finalmente
+acabou_finalmente
+```
+
+- `fecha` resumes the body with a **close signal** in place of the `rende`: it
+  unwinds the body and only `finalmente` sees it go by — `quebrou` **does not
+  catch it**. After that the generator is finished. Closing again does
+  nothing; a generator that never started just ends (nothing was pending).
+- If the body hits a `rende` while closing (a `rende` inside the `finalmente`,
+  say), `fecha` throws:
+  `o gerador naturais ignorou o fecha (deu rende enquanto fechava)`. An error raised in the `finalmente` goes up to whoever closed it
+  (catch it with `arruma` around the `fecha`).
+- **Automatic close**: `pra_cada` **owns** a generator created in its own
+  header (`pra_cada x em naturais()`, or a treta's `itera()` returning a new
+  generator). Leaving before the end — `vaza`, `funciona` or an error going up
+  — closes the generator right there, like a `finalmente` around the loop (an
+  error while closing replaces whatever was leaving). A generator that existed
+  before the loop (variable, parameter, field) is **not** closed: you can
+  resume it later. `sai()` closes nothing (the program is ending).
+- In a pipeline such as `pares(naturais())`, closing `pares` only closes what
+  it created itself in a `pra_cada`: `naturais()` came from outside, so it
+  stays paused until it is garbage, without running its `finalmente`. To close
+  in a chain, create the inner generator in the header of the outer one's
+  `pra_cada`.
+- A generator that closes itself while running is an error (it would never
+  move).
 
 Generator combining generator (lazy pipeline):
 

@@ -128,6 +128,10 @@ type loopFrame struct {
 	// arrumaBase: quantos arrumas ja estavam abertos quando o laco comecou.
 	// vaza/continua fecham so os arrumas abertos DENTRO do laco.
 	arrumaBase int
+	// seq: o temporario com o que o pra_cada percorre (nil nos outros
+	// lacos). O `funciona` de dentro emite o fim dele (OpIterFim), que fecha
+	// o gerador de que o laco e dono.
+	seq *Symbol
 }
 
 // arrumaAtiva e um arruma aberto no ponto da compilacao. Saida antecipada
@@ -621,7 +625,7 @@ func (c *Compiler) compile(node ast.Node) error {
 		if len(c.loopStack) == 0 {
 			return fmt.Errorf("linha %d: `vaza` so funciona dentro de um laco", node.Token.Line)
 		}
-		if err := c.saiDosArrumas(c.loopStack[len(c.loopStack)-1].arrumaBase); err != nil {
+		if err := c.saiDosArrumas(c.loopStack[len(c.loopStack)-1].arrumaBase, false); err != nil {
 			return err
 		}
 		frame := &c.loopStack[len(c.loopStack)-1]
@@ -631,7 +635,7 @@ func (c *Compiler) compile(node ast.Node) error {
 		if len(c.loopStack) == 0 {
 			return fmt.Errorf("linha %d: `continua` so funciona dentro de um laco", node.Token.Line)
 		}
-		if err := c.saiDosArrumas(c.loopStack[len(c.loopStack)-1].arrumaBase); err != nil {
+		if err := c.saiDosArrumas(c.loopStack[len(c.loopStack)-1].arrumaBase, false); err != nil {
 			return err
 		}
 		frame := &c.loopStack[len(c.loopStack)-1]
@@ -643,7 +647,9 @@ func (c *Compiler) compile(node ast.Node) error {
 			// que reusa o frame atual — recursao em cauda nao estoura os frames.
 			// Dentro de arruma nao: a chamada tem que rodar protegida pelo try.
 			// Chamada com `...lista` nao vira tail call (argc so se sabe em runtime).
-			if call, ok := node.Value.(*ast.CallExpression); ok && len(c.arrumas) == 0 && !c.emGerador && call.Espalhados == nil && ehSelfCall(call, c.funcAtual) {
+			// Dentro de pra_cada tambem nao: o laco fecha o gerador dele depois
+			// da chamada, antes de retornar (igual o tree-walker).
+			if call, ok := node.Value.(*ast.CallExpression); ok && len(c.arrumas) == 0 && !c.emGerador && !c.dentroDePraCada() && call.Espalhados == nil && ehSelfCall(call, c.funcAtual) {
 				for _, a := range call.Arguments {
 					if err := c.compile(a); err != nil {
 						return err
@@ -658,13 +664,13 @@ func (c *Compiler) compile(node ast.Node) error {
 					return err
 				}
 				// valor fica na pilha enquanto os finalmentes rodam
-				if err := c.saiDosArrumas(0); err != nil {
+				if err := c.saiDosArrumas(0, true); err != nil {
 					return err
 				}
 				c.emit(code.OpReturn)
 			}
 		} else {
-			if err := c.saiDosArrumas(0); err != nil {
+			if err := c.saiDosArrumas(0, true); err != nil {
 				return err
 			}
 			c.emit(code.OpReturnNada)
@@ -1134,10 +1140,11 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 
 	doisNomes := len(node.Vars) == 2
 
+	c.emit(code.OpIterMarca) // gerador criado no cabecalho e do laco
 	if err := c.compile(node.Iterable); err != nil {
 		return err
 	}
-	c.emit(code.OpIterSeq) // -> orig, seq, tamanho
+	c.emit(code.OpIterSeq) // marca, iteravel -> orig, seq, tamanho
 	lenSym := c.defineVar(lenNome)
 	c.emitVarSet(lenSym)
 	seqSym := c.defineVar(seqNome)
@@ -1172,7 +1179,7 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 		c.emitVarSet(xSym)
 	}
 
-	c.pushLoop(loopFrame{})
+	c.pushLoop(loopFrame{seq: &seqSym})
 	idx := len(c.loopStack) - 1
 	if err := c.compile(node.Body); err != nil {
 		c.popLoop()
@@ -1187,7 +1194,10 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 	c.emit(code.OpAdd)
 	c.emitVarSet(itSym)
 	c.emit(code.OpJump, startPos)
+	// fim (acabou ou vaza): fecha o gerador de que o laco e dono
 	endAddr := len(c.instructions)
+	c.emitVarGet(seqSym)
+	c.emit(code.OpIterFim)
 	c.backpatch(jmpFim, endAddr)
 	frame := c.loopStack[idx]
 	c.popLoop()
@@ -1580,6 +1590,15 @@ func (c *Compiler) compileArruma(node *ast.ArrumaStatement) error {
 
 	c.backpatch(tryOp, len(c.instructions))
 	if len(node.Quebrous) > 0 {
+		// com finalmente, erro dentro do quebrou (ou do filtro, ou nenhum
+		// filtro colou) roda o finalmente e sobe
+		relancaOp := -1
+		if node.Finally != nil {
+			relancaOp = c.emit(code.OpTry, 9999)
+		}
+		// o sinal de fecha de gerador nao e do quebrou: vai pro relanca
+		// (finalmente) ou sobe direto
+		c.emit(code.OpRelancaFecha)
 		// multi-catch: o erro fica num temporario pra cada clausula amarrar
 		// e pra relancar se nenhum filtro colar. Um quebrou sem filtro so
 		// amarra direto (o bytecode de sempre).
@@ -1592,12 +1611,6 @@ func (c *Compiler) compileArruma(node *ast.ArrumaStatement) error {
 			c.numTemps++
 			erroTmp = c.defineVar("__erro_gs" + strconv.Itoa(c.numTemps))
 			c.emitVarSet(erroTmp)
-		}
-		// com finalmente, erro dentro do quebrou (ou do filtro, ou nenhum
-		// filtro colou) roda o finalmente e sobe
-		relancaOp := -1
-		if node.Finally != nil {
-			relancaOp = c.emit(code.OpTry, 9999)
 		}
 		for _, q := range node.Quebrous {
 			if temFiltro {
@@ -1666,12 +1679,20 @@ func (c *Compiler) compileArruma(node *ast.ArrumaStatement) error {
 // saiDosArrumas prepara uma saida antecipada (funciona/vaza/continua): fecha,
 // de dentro pra fora, os arrumas abertos a partir de `ate` — desarma o
 // handler (OpTryEnd) e roda o finalmente inline. O finalmente compila como se
-// estivesse no lugar dele: so com os arrumas e lacos de fora.
-func (c *Compiler) saiDosArrumas(ate int) error {
+// estivesse no lugar dele: so com os arrumas e lacos de fora. fechaLacos (o
+// `funciona`, que sai de todos): os pra_cada da funcao terminam tambem
+// (OpIterFim), intercalados — o laco de dentro de um arruma fecha o gerador
+// antes do finalmente dele, com o handler ainda armado (igual o tree-walker).
+func (c *Compiler) saiDosArrumas(ate int, fechaLacos bool) error {
 	salvos := c.arrumas
 	defer func() { c.arrumas = salvos }()
+	lacos := len(c.loopStack)
 	for k := len(salvos) - 1; k >= ate; k-- {
 		a := salvos[k]
+		if fechaLacos {
+			c.fimDosLacos(a.numLoops, lacos)
+			lacos = a.numLoops
+		}
 		if a.handler {
 			c.emit(code.OpTryEnd)
 		}
@@ -1690,7 +1711,31 @@ func (c *Compiler) saiDosArrumas(ate int) error {
 			return err
 		}
 	}
+	if fechaLacos {
+		c.fimDosLacos(0, lacos)
+	}
 	return nil
+}
+
+// fimDosLacos emite o fim (OpIterFim) dos pra_cada abertos nos indices
+// [de, ate) do loopStack, de dentro pra fora.
+func (c *Compiler) fimDosLacos(de, ate int) {
+	for j := ate - 1; j >= de; j-- {
+		if s := c.loopStack[j].seq; s != nil {
+			c.emitVarGet(*s)
+			c.emit(code.OpIterFim)
+		}
+	}
+}
+
+// dentroDePraCada diz se tem pra_cada aberto na funcao sendo compilada.
+func (c *Compiler) dentroDePraCada() bool {
+	for _, l := range c.loopStack {
+		if l.seq != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Compiler) compileLista(node *ast.ListaLiteral) error {

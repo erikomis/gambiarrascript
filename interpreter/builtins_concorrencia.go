@@ -81,15 +81,21 @@ func (i *Interpreter) builtinRecebe(args []object.Object) object.Object {
 	return v
 }
 
-// builtinFecha fecha um recurso pode ser Cano (channel)ou conexao de banco
-// (*Nativo embrulhando *conexaoBD). Idempotente. O `fecha` do banco ja existia
+// builtinFecha fecha um recurso: Cano (channel), conexao de banco (*Nativo
+// embrulhando *conexaoBD) ou gerador (roda os finalmente pendentes). Idempotente. O `fecha` do banco ja existia
 // em builtins.go antes do `fecha` de cano ser adicionado em builtinsInstancia;
 // pra manter um nome so, este builtin aceita os dois.
 func (i *Interpreter) builtinFecha(args []object.Object) object.Object {
 	if len(args) != 1 {
-		return erroBuiltin("fecha() quer 1 argumento (cano ou conexao), veio %d", len(args))
+		return erroBuiltin("fecha() quer 1 argumento (cano, conexao ou gerador), veio %d", len(args))
 	}
 	switch v := args[0].(type) {
+	case *object.Gerador:
+		// roda os finalmente pendentes do corpo pausado (gerador.go)
+		if falha := v.Fecha(); falha != nil {
+			return falha
+		}
+		return NADA
 	case *object.Cano:
 		v.Fechar()
 		return NADA
@@ -103,7 +109,7 @@ func (i *Interpreter) builtinFecha(args []object.Object) object.Object {
 		// delega pro builtin global de banco (mesmo nome) pra fechar a conexao.
 		return builtinFecha([]object.Object{v})
 	}
-	return erroBuiltin("fecha() espera um cano ou conexao, veio %s", args[0].Type())
+	return erroBuiltin("fecha() espera um cano, conexao ou gerador, veio %s", args[0].Type())
 }
 
 // builtinTrava cria uma trava (lock) pra usar com com_trava.
@@ -140,9 +146,14 @@ func (i *Interpreter) builtinComTrava(args []object.Object) object.Object {
 	if !ehChamavel(fn) {
 		return erroBuiltin("com_trava() espera uma gambiarra no 2o arg, veio %s", object.NomeTipo(fn))
 	}
-	res, reentrou := t.Segura(func() object.Object {
-		return i.applyFunction(fn, nil, 0, "<com_trava>")
-	})
+	// corpo de gerador e o fluxo de quem consome (gerador.go)
+	reentrou := travaComQuemConsome(t)
+	var res object.Object
+	if !reentrou {
+		res, reentrou = t.Segura(func() object.Object {
+			return i.applyFunction(fn, nil, 0, "<com_trava>")
+		})
+	}
 	if reentrou {
 		return erroBuiltin("com_trava(): essa trava ja ta com voce — trava nao e reentrante, pedir de novo de dentro do com_trava ia travar pra sempre")
 	}

@@ -3,6 +3,7 @@ package vm
 import (
 	"fmt"
 
+	"gambiarrascript/code"
 	"gambiarrascript/object"
 )
 
@@ -20,11 +21,19 @@ import (
 //
 // Por que nao goroutine+canal: a VM ja tem o estado da execucao em dados (pilha
 // e frames), entao pausar e so voltar do laco. Gerador abandonado no meio (um
-// `vaza` no pra_cada) nao segura nada fora da memoria: a sub-VM vira lixo com
-// ele. E o corpo roda na goroutine de quem pede, entao nao tem concorrencia
-// nova (o modo concorrente nao liga) nem troca de contexto por valor.
+// proximo() que ninguem chama de novo) nao segura nada fora da memoria: a
+// sub-VM vira lixo com ele. E o corpo roda na goroutine de quem pede, entao
+// nao tem concorrencia nova (o modo concorrente nao liga) nem troca de
+// contexto por valor.
+//
+// Fecha (`fecha(g)`, e o pra_cada dono saindo no meio): o sinal de fecha
+// (object.SinalFecha) e levantado como erro no frame 0 parado no `rende` —
+// o mesmo desenrola de um erro de verdade, entao os `finalmente` pendentes
+// rodam (o quebrou relanca ele com OpRelancaFecha) — e o corpo segue ate o
+// fim. Um OpRende no caminho volta do execDesde: ignorou o fecha.
 type geradorVM struct {
-	vm *VM
+	vm       *VM
+	iniciado bool // ja pediram valor (o corpo ta pausado num rende)
 }
 
 // novoGerador guarda o frame que acabou de abrir (chamada do gerador) numa
@@ -69,6 +78,7 @@ func (vm *VM) novoGerador(frame *Frame, ipCorpo int) *object.Gerador {
 // Proximo roda o corpo ate o proximo OpRende (ou o fim). O object.Gerador
 // garante uma chamada por vez e nunca chama de novo depois do fim.
 func (g *geradorVM) Proximo() (valor object.Object, ok bool, falha object.Object) {
+	g.iniciado = true
 	sub := g.vm
 	if sub.dep != nil {
 		// depurador: o corpo roda no fluxo de quem pediu (frames em cima)
@@ -106,6 +116,126 @@ func (g *geradorVM) Proximo() (valor object.Object, ok bool, falha object.Object
 	return v, true, nil
 }
 
+// Fecha retoma o corpo pausado no `rende` com o sinal de fecha (ver o
+// comeco do arquivo). O object.Gerador so chama antes do fim, uma vez.
+func (g *geradorVM) Fecha() (rendeu bool, linha int, falha object.Object) {
+	if !g.iniciado {
+		return false, 0, nil // nem comecou: nao tem finalmente pendente
+	}
+	sub := g.vm
+	if sub.dep != nil {
+		gid := sub.dep.entra(sub)
+		defer sub.dep.sai(sub, gid)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			rendeu, linha = false, 0
+			if vme, e := r.(VMError); e {
+				if vme.sai != nil {
+					falha = vme.sai
+				} else {
+					falha = vme.err
+				}
+				return
+			}
+			falha = &object.Erro{Message: fmt.Sprintf("panico no gerador: %v", r), Kind: "runtime"}
+		}
+	}()
+	e, sai := sub.desenrola(object.SinalFecha(), nil)
+	if sai != nil {
+		return false, 0, sai
+	}
+	var err error = erroNaoCapturado{err: e}
+	if sub.framesIdx > 0 {
+		err = sub.execDesde(sub.currentFrame(), 1)
+	}
+	switch x := err.(type) {
+	case nil:
+		if sub.framesIdx == 0 {
+			return false, 0, nil // o finalmente engoliu o fecha e o corpo acabou
+		}
+		fr := sub.frames[0] // parou num OpRende (1 byte): a linha e a dele
+		return true, fr.fn.LinhaDoPC(fr.ip - 1), nil
+	case erroNaoCapturado:
+		if object.EhSinalFecha(x.err) {
+			return false, 0, nil
+		}
+		return false, 0, x.err
+	case SaiRequisicao:
+		return false, 0, &object.Sair{Codigo: x.Codigo}
+	}
+	return false, 0, &object.Erro{Message: err.Error(), Kind: "runtime"}
+}
+
+// lacoDono e um pra_cada aberto que e dono do gerador que percorre (o gerador
+// nasceu no cabecalho dele). tries: quantos handlers de arruma ja estavam
+// armados quando o laco comecou — handler armado antes do laco (indice <
+// tries) e de fora dele, entao o erro que vai pra ele atravessa o laco.
+type lacoDono struct {
+	g        *object.Gerador
+	frameIdx int
+	tries    int
+}
+
+// desenrola trata um erro levantado: fecha (de dentro pra fora) os geradores
+// dos pra_cada donos que o erro atravessa, depois acha o handler
+// (handleVMError). Erro no fecha toma o lugar do que tava subindo (igual um
+// erro no finalmente); sai() no fecha volta em sai.
+func (vm *VM) desenrola(e *object.Erro, quadro *object.StackFrame) (*object.Erro, *object.Sair) {
+	h := len(vm.errStack) - 1
+	for len(vm.donos) > 0 && vm.donos[len(vm.donos)-1].tries > h {
+		d := vm.donos[len(vm.donos)-1]
+		vm.donos[len(vm.donos)-1] = lacoDono{}
+		vm.donos = vm.donos[:len(vm.donos)-1]
+		switch f := d.g.Fecha().(type) {
+		case *object.Sair:
+			return e, f
+		case *object.Erro:
+			e, quadro = f, nil
+		}
+	}
+	vm.handleVMError(e, quadro)
+	return e, nil
+}
+
+// execFecha roda os opcodes do fecha de gerador (raros: um por laco). false =
+// nao e um deles.
+func (vm *VM) execFecha(op code.Opcode) bool {
+	switch op {
+	case code.OpIterMarca:
+		vm.push(vm.num.Int(int64(object.SerieGeradores())))
+	case code.OpIterFim:
+		vm.fimDoLaco(vm.pop())
+	case code.OpRelancaFecha:
+		if e, ok := vm.stack[vm.sp-1].(*object.Erro); ok && object.EhSinalFecha(e) {
+			vm.sp--
+			e.Handled = false
+			panic(VMError{err: e})
+		}
+	default:
+		return false
+	}
+	return true
+}
+
+// fimDoLaco e o fim de um pra_cada (acabou, vaza ou funciona): se ele e dono
+// do gerador seq, fecha (no gerador que acabou nao faz nada).
+func (vm *VM) fimDoLaco(seq object.Object) {
+	g, ok := seq.(*object.Gerador)
+	if !ok || len(vm.donos) == 0 {
+		return
+	}
+	d := vm.donos[len(vm.donos)-1]
+	if d.g != g || d.frameIdx != vm.framesIdx {
+		return
+	}
+	vm.donos[len(vm.donos)-1] = lacoDono{}
+	vm.donos = vm.donos[:len(vm.donos)-1]
+	if falha := g.Fecha(); falha != nil {
+		panicFalha(falha)
+	}
+}
+
 // cresceFrames aumenta o array de slots de frame ate caber idx (a sub-VM de
 // gerador nasce pequena). O teto continua o MaxFrames do empurraFrame.
 func (vm *VM) cresceFrames(idx int) {
@@ -125,7 +255,7 @@ func (vm *VM) cresceFrames(idx int) {
 
 // iterSeq e o comeco do pra_cada: empilha orig, seq e tamanho (ver
 // compilePraCadaList). Treta percorre o que o itera() dela devolve.
-func (vm *VM) iterSeq(it object.Object, fn *object.CompiledFunction, ip int) {
+func (vm *VM) iterSeq(it object.Object, marca uint64, fn *object.CompiledFunction, ip int) {
 	if inst, ok := it.(*object.Instancia); ok {
 		it = vm.iteraTreta(inst, fn.LinhaDoPC(ip))
 	}
@@ -156,6 +286,10 @@ func (vm *VM) iterSeq(it object.Object, fn *object.CompiledFunction, ip int) {
 		vm.push(object.NovaLista(opcoes))
 		vm.push(vm.num.Int(int64(len(opcoes))))
 	case *object.Gerador:
+		if c.NasceuDepois(marca) {
+			// nasceu no cabecalho (ou no itera()): o laco e dono
+			vm.donos = append(vm.donos, lacoDono{g: c, frameIdx: vm.framesIdx, tries: len(vm.errStack)})
+		}
 		vm.push(c)
 		vm.push(c)
 		vm.push(vm.num.Int(0)) // sem tamanho: pede ate acabar

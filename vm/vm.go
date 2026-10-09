@@ -117,6 +117,11 @@ type VM struct {
 	// rendido: o valor do ultimo OpRende (so na sub-VM de um gerador, ver
 	// gerador.go). O execDesde volta com o frame parado depois do rende.
 	rendido object.Object
+
+	// donos: pra_cada abertos que sao donos do gerador que percorrem (o
+	// gerador nasceu no cabecalho). Erro que atravessa o laco fecha o
+	// gerador (gerador.go: fechaDonos).
+	donos []lacoDono
 }
 
 func New(bytecode *compiler.Bytecode, out io.Writer) *VM {
@@ -304,6 +309,8 @@ func (vm *VM) devolveSubVM(sub *VM) {
 	sub.sp = 0
 	sub.framesIdx = 0
 	sub.errStack = sub.errStack[:0]
+	clear(sub.donos)
+	sub.donos = sub.donos[:0]
 	vm.subVMs.Put(sub)
 }
 
@@ -734,13 +741,18 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 						vme.err.Message = fmt.Sprintf("deu ruim na linha %d: %s", l, vme.err.Message)
 					}
 				}
-				vm.handleVMError(vme.err, vme.quadro)
+				e, sai := vm.desenrola(vme.err, vme.quadro)
+				if sai != nil {
+					// sai() no finalmente de um gerador fechado no caminho
+					errRet = SaiRequisicao{Codigo: sai.Codigo}
+					return
+				}
 				// apos handle: ou temos handler (continua) ou propaga
 				errRet = nil
 				// se ainda ha erro pendente (sem handler), sinalizamos
 				if vm.framesIdx == 0 {
 					// top-level sem handler: erro fatal
-					errRet = erroNaoCapturado{err: vme.err}
+					errRet = erroNaoCapturado{err: e}
 					return
 				}
 				// handler achado — resume no frame que registrou o try (o
@@ -953,7 +965,9 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			}
 			ip++
 		case code.OpIterSeq:
-			vm.iterSeq(vm.pop(), fn, ip)
+			it := vm.pop()
+			marca := vm.pop().(*object.Numero).Int
+			vm.iterSeq(it, uint64(marca), fn, ip)
 			ip++
 		case code.OpIterProx:
 			if !vm.iterProx(int(fn.Bytecode[ip+3])) {
@@ -1509,6 +1523,11 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			// switch quente
 			if n := vm.execPadrao(op, fn.Bytecode[ip+1:]); n > 0 {
 				ip += n
+				continue
+			}
+			// fecha de gerador (gerador.go): uma vez por laco, fora do quente
+			if vm.execFecha(op) {
+				ip++
 				continue
 			}
 			return fmt.Errorf("opcode desconhecido: %d", op)

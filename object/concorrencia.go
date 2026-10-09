@@ -62,6 +62,9 @@ func (t *Trava) Inspect() string {
 	return "<trava>"
 }
 
+// Dono e o id da goroutine que segura a trava agora (0 = livre).
+func (t *Trava) Dono() int64 { return t.dono.Load() }
+
 // Segura roda f com a trava fechada e solta no fim, mesmo se f entrar em
 // panico. reentrou=true (e f nao roda) se esta goroutine ja segura a trava.
 func (t *Trava) Segura(f func() Object) (res Object, reentrou bool) {

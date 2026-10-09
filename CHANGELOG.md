@@ -57,6 +57,17 @@ no [ROADMAP](ROADMAP.md).
   vezes; vale pro `serve_pasta` também.
 - Exemplo novo: `examples/upload.gs` (upload + sessão + limite + gzip).
 - `.gsc` antigo é recompilado sozinho (6 builtins novas).
+- **`fecha(g)` em gerador**: encerra o gerador pausado rodando os
+  `finalmente` pendentes do corpo (igual o `close()` do Python). O `quebrou`
+  não pega o sinal de fecha; um `rende` no caminho dá erro (`o gerador X
+  ignorou o fecha`). Idempotente; gerador que nem começou só acaba.
+- **Fecha automático no `pra_cada`**: o gerador criado no próprio cabeçalho
+  (`pra_cada x em naturais()`, ou o `itera()` da treta) é fechado quando o
+  laço sai no meio (`vaza`, `funciona`, erro) — o `finalmente` dele roda na
+  hora. Gerador em variável continua pausado, dá pra retomar.
+- Tree-walker (`--tree`): o gerador fechado solta a goroutine na hora, e
+  `com_trava` pedindo de dentro do gerador a trava que quem consome segura dá
+  o erro de reentrada (igual a VM) em vez de travar pra sempre.
 
 ## v0.8.0 — 2026-10-08
 

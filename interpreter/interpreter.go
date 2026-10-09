@@ -1178,6 +1178,8 @@ func (i *Interpreter) evalPraCadaNum(node *ast.PraCadaNumStatement, env *object.
 }
 
 func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *object.Environment) object.Object {
+	// gerador criado daqui pra frente (no cabecalho, ou pelo itera()) e do laco
+	marca := object.SerieGeradores()
 	it := i.Eval(node.Iterable, env)
 	if isError(it) {
 		return it
@@ -1202,7 +1204,7 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 
 	switch c := it.(type) {
 	case *object.Gerador:
-		return i.praCadaGerador(c, node, env)
+		return i.praCadaGerador(c, c.NasceuDepois(marca), node, env)
 	case *object.Lista:
 		// com concorrencia percorre um retrato tirado agora (ParaIterar); sem,
 		// le elemento a elemento, com o tamanho do inicio (igual a VM)
@@ -1413,7 +1415,8 @@ func (i *Interpreter) evalArruma(node *ast.ArrumaStatement, env *object.Environm
 	// amarra o erro no nome dela; com filtro (`quebrou e se COND`), so pega se
 	// a condicao colar. Nenhuma pegou: o erro continua subindo (depois do
 	// finalmente), igual arruma sem quebrou. Erro no filtro sobe no lugar.
-	if res != nil && res.Type() == object.ERRO_OBJ && len(node.Quebrous) > 0 {
+	// o sinal de fecha de gerador (gerador.go) so roda o finalmente
+	if res != nil && res.Type() == object.ERRO_OBJ && len(node.Quebrous) > 0 && !object.EhSinalFecha(res) {
 		res = i.pegaErro(node, res.(*object.Erro), env)
 	}
 

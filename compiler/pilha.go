@@ -174,8 +174,15 @@ func efeitoPilha(op code.Opcode, operandos []byte, consts []object.Object) (efei
 	case code.OpIterPar:
 		return efeito{tira: 3, poe: 2}, true
 	case code.OpIterSeq:
-		// iteravel -> orig, seq, tamanho
-		return efeito{tira: 1, poe: 3}, true
+		// marca, iteravel -> orig, seq, tamanho
+		return efeito{tira: 2, poe: 3}, true
+	case code.OpIterMarca:
+		return efeito{poe: 1}, true
+	case code.OpIterFim:
+		return efeito{tira: 1}, true
+	case code.OpRelancaFecha:
+		// so olha o topo (relancar e erro, sem sucessor nesse caminho)
+		return efeito{}, true
 	case code.OpIterProx:
 		// [orig] seq it tam -> valor(es); no salto (acabou) nao empilha nada
 		nomes := u8(2)

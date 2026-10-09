@@ -139,6 +139,7 @@ A generator is what a gambiarra with `rende` returns (see
 | `proximo(g, [padrao])` | `(gerador, any)` | the next value; at the end, `nada` (or the `padrao`) |
 | `acabou(g)` | `(gerador)` | `booleano` — no more values (may run the body up to the next `rende`) |
 | `pega(g, n)` | `(gerador, integer)` | `lista` with up to `n` values |
+| `fecha(g)` | `(gerador)` | `nada` — runs the body's pending `finalmente` blocks and ends the generator (can be called more than once) |
 | `lista(x)` | `(generator, list, set, dict or treta with itera())` | a new `lista`: the generator's values (all of them), a copy of the list, the set's items, the dict's keys |
 
 ## Dictionary
@@ -711,7 +712,7 @@ Details in [Arruma / quebrou](/docs/en/erros).
 | `cano([cap])` | `([numero])` | channel; no arg (or `0`) = synchronous |
 | `envia(cano, v)` | `(cano ou conexao, valor)` | `nada` — blocks until there's room/a receiver; a closed pipe throws |
 | `recebe(cano)` | `(cano ou conexao)` | the value, or `nada` if the pipe (or the connection) closed |
-| `fecha(cano)` | `(cano ou conexao)` | `nada` — can be called more than once |
+| `fecha(cano)` | `(cano, conexao ou gerador)` | `nada` — can be called more than once (on a generator, runs the pending `finalmente` blocks) |
 | `espera(futuro)` | `(futuro ou lista de futuros)` | the value (or the list of values, in order) |
 | `paralelo(lista, fn)` | `(lista, gambiarra)` | `lista` with `fn(item)` run in parallel (up to 256 at a time), in the original order |
 | `trava()` | `()` | `trava` ("lock") — a lock to use with `com_trava` |

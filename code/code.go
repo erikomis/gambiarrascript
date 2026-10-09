@@ -154,6 +154,17 @@ const (
 	// valor (1 nome) ou indice/chave + valor (2 nomes). seq e lista (tam e o
 	// tamanho no comeco do laco) ou gerador (pede o proximo valor).
 	OpIterProx // alvo (2) + nomes (1)
+	// --- fecha de gerador ---
+	// OpIterMarca: empilha a marca de geradores (object.SerieGeradores)
+	// antes do cabecalho do pra_cada; o OpIterSeq tira ela junto com o
+	// iteravel. Gerador criado depois da marca e do laco (fecha na saida).
+	OpIterMarca
+	// OpIterFim: pop seq; fim do pra_cada (acabou, vaza ou funciona): se o
+	// laco e dono do gerador seq, fecha ele (roda os finalmente pendentes).
+	OpIterFim
+	// OpRelancaFecha: comeco do quebrou. Se o erro no topo e o sinal de fecha
+	// de gerador, relanca (so o finalmente roda com ele); senao nao mexe.
+	OpRelancaFecha
 )
 
 type Definition struct {
@@ -259,6 +270,10 @@ var definitions = map[Opcode]*Definition{
 	OpGerador:  {"OpGerador", []int{}},
 	OpRende:    {"OpRende", []int{}},
 	OpIterProx: {"OpIterProx", []int{2, 1}},
+	// fecha de gerador
+	OpIterMarca:    {"OpIterMarca", []int{}},
+	OpIterFim:      {"OpIterFim", []int{}},
+	OpRelancaFecha: {"OpRelancaFecha", []int{}},
 }
 
 func Lookup(op byte) (*Definition, error) {

@@ -65,7 +65,12 @@ func init() {
 // 19 = geradores (OpGerador/OpRende), pra_cada com OpIterProx (OpIterSeq
 // empilha orig/seq/tamanho; treta com itera()) e proximo/acabou/pega/lista
 // no fim da lista de builtins.
-const formatoGSC = 20
+// 20 = builtins novos do servidor (upload, cookies assinados, sessao,
+// limita, comprime) no fim da lista.
+// 21 = fecha de gerador: OpIterMarca antes do cabecalho do pra_cada (o
+// OpIterSeq tira a marca junto), OpIterFim no fim do laco (e no funciona de
+// dentro) e OpRelancaFecha no comeco do quebrou.
+const formatoGSC = 21
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

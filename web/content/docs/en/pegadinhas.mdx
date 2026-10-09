@@ -322,7 +322,17 @@ mostra lista(g)      # []
 mostra lista(tres()) # [1, 2, 3]
 ```
 
-Also, the `finalmente` inside a generator that nobody finished consuming (a
-`vaza` halfway, a `proximo` that was never called again) **does not run**: the
-generator stays paused until it is garbage. Cleanup that must happen belongs
-outside the generator, around the loop that consumes it.
+Also, the `finalmente` inside a generator that nobody finished consuming only
+runs if someone **closes** the generator: `fecha(g)`, or the `pra_cada` that
+created it in its header leaving halfway (that one closes on its own). A
+generator kept in a variable and dropped halfway (a `vaza` in a
+`pra_cada x em g`, a `proximo` that was never called again) stays paused until
+it is garbage — and then the `finalmente` **does not run**. If cleanup matters, call
+`fecha(g)` when you are done. See [Closing](/docs/en/funcoes#closing-fecha).
+
+On `gs roda --tree` there is one more reason: there the paused body holds a
+goroutine, and a generator kept in a scope its own body can see (a global, or
+a variable of the function that defined the gambiarra) is never garbage — the
+goroutine only exits with `fecha(g)`, by consuming to the end or when the
+program ends. On the VM (the default) there is no goroutine: a paused
+generator is just memory.

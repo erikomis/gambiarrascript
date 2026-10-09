@@ -141,6 +141,7 @@ tambem aceitam gerador, consumindo ele inteiro.
 | `proximo(g, [padrao])` | `(gerador, qualquer)` | o proximo valor; no fim, `nada` (ou o `padrao`) |
 | `acabou(g)` | `(gerador)` | `booleano` — nao tem mais valor (pode rodar o corpo ate o proximo `rende`) |
 | `pega(g, n)` | `(gerador, inteiro)` | `lista` com ate `n` valores |
+| `fecha(g)` | `(gerador)` | `nada` — roda os `finalmente` pendentes do corpo e encerra o gerador (pode chamar mais de uma vez) |
 | `lista(x)` | `(gerador, lista, conjunto, dicionario ou treta com itera())` | `lista` nova: os valores do gerador (todos), copia da lista, itens do conjunto, chaves do dicionario |
 
 ## Dicionario
@@ -706,7 +707,7 @@ Detalhes em [Arruma / quebrou](/docs/erros).
 | `cano([cap])` | `([numero])` | canal; sem arg (ou `0`) = sincrono |
 | `envia(cano, v)` | `(cano ou conexao, valor)` | `nada` — bloqueia ate ter espaco/receptor; cano fechado da erro |
 | `recebe(cano)` | `(cano ou conexao)` | valor, ou `nada` se o cano (ou a conexao) fechou |
-| `fecha(cano)` | `(cano ou conexao)` | `nada` — pode chamar mais de uma vez |
+| `fecha(cano)` | `(cano, conexao ou gerador)` | `nada` — pode chamar mais de uma vez (no gerador, roda os `finalmente` pendentes) |
 | `espera(futuro)` | `(futuro ou lista de futuros)` | o valor (ou a lista de valores, na ordem) |
 | `paralelo(lista, fn)` | `(lista, gambiarra)` | `lista` com `fn(item)` rodado em paralelo (ate 256 de uma vez), na ordem original |
 | `trava()` | `()` | `trava` — lock pra usar com `com_trava` |

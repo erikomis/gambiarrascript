@@ -313,7 +313,16 @@ mostra lista(g)      # []
 mostra lista(tres()) # [1, 2, 3]
 ```
 
-E o `finalmente` de dentro de um gerador que ninguem terminou de consumir
-(um `vaza` no meio, um `proximo` que nao foi chamado de novo) **nao roda**: o
-gerador fica pausado ate virar lixo. Limpeza que precisa acontecer fica fora
-do gerador, em volta do laco que consome.
+E o `finalmente` de dentro de um gerador que ninguem terminou de consumir so
+roda se alguem **fechar** o gerador: `fecha(g)`, ou o `pra_cada` que criou o
+gerador no cabecalho saindo no meio (esse fecha sozinho). Um gerador guardado
+numa variavel e largado no meio (um `vaza` num `pra_cada x em g`, um `proximo`
+que nao foi chamado de novo) fica pausado ate virar lixo — e ai o `finalmente`
+**nao roda**. Se a limpeza importa, chame `fecha(g)` quando acabar de usar.
+Veja [Fechando](/docs/funcoes#fechando-fecha).
+
+No `gs roda --tree` tem mais um motivo: la o corpo pausado segura uma
+goroutine, e o gerador guardado num escopo que o proprio corpo enxerga (uma
+global, ou variavel da funcao que definiu a gambiarra) nunca vira lixo — a
+goroutine so sai com `fecha(g)`, consumindo ate o fim ou quando o programa
+acaba. Na VM (o padrao) nao tem goroutine: o gerador pausado e so memoria.

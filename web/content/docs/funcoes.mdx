@@ -275,9 +275,11 @@ mostra pega(naturais(), 5)      # [0, 1, 2, 3, 4]
   (um `mostra` la dentro aparece nessa hora); o valor fica guardado pro proximo
   pedido.
 - **Um gerador so anda pra frente**: o que ja saiu nao volta. Um `vaza` no
-  meio deixa ele parado onde estava — o proximo `pra_cada` (ou `proximo`)
-  continua dali. Gerador que acabou fica acabado; pra comecar de novo, chame a
-  gambiarra de novo (cada chamada e um gerador independente).
+  meio de um `pra_cada` sobre um gerador **guardado numa variavel** deixa ele
+  parado onde estava — o proximo `pra_cada` (ou `proximo`) continua dali (o
+  gerador criado no proprio `pra_cada` e fechado na saida: veja
+  [Fechando](#fechando-fecha)). Gerador que acabou fica acabado; pra comecar de
+  novo, chame a gambiarra de novo (cada chamada e um gerador independente).
 - **`lista(g)`** puxa tudo numa lista; **`pega(g, n)`** puxa ate `n` valores.
   `mapeia`, `filtra` e `reduz` aceitam gerador direto, mas **consomem ele
   inteiro** antes (e devolvem lista) — com gerador infinito nunca voltam: use
@@ -294,7 +296,62 @@ mostra pega(naturais(), 5)      # [0, 1, 2, 3, 4]
   sintaxe.
 - Gerador pode ser usado de varias goroutines (`bora`): um pedido por vez, cada
   valor sai uma vez so. Um gerador que pede o proprio proximo valor enquanto
-  roda da erro (nunca ia andar).
+  roda da erro (nunca ia andar). O corpo roda no fluxo de quem pediu: pegar
+  la dentro, com `com_trava`, a trava que quem consome ta segurando e a mesma
+  reentrada de sempre (da erro, nao trava pra sempre).
+
+### Fechando (`fecha`)
+
+`fecha(g)` encerra um gerador pausado **rodando os `finalmente` pendentes** do
+corpo (igual o `close()` do Python). O `pra_cada` faz isso sozinho com o
+gerador que nasceu no cabecalho dele:
+
+```gambiarrascript
+gambiarra naturais()
+    bota n = 0
+    arruma
+        enquanto deu_bom
+            rende n
+            n += 1
+        acabou_finalmente
+    finalmente
+        mostra "limpou em " + texto(n)
+    acabou_finalmente
+acabou_finalmente
+
+bota g = naturais()
+mostra proximo(g)        # 0
+mostra proximo(g)        # 1
+fecha(g)                 # limpou em 1
+mostra proximo(g)        # nada (fechado = acabou)
+
+pra_cada x em naturais() # o laco e dono do gerador
+    se_colar x == 2
+        vaza             # limpou em 2
+    acabou_finalmente
+acabou_finalmente
+```
+
+- O `fecha` retoma o corpo com um **sinal de fecha** no lugar do `rende`: ele
+  sobe desenrolando o corpo e so o `finalmente` ve ele passar — o `quebrou`
+  **nao pega**. Depois disso o gerador acabou. Fechar de novo nao faz nada;
+  gerador que nem comecou so acaba (nao tinha nada pendente).
+- Se o corpo der `rende` enquanto fecha (um `rende` no `finalmente`, por
+  exemplo), o `fecha` da erro:
+  `o gerador naturais ignorou o fecha (deu rende enquanto fechava)`. Erro levantado no `finalmente` sobe pra quem fechou (da
+  pra pegar com `arruma` em volta do `fecha`).
+- **Fecha automatico**: o `pra_cada` e **dono** do gerador criado no proprio
+  cabecalho (`pra_cada x em naturais()`, ou o `itera()` de treta que devolve
+  um gerador novo). Saindo antes do fim — `vaza`, `funciona` ou erro subindo
+  — o laco fecha o gerador na hora, como um `finalmente` em volta do laco (erro
+  no fecha toma o lugar do que tava saindo). Gerador que ja existia antes do
+  laco (variavel, parametro, campo) **nao** e fechado: da pra continuar depois.
+  O `sai()` nao fecha nada (o programa ta acabando).
+- Num pipeline como `pares(naturais())`, fechar o `pares` fecha so o que ele
+  mesmo criou num `pra_cada`: o `naturais()` veio de fora, entao fica pausado
+  ate virar lixo, sem rodar o `finalmente` dele. Pra fechar em cadeia, crie o
+  gerador de dentro no cabecalho do `pra_cada` do de fora.
+- Um gerador que fecha a si mesmo enquanto roda da erro (nunca ia andar).
 
 Gerador combinando gerador (pipeline preguicoso):
 
