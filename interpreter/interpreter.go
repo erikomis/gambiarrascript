@@ -52,6 +52,10 @@ type Interpreter struct {
 
 	// gancho de linha (gancho.go); nil = desligado
 	gancho *ganchoLinha
+
+	// tarefas agendadas (a_cada/depois_de/agenda); criado na primeira
+	agenda   *agendador
+	muAgenda sync.Mutex
 }
 
 func New(out io.Writer) *Interpreter {
@@ -102,6 +106,11 @@ func New(out io.Writer) *Interpreter {
 		"log_aviso": {Nome: "log_aviso", Fn: i.builtinLogAviso},
 		"log_erro":  {Nome: "log_erro", Fn: i.builtinLogErro},
 		"opcoes":    {Nome: "opcoes", Fn: i.builtinOpcoes},
+		// tarefas agendadas (builtins_agenda.go; stub no wasm)
+		"a_cada":    {Nome: "a_cada", Fn: i.builtinACada},
+		"depois_de": {Nome: "depois_de", Fn: i.builtinDepoisDe},
+		"agenda":    {Nome: "agenda", Fn: i.builtinAgenda},
+		"cancela":   {Nome: "cancela", Fn: i.builtinCancela},
 	}
 	return i
 }

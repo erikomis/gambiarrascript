@@ -745,6 +745,21 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       de parse.
 - [x] **multi-catch** — entregue no Tier 2 do jeito sugerido aqui:
       `quebrou erro se erro_tipo(erro) == "rede"`.
+- [x] **Tarefas agendadas** — `a_cada(seg, f)`, `depois_de(seg, f)`,
+      `agenda("cron", f)` e `cancela(h)` (`interpreter/builtins_agenda.go`).
+      Cron de 5 campos próprio (`cron.go`: `*`, listas, faixas, passos, regra
+      dia OU dia_semana do Unix, atalhos `@diario`/`@hora`/...) no fuso local,
+      testado com relógio fixo. Cada agendamento é uma goroutine que chama a
+      gambiarra pelo `applyFunction` (mesmo gancho do `paralelo`, vale pros 2
+      motores); erro vai pro stderr e segue; disparo atrasado é pulado, nunca
+      sobrepõe. Decisão de vida do processo: o `gs roda` (e o binário do
+      `gs build`) espera enquanto houver agendamento; Ctrl+C/SIGTERM cancela e
+      espera até 10s quem está rodando; `sai()` numa tarefa encerra com o
+      código. `gs testa` cancela o que sobrou; no wasm os builtins avisam.
+- [x] **Datas sem layout do Go** — `formata_data`/`le_data` com marcadores
+      `aaaa aa mm mmm mmmm dd ddd dddd hh mi ss` (decisão: `mm` é sempre mês,
+      minuto é `mi`, tudo minúsculo), literal entre aspas simples, nomes em
+      português (leitura aceita sem acento) e fuso opcional.
 
 **API de verdade (banco + entrada)**
 
@@ -801,6 +816,13 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       formatação; o `ci.yml` barra arquivo `.go` desformatado.
 - [x] **CHANGELOG** — `CHANGELOG.md` por versão, escrito pra quem usa a
       linguagem (não é a lista crua de commits).
+- [x] **Imagem Docker oficial** — `packaging/docker/Dockerfile` (distroless
+      static, `nonroot`, sem RUN — multi-arch sem QEMU) copia o MESMO binário
+      dos tarballs. O `release.yml` monta linux/amd64+arm64, roda um smoke
+      test (`versao` + `roda salve.gs`) e dá push em
+      `ghcr.io/erikomis/gambiarrascript:<versao>` e `:latest` (pre-release não
+      move o latest) com o `GITHUB_TOKEN`; no workflow_dispatch só monta.
+      Doc de deploy de API em servidor.mdx.
 
 **Site / playground**
 

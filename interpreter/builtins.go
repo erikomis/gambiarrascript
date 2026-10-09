@@ -138,11 +138,11 @@ var builtins = map[string]*object.Builtin{
 	"separa_regex":    {Nome: "separa_regex", Fn: builtinSeparaRegex},
 
 	// tempo/datetime
-	"agora":           {Nome: "agora", Fn: builtinAgora},
-	"agora_num":       {Nome: "agora_num", Fn: builtinAgoraNum},
-	"agora_ns":        {Nome: "agora_ns", Fn: builtinAgoraNs},
-	"formata_tempo":   {Nome: "formata_tempo", Fn: builtinFormataTempo},
-	"parse_tempo":     {Nome: "parse_tempo", Fn: builtinParseTempo},
+	"agora":         {Nome: "agora", Fn: builtinAgora},
+	"agora_num":     {Nome: "agora_num", Fn: builtinAgoraNum},
+	"agora_ns":      {Nome: "agora_ns", Fn: builtinAgoraNs},
+	"formata_tempo": {Nome: "formata_tempo", Fn: builtinFormataTempo},
+	"parse_tempo":   {Nome: "parse_tempo", Fn: builtinParseTempo}, "formata_data": {Nome: "formata_data", Fn: builtinFormataData}, "le_data": {Nome: "le_data", Fn: builtinLeData},
 	"duracao":         {Nome: "duracao", Fn: builtinDuracao},
 	"espera_ms":       {Nome: "espera_ms", Fn: builtinEsperaMs},
 	"soma_tempo":      {Nome: "soma_tempo", Fn: builtinSomaTempo},

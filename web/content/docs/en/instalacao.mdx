@@ -8,7 +8,8 @@ below — none of the installers needs `sudo` or admin rights, and all of them
 check the download's sha256 against the release's `checksums.txt` before
 installing. Rather build it yourself? Jump to
 [Building with Go](#2-building-with-go) or
-[With Docker](#3-with-docker-no-go-install).
+[Building with Docker](#4-building-with-docker-no-go-install). Just want to
+run it in a container? There's the [official image](#3-official-docker-image).
 
 ## 1. Installer (recommended)
 
@@ -122,7 +123,31 @@ gs --version
 `scripts/install` just copies `dist/gs` onto your `PATH` (and on macOS it
 re-signs the binary, otherwise the system kills it with "Killed: 9").
 
-## 3. With Docker (no Go install)
+## 3. Official Docker image
+
+Every release publishes the **`ghcr.io/erikomis/gambiarrascript`** image
+(linux `amd64` and `arm64`), tagged with the version (e.g. `:0.8.0`) and `:latest`
+(pre-releases don't move `latest`). It only holds the static `gs` binary on a
+distroless base: certificates (for `busca` over https) and time zones
+included, no shell, running as the `nonroot` user. The `ENTRYPOINT` is `gs`,
+so whatever follows the image name is a subcommand:
+
+```bash
+docker run --rm ghcr.io/erikomis/gambiarrascript versao
+docker run --rm -v "$PWD:/app" ghcr.io/erikomis/gambiarrascript roda app.gs
+docker run --rm -it ghcr.io/erikomis/gambiarrascript repl
+```
+
+The working directory is `/app`. To package your app into an image (an API, a
+worker using `agenda`...), see [Deploying with Docker](/docs/en/servidor#deploying-with-docker).
+
+<Callout title="Need a shell?">
+  The image has no `sh` on purpose. For a base with a shell, copy just the
+  binary: `COPY --from=ghcr.io/erikomis/gambiarrascript /usr/local/bin/gs /usr/local/bin/gs`
+  in a `FROM alpine`.
+</Callout>
+
+## 4. Building with Docker (no Go install)
 
 `scripts/build` compiles **inside a** `golang:1.23` **container** and leaves
 the native binary for your system in `dist/gs`:

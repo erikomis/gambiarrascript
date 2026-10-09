@@ -168,6 +168,24 @@ trava nao e reentrante: pedir a mesma trava de dentro do proprio `com_trava`
 da erro (em vez de travar pra sempre). `pra_cada` numa colecao que outra
 goroutine esta mexendo percorre um retrato tirado no comeco do laco.
 
+## Agenda e datas
+
+```
+a_cada(60, gambiarra() log_info("ainda de pe") acabou_finalmente)
+agenda("0 9 * * 1-5", gambiarra() mostra "bom dia, tropa" acabou_finalmente)
+bota h = depois_de(5, gambiarra() mostra "5s depois" acabou_finalmente)
+cancela(h)
+
+mostra formata_data(agora(), "dddd, dd 'de' mmmm 'as' hh:mi", "America/Sao_Paulo")
+# quinta-feira, 08 de outubro as 14:05
+mostra le_data("25/12/2026", "dd/mm/aaaa")   # 2026-12-25T00:00:00Z
+```
+
+Cada agendamento roda na propria goroutine (cron de 5 campos no fuso local,
+com `*/5`, listas, faixas e atalhos tipo `@diario`); erro na tarefa vai pro
+stderr e o agendamento segue. O `gs roda` fica de pe enquanto tiver
+agendamento e o Ctrl+C para com calma. Nas datas, `mm` e mes e `mi` e minuto.
+
 ## Segurança e configuração
 
 ```
@@ -288,6 +306,25 @@ Baixa o binário da última release, confere o sha256 e instala em
 — instala em `%LOCALAPPDATA%\Programs\gambiarrascript` e poe no PATH do
 usuario. Passo a passo de cada sistema (PATH, WSL, Raspberry Pi, `.zip` na mao)
 na [doc de instalacao](https://erikomis.github.io/gambiarrascript/docs/instalacao/).
+
+### Docker — imagem oficial
+
+```bash
+docker run --rm ghcr.io/erikomis/gambiarrascript versao
+docker run --rm -v "$PWD:/app" ghcr.io/erikomis/gambiarrascript roda app.gs
+```
+
+Pra subir uma API (`docker build` em cima da imagem oficial):
+
+```dockerfile
+FROM ghcr.io/erikomis/gambiarrascript:latest
+COPY --chown=nonroot:nonroot . /app
+EXPOSE 8080
+CMD ["roda", "api.gs"]
+```
+
+Linux amd64 e arm64, distroless, roda como `nonroot`; `:latest` so anda nas
+releases estaveis. Detalhes no [deploy com Docker](https://erikomis.github.io/gambiarrascript/docs/servidor/#deploy-com-docker).
 
 Quer compilar você mesmo? Dois caminhos:
 

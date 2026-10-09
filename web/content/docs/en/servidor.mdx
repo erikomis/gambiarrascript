@@ -401,3 +401,39 @@ only that CA counts) or, as a last resort, `{"inseguro": deu_bom}` ("insecure")
 Failed → network error
 (`conecta_ws(): nao consegui conectar em "ws://..." (o servidor respondeu 401): ...`).
 WebSocket doesn't run in the playground (browser).
+
+## Deploying with Docker
+
+The [official image](/docs/en/instalacao#3-official-docker-image) already has
+`gs` as its `ENTRYPOINT` and `/app` as the working directory. To package an
+API, a 4-line `Dockerfile` does it:
+
+```dockerfile
+FROM ghcr.io/erikomis/gambiarrascript:latest
+COPY --chown=nonroot:nonroot . /app
+EXPOSE 8080
+CMD ["roda", "api.gs"]
+```
+
+```gambiarrascript
+# api.gs
+rota("GET", "/saude", gambiarra(req) funciona "ok" acabou_finalmente)
+escuta(env("PORTA", "8080"))
+```
+
+```bash
+docker build -t my-api .
+docker run --rm -p 8080:8080 my-api
+```
+
+- Listen on every interface (`escuta(8080)` or `":8080"`); `"127.0.0.1:8080"`
+  isn't reachable from outside the container.
+- `docker stop` sends SIGTERM: `escuta` shuts down gracefully (see above) and
+  schedules (`a_cada`, `agenda`) stop with it.
+- `--chown` lets the `nonroot` user write to `/app` (sqlite database,
+  `roda --cache`, uploads). For data that must outlive the container, use a
+  volume: `docker run -v data:/app/data ...`.
+- Pin the version (`:0.8.0`) in production; `:latest` moves with every stable
+  release. Add a `.dockerignore` so `.git` and friends aren't copied.
+- A worker with no server (just `agenda`/`a_cada`) works the same way: `gs
+  roda` stays up while there are schedules.

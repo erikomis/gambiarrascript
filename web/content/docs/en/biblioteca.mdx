@@ -250,6 +250,8 @@ layout: `2006-01-02 15:04:05`.
 | `dia_da_semana(inst)` | `(instante)` | `texto` (`"domingo"`, `"segunda"`, ..., `"sabado"`) — weekday names in Portuguese |
 | `diferenca_dias(i1, i2)` / `diferenca_horas(i1, i2)` | `(instante, instante)` | integer `numero` (can be negative) |
 | `converte_tz(inst, tz)` | `(instante, texto)` | ISO 8601 `texto` in the time zone (e.g. `"America/Sao_Paulo"`) |
+| `formata_data(inst, format[, tz])` | `(instante, texto[, texto])` | `texto` in a friendly format (`"dd/mm/aaaa hh:mi"`) |
+| `le_data(text, format[, tz])` | `(texto, texto[, texto])` | ISO 8601 `texto` — the reverse of `formata_data` |
 | `espera_ms(ms)` | `(numero)` | `nada` — sleeps `ms` milliseconds |
 
 ```gambiarrascript
@@ -261,6 +263,41 @@ mostra soma_tempo(natal, duracao({"h": 2}))         # 2024-12-25T12:00:00Z
 mostra converte_tz(natal, "America/Sao_Paulo")      # 2024-12-25T07:00:00-03:00
 espera_ms(10)                                       # 10ms nap
 ```
+
+### Friendly format: `formata_data` and `le_data`
+
+No need to memorize Go's `2006-01-02`. The tokens are lowercase Portuguese
+and unambiguous: **`mm` is always the month**, minutes are **`mi`**.
+
+| Token | Becomes | Token | Becomes |
+| --- | --- | --- | --- |
+| `aaaa` (year) | `2026` | `aa` | `26` |
+| `mm` (month) | `10` | `mmm` / `mmmm` | `out` / `outubro` |
+| `dd` (day) | `08` | `ddd` / `dddd` | `qui` / `quinta-feira` |
+| `hh` (hour) | `14` (00-23) | `mi` / `ss` | minute / second |
+
+Month and weekday names are in Portuguese. Text inside single quotes is
+literal (`'de'`, `'as'`); two single quotes (`''`) become one. Everything else
+(`/`, `:`, `-`, space, comma) passes through.
+
+The optional 3rd argument is the time zone: an IANA name
+(`"America/Sao_Paulo"`), `"UTC"` or `"local"`. Without it, `formata_data`
+uses the offset carried by the instant — and `agora()` is UTC, so pass the
+zone to show local time. `le_data` without a zone parses in UTC. When parsing,
+month and weekday names accept uppercase and missing accents (`"MARCO"`,
+`"sabado"`), and dates that don't exist (`31/02`) raise an error.
+
+```gambiarrascript
+bota t = "2026-10-08T14:05:09Z"
+mostra formata_data(t, "dd/mm/aaaa hh:mi:ss")              # 08/10/2026 14:05:09
+mostra formata_data(t, "dddd, dd 'de' mmmm 'de' aaaa")     # quinta-feira, 08 de outubro de 2026
+mostra formata_data(t, "hh'h'mi", "America/Sao_Paulo")     # 11h05
+mostra le_data("08/10/2026", "dd/mm/aaaa")                 # 2026-10-08T00:00:00Z
+mostra le_data("25/12/2026 20:00", "dd/mm/aaaa hh:mi", "America/Sao_Paulo")
+# 2026-12-25T20:00:00-03:00
+```
+
+`formata_tempo`/`parse_tempo` (Go layout) keep working.
 
 ## Crypto, encoding and compression
 
@@ -642,6 +679,57 @@ Details in [Arruma / quebrou](/docs/en/erros).
 
 The keyword `bora fn(args)` fires the gambiarra off in a goroutine and returns
 a future. Details in [Concurrency](/docs/en/concorrencia).
+
+## Scheduled tasks
+
+| Builtin | Signature | Returns |
+| --- | --- | --- |
+| `a_cada(seconds, fn)` | `(numero, gambiarra)` | schedule — runs `fn()` every so many seconds |
+| `depois_de(seconds, fn)` | `(numero, gambiarra)` | schedule — runs `fn()` once |
+| `agenda(cron, fn)` | `(texto, gambiarra)` | schedule — runs `fn()` whenever the cron matches |
+| `cancela(s)` | `(schedule)` | `deu_bom` if it was still active, `deu_ruim` if it had already ended |
+
+Seconds may be fractional (`0.5`). The gambiarra takes no arguments and runs
+in **its own goroutine** (collections are already goroutine-safe; for compound
+operations use `com_trava`). Two runs of the same schedule never overlap: if
+one takes longer than the interval, missed ticks are skipped. **An error
+inside the task goes to stderr and the schedule keeps going.** `sai(code)`
+inside a task cancels everything and exits the process with that code.
+
+The cron has the classic 5 fields, in the machine's **local time zone** (`TZ`
+variable): `minute hour day month weekday` (0-59, 0-23, 1-31, 1-12, 0-6 with
+0 = Sunday; 7 is Sunday too). Each field accepts `*`, a number, a list
+(`1,15,30`), a range (`9-18`) and a step (`*/5`, `0-30/10`). If both day
+**and** weekday are restricted, either one matching is enough (like Unix
+cron). Shortcuts: `@minuto`, `@hora`, `@diario`, `@semanal`, `@mensal`,
+`@anual` (and the English `@hourly`, `@daily`...). An invalid cron, or one
+that never happens (`0 0 30 2 *`), raises an error right away.
+
+```gambiarrascript
+bota visitas = {"n": 0}
+
+a_cada(30, gambiarra()
+    log_info("ainda de pe", {"visitas": visitas["n"]})
+acabou_finalmente)
+
+agenda("0 9 * * 1-5", gambiarra()       # weekdays, 9am
+    mostra "bom dia, tropa"
+acabou_finalmente)
+
+bota lembrete = depois_de(5, gambiarra() mostra "5 segundos depois" acabou_finalmente)
+cancela(lembrete)                       # changed my mind
+```
+
+<Callout title="The script stays up while there are schedules">
+  When the main script ends, `gs roda` **waits** while any schedule is active
+  (it prints `agendamentos rodando (ctrl+c pra parar)` to stderr). Ctrl+C (or
+  SIGTERM, which `docker stop` sends) cancels everything, waits up to 10s for
+  tasks that are running and exits. If there were only `depois_de` calls, the
+  process exits by itself after the last one fires. With `escuta` the server
+  already keeps the process alive, and the Ctrl+C that stops the server stops
+  the schedules too. In `gs testa` leftover schedules are cancelled at the end
+  of each file; in the playground (browser) these builtins raise an error.
+</Callout>
 
 ## Tests
 

@@ -54,7 +54,9 @@ func init() {
 // viria com 0 em tudo e cairia no caminho checado da VM — funciona, mas
 // invalida pra nao rodar lento a toa.
 // 15 = builtins migra e valida no fim da lista.
-const formatoGSC = 15
+// 16 = a_cada, depois_de, agenda, cancela, formata_data e le_data no fim da
+// lista de builtins.
+const formatoGSC = 16
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

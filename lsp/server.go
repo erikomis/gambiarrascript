@@ -111,6 +111,8 @@ var builtinsCompletion = []string{
 	"trava", "com_trava",
 	// tls
 	"gera_certificado",
+	// tarefas agendadas e datas amigaveis
+	"a_cada", "depois_de", "agenda", "cancela", "formata_data", "le_data",
 }
 
 // builtinsSet espelha builtinsCompletion num map pra lookup rapido.
@@ -239,6 +241,13 @@ var docsBuiltin = map[string]string{
 	"como_tipo":        "como_tipo(valor, Tipo) -> valor: o type assertion do Go (`v.(Ponto)`). Devolve o proprio valor se ele satisfaz o Tipo (treta ou combinado); senao quebra com o motivo (\"esperava Ponto, veio Circulo\" / \"falta o metodo area\").",
 	"migra":            "migra(conexao, [pasta]) -> lista: aplica as migracoes pendentes da pasta (padrao \"migracoes\": NNN_nome.sobe.sql, em ordem) e devolve as versoes aplicadas agora (vazia = banco em dia). Anota em gs_migracoes com checksum; arquivo aplicado que mudou = quebra. Desfazer e pelo `gs migra desce`.",
 	"valida":           "valida(valor, esquema) -> lista de textos: os erros com o caminho (\"idade: tem que ser numero, veio texto\", \"itens[2].preco: obrigatorio\"); vazia = ok. Esquema: {campo: tipo} com tipo texto, numero, inteiro, booleano, lista, dicionario, email, data (ISO) ou qualquer (\"texto?\" = opcional), ou {campo: {\"tipo\", \"obrigatorio\", \"min\", \"max\", \"padrao\", \"opcoes\", \"itens\", \"campos\"}}. `\"_estrito\": deu_bom` recusa campo a mais.",
+	// tarefas agendadas e datas amigaveis
+	"a_cada":       "a_cada(segundos, gambiarra) -> agendamento: roda a gambiarra (sem argumentos) de tantos em tantos segundos, na propria goroutine. Erro na tarefa vai pro stderr e o agendamento segue. O `gs roda` fica de pe enquanto houver agendamento (ctrl+c para com calma). Para com cancela().",
+	"depois_de":    "depois_de(segundos, gambiarra) -> agendamento: roda a gambiarra uma vez so, depois de tantos segundos (aceita fracao: 0.5). Da pra desistir com cancela().",
+	"agenda":       "agenda(\"cron\", gambiarra) -> agendamento: cron de 5 campos (minuto hora dia mes dia_semana; *, listas 1,15, faixas 9-18, passos */5) no fuso local. Atalhos: @minuto, @hora, @diario, @semanal, @mensal, @anual. Ex.: agenda(\"0 9 * * 1-5\", f) = dias uteis as 9h.",
+	"cancela":      "cancela(agendamento) -> booleano: para o a_cada/depois_de/agenda. deu_bom se ainda tava ativo; quem ja ta rodando termina a vez dele.",
+	"formata_data": "formata_data(tempo, formato, [fuso]) -> texto: formato amigavel. aaaa/aa ano, mm mes, mmm \"out\", mmmm \"outubro\", dd dia, ddd \"qui\", dddd \"quinta-feira\", hh hora, mi minuto, ss segundo; texto entre aspas simples e literal. Ex.: formata_data(agora(), \"dd/mm/aaaa hh:mi\", \"America/Sao_Paulo\").",
+	"le_data":      "le_data(texto, formato, [fuso]) -> texto ISO 8601: o contrario do formata_data. le_data(\"08/10/2026\", \"dd/mm/aaaa\") = \"2026-10-08T00:00:00Z\". Sem fuso le em UTC; nome de mes/dia aceita sem acento e maiuscula.",
 	// rede baixo nivel
 	"conecta_tcp": "conecta_tcp(host_porta, [opcoes]) -> conexao: abre um socket TCP (host_porta = \"127.0.0.1:9000\"). opcoes: {\"modo\": \"linha\"|\"bruto\", \"timeout\": segundos, \"tls\": deu_bom | {\"servidor\", \"inseguro\", \"ca\"}}. Usa com envia/recebe/fecha.",
 	"escuta_tcp":  "escuta_tcp(porta, handler, [opcoes]): servidor TCP; cada conexao roda handler(conexao) na propria goroutine. Bloqueia ate ctrl+c ou o cano opcoes.para. opcoes: modo, timeout, pronto, para, tls ({\"cert\": \"cert.pem\", \"chave\": \"chave.pem\"}).",

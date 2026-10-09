@@ -236,6 +236,8 @@ func rodaUmTeste(arq string, usarVM bool, out io.Writer, gancho object.GanchoLin
 	interp := interpreter.New(out)
 	interp.DefinirArquivo(arq)
 	interp.ResetTeste()
+	// teste nao fica de pe esperando agendamento: o que sobrou morre aqui
+	defer interp.CancelaAgendamentos()
 
 	var runErro object.Object
 	if usarVM {

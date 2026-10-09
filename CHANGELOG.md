@@ -20,7 +20,22 @@ no [ROADMAP](ROADMAP.md).
   `min`, `max`, `padrao`, `opcoes`, `itens`, `campos`; `"texto?"` = opcional e
   `"_estrito"` recusa campo a mais. O `examples/api_rest.gs` responde `400`
   com a lista.
-- Cache `.gsc` antigo é descartado sozinho (formato 15: builtins novas).
+- **Tarefas agendadas**: `a_cada(segundos, f)`, `depois_de(segundos, f)`,
+  `agenda("0 9 * * 1-5", f)` (cron de 5 campos com `*`, listas, faixas e
+  passos, no fuso local; atalhos `@minuto`, `@hora`, `@diario`, `@semanal`,
+  `@mensal`, `@anual`) e `cancela(h)`. Cada agendamento roda na própria
+  goroutine; erro na tarefa vai pro stderr e o agendamento segue. O `gs roda`
+  fica de pé enquanto houver agendamento e o Ctrl+C (ou SIGTERM) para com
+  calma.
+- **Datas sem layout do Go**: `formata_data(t, "dd/mm/aaaa hh:mi")` e
+  `le_data("08/10/2026", "dd/mm/aaaa")`, com nomes de mês e dia em português
+  (`mmmm` → "outubro", `dddd` → "quinta-feira") e fuso opcional. `mm` é
+  sempre mês; minuto é `mi`. `formata_tempo`/`parse_tempo` continuam.
+- **Imagem Docker oficial**: `ghcr.io/erikomis/gambiarrascript` (linux amd64
+  e arm64, distroless, usuário `nonroot`) publicada a cada release, com
+  `:latest` só nas estáveis. Doc de deploy de API com
+  `FROM ghcr.io/erikomis/gambiarrascript`.
+- Cache `.gsc` antigo é descartado sozinho (formato 16: builtins novas).
 
 ## v0.7.1 — 2026-10-08
 

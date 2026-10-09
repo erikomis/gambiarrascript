@@ -193,6 +193,16 @@ func rodaNaVM(bc *compiler.Bytecode, dirBase string, scriptArgs []string) {
 		reportaErroVM(err)
 		os.Exit(1)
 	}
+	esperaAgendamentos(interp)
+}
+
+// esperaAgendamentos segura o processo enquanto o script tiver a_cada,
+// depois_de ou agenda de pe (ctrl+c para com calma). Se uma tarefa chamou
+// sai(codigo), sai com esse codigo.
+func esperaAgendamentos(interp *interpreter.Interpreter) {
+	if s := interp.EsperaAgendamentos(); s != nil {
+		os.Exit(s.Codigo)
+	}
 }
 
 func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []string) {
@@ -250,6 +260,7 @@ func rodarArquivoCache(caminho string, usarVM, usarCache bool, scriptArgs []stri
 		}
 		os.Exit(1)
 	}
+	esperaAgendamentos(interp)
 }
 
 // trataSaiVM: quando o Run da VM devolve um sai(codigo), encerra o processo

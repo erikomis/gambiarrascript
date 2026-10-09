@@ -7,7 +7,8 @@ Binario pronto pra **macOS, Linux e Windows** (64 bits). Escolhe o teu
 sistema abaixo — nenhum dos instaladores pede `sudo` ou admin, e todos conferem
 o sha256 do download contra o `checksums.txt` da release antes de instalar.
 Prefere compilar? Pula pra [Compilando com Go](#2-compilando-com-go) ou
-[Com Docker](#3-com-docker-sem-instalar-go).
+[Compilando com Docker](#4-compilando-com-docker-sem-instalar-go). So quer
+rodar num container? Tem a [imagem oficial](#3-imagem-docker-oficial).
 
 ## 1. Instalador (recomendado)
 
@@ -121,7 +122,31 @@ gs --version
 O `scripts/install` so copia o `dist/gs` pro `PATH` (e no macOS re-assina o
 binario, senao o sistema mata ele com "Killed: 9").
 
-## 3. Com Docker (sem instalar Go)
+## 3. Imagem Docker oficial
+
+Cada release publica a imagem **`ghcr.io/erikomis/gambiarrascript`** (linux
+`amd64` e `arm64`), com a tag da versao (ex.: `:0.8.0`) e `:latest` (pre-release
+nao mexe no `latest`). Dentro tem so o binario `gs` estatico numa base
+distroless: certificados (pro `busca` em https) e fusos horarios inclusos,
+sem shell, rodando como usuario `nonroot`. O `ENTRYPOINT` e o `gs`, entao o
+que vier depois da imagem e subcomando:
+
+```bash
+docker run --rm ghcr.io/erikomis/gambiarrascript versao
+docker run --rm -v "$PWD:/app" ghcr.io/erikomis/gambiarrascript roda app.gs
+docker run --rm -it ghcr.io/erikomis/gambiarrascript repl
+```
+
+O diretorio de trabalho e o `/app`. Pra empacotar teu app numa imagem (API,
+worker com `agenda`...), veja [Deploy com Docker](/docs/servidor#deploy-com-docker).
+
+<Callout title="Precisa de shell?">
+  A imagem nao tem `sh` de proposito. Pra uma base com shell, copie so o
+  binario: `COPY --from=ghcr.io/erikomis/gambiarrascript /usr/local/bin/gs /usr/local/bin/gs`
+  num `FROM alpine`.
+</Callout>
+
+## 4. Compilando com Docker (sem instalar Go)
 
 O `scripts/build` compila **dentro de um container** `golang:1.23` e deixa o
 binario nativo do teu sistema em `dist/gs`:

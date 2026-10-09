@@ -285,6 +285,8 @@ var nomesBuiltins = []string{
 	"satisfaz", "como_tipo",
 	// banco: migracoes; validacao de entrada
 	"migra", "valida",
+	// tarefas agendadas e datas amigaveis
+	"a_cada", "depois_de", "agenda", "cancela", "formata_data", "le_data",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que

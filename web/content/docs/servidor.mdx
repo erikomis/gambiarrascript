@@ -391,3 +391,39 @@ esse CA vale) ou, em ultimo caso, `{"inseguro": deu_bom}` — mesmas opcoes do
 [`busca`](/docs/http#https-com-certificado-proprio-ca-e-inseguro). Falhou → erro de rede
 (`conecta_ws(): nao consegui conectar em "ws://..." (o servidor respondeu 401): ...`).
 WebSocket nao roda no playground (navegador).
+
+## Deploy com Docker
+
+A [imagem oficial](/docs/instalacao#3-imagem-docker-oficial) ja tem o `gs`
+como `ENTRYPOINT` e `/app` como diretorio de trabalho. Pra empacotar uma API,
+um `Dockerfile` de 4 linhas resolve:
+
+```dockerfile
+FROM ghcr.io/erikomis/gambiarrascript:latest
+COPY --chown=nonroot:nonroot . /app
+EXPOSE 8080
+CMD ["roda", "api.gs"]
+```
+
+```gambiarrascript
+# api.gs
+rota("GET", "/saude", gambiarra(req) funciona "ok" acabou_finalmente)
+escuta(env("PORTA", "8080"))
+```
+
+```bash
+docker build -t minha-api .
+docker run --rm -p 8080:8080 minha-api
+```
+
+- Escute em todas as interfaces (`escuta(8080)` ou `":8080"`); `"127.0.0.1:8080"`
+  nao e alcancavel de fora do container.
+- O `docker stop` manda SIGTERM: o `escuta` desliga com calma (veja acima) e os
+  agendamentos (`a_cada`, `agenda`) param junto.
+- O `--chown` deixa o usuario `nonroot` gravar no `/app` (banco sqlite,
+  `roda --cache`, uploads). Pra dado que precisa sobreviver ao container, use
+  volume: `docker run -v dados:/app/dados ...`.
+- Fixe a versao (`:0.8.0`) em producao; o `:latest` anda a cada release
+  estavel. Ponha um `.dockerignore` pra nao copiar `.git` e afins.
+- Worker sem servidor (so `agenda`/`a_cada`) funciona igual: o `gs roda` fica
+  de pe enquanto tiver agendamento.

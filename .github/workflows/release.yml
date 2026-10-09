@@ -1,9 +1,13 @@
 # Release: ao dar push de uma tag v* (ex: v0.2.0) testa, cross-compila o gs
-# pras 5 plataformas, empacota a extensao do VSCode e publica um GitHub
-# Release com notas automaticas + checksums.txt.
+# pras 5 plataformas, empacota a extensao do VSCode, publica um GitHub
+# Release com notas automaticas + checksums.txt e sobe a imagem Docker
+# multi-arch (linux/amd64 + linux/arm64) em ghcr.io/erikomis/gambiarrascript
+# com a tag da versao e :latest (pre-release, tag com hifen, nao mexe no
+# :latest).
 #
-# Rodar na mao (Actions > release > Run workflow) e um ensaio: monta tudo e
-# sobe como artifact da run, mas NAO publica release nenhum.
+# Rodar na mao (Actions > release > Run workflow) e um ensaio: monta tudo
+# (imagem Docker inclusive, com o smoke test) e sobe como artifact da run,
+# mas NAO publica release nem imagem nenhuma.
 name: release
 
 on:
@@ -18,6 +22,7 @@ on:
 
 permissions:
   contents: write
+  packages: write # push da imagem no ghcr.io com o GITHUB_TOKEN
 
 concurrency:
   group: release-${{ github.ref }}
@@ -79,9 +84,87 @@ jobs:
           VERSAO: ${{ steps.versao.outputs.versao }}
         run: ./scripts/release "$VERSAO"
 
+      # ---- imagem Docker (packaging/docker/Dockerfile) ----
+      # Reaproveita os binarios linux que o scripts/release acabou de gerar:
+      # nada e compilado dentro do Docker, e a imagem carrega o MESMO gs dos
+      # tarballs do release.
+      - name: docker - contexto e tags
+        id: docker
+        env:
+          VERSAO: ${{ steps.versao.outputs.versao }}
+          REPO: ${{ github.repository }}
+        run: |
+          ctx=dist/docker
+          rm -rf "$ctx"
+          mkdir -p "$ctx/app"
+          touch "$ctx/app/.mantem"
+          for arch in amd64 arm64; do
+            mkdir -p "$ctx/linux_$arch"
+            tar -xzf "dist/release/gs_${VERSAO}_linux_${arch}.tar.gz" -C "$ctx/linux_$arch" gs
+          done
+          imagem="ghcr.io/$(echo "$REPO" | tr '[:upper:]' '[:lower:]')"
+          tags="$imagem:$VERSAO"
+          # pre-release (versao com hifen) nao move o :latest
+          case "$VERSAO" in *-*) ;; *) tags="$tags,$imagem:latest" ;; esac
+          publica=false
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
+            publica=true
+          fi
+          {
+            echo "imagem=$imagem"
+            echo "tags=$tags"
+            echo "publica=$publica"
+          } >> "$GITHUB_OUTPUT"
+          echo "tags: $tags (publica: $publica)"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: docker - login no ghcr.io
+        if: steps.docker.outputs.publica == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # so amd64 e carregada no daemon local, pro smoke test conseguir rodar
+      - name: docker - imagem de teste (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: dist/docker
+          file: packaging/docker/Dockerfile
+          platforms: linux/amd64
+          build-args: VERSAO=${{ steps.versao.outputs.versao }}
+          load: true
+          push: false
+          tags: gambiarrascript:smoke
+
+      - name: docker - smoke test
+        env:
+          VERSAO: ${{ steps.versao.outputs.versao }}
+        run: |
+          set -o pipefail
+          docker run --rm gambiarrascript:smoke versao | tee /tmp/versao.txt
+          grep -qF "$VERSAO" /tmp/versao.txt
+          # roda um .gs montado em /app (o WORKDIR da imagem)
+          docker run --rm -v "$PWD/examples:/app:ro" gambiarrascript:smoke roda salve.gs | tee /tmp/salve.txt
+          grep -qF "Salve, tropa!" /tmp/salve.txt
+
+      - name: docker - multi-arch (push so em tag)
+        uses: docker/build-push-action@v6
+        with:
+          context: dist/docker
+          file: packaging/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSAO=${{ steps.versao.outputs.versao }}
+          push: ${{ steps.docker.outputs.publica == 'true' }}
+          tags: ${{ steps.docker.outputs.tags }}
+
       - name: resumo (formula Homebrew pra copiar)
         env:
           VERSAO: ${{ steps.versao.outputs.versao }}
+          TAGS_DOCKER: ${{ steps.docker.outputs.tags }}
+          PUBLICA_DOCKER: ${{ steps.docker.outputs.publica }}
         run: |
           {
             echo "## Release $VERSAO"
@@ -95,6 +178,9 @@ jobs:
             echo '```ruby'
             cat dist/release/gambiarrascript.rb
             echo '```'
+            echo
+            echo '### Imagem Docker'
+            echo "tags: $TAGS_DOCKER (publicada: $PUBLICA_DOCKER)"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4

@@ -320,6 +320,7 @@ func rodarEmbedado() bool {
 			reportaErroVM(err)
 			os.Exit(1)
 		}
+		esperaAgendamentos(interp)
 		return true
 	}
 
@@ -328,5 +329,6 @@ func rodarEmbedado() bool {
 		fmt.Println(res.Inspect())
 		os.Exit(1)
 	}
+	esperaAgendamentos(interp)
 	return true
 }

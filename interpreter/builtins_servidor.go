@@ -296,6 +296,8 @@ func (s *servidorEstado) builtinEscuta(args []object.Object) object.Object {
 		}
 		return NADA
 	case <-sinais:
+		// ctrl+c derruba o processo inteiro: os agendamentos param junto
+		s.i.CancelaAgendamentos()
 	case <-s.desliga:
 	}
 	// segundo ctrl+c volta a matar na hora

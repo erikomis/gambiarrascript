@@ -251,6 +251,8 @@ layout de referencia do Go: `2006-01-02 15:04:05`.
 | `dia_da_semana(inst)` | `(instante)` | `texto` (`"domingo"`, `"segunda"`, ..., `"sabado"`) |
 | `diferenca_dias(i1, i2)` / `diferenca_horas(i1, i2)` | `(instante, instante)` | `numero` inteiro (pode ser negativo) |
 | `converte_tz(inst, tz)` | `(instante, texto)` | `texto` ISO 8601 no fuso (ex: `"America/Sao_Paulo"`) |
+| `formata_data(inst, formato[, fuso])` | `(instante, texto[, texto])` | `texto` com formato amigavel (`"dd/mm/aaaa hh:mi"`) |
+| `le_data(texto, formato[, fuso])` | `(texto, texto[, texto])` | `texto` ISO 8601 — o contrario do `formata_data` |
 | `espera_ms(ms)` | `(numero)` | `nada` — dorme `ms` milissegundos |
 
 ```gambiarrascript
@@ -262,6 +264,40 @@ mostra soma_tempo(natal, duracao({"h": 2}))         # 2024-12-25T12:00:00Z
 mostra converte_tz(natal, "America/Sao_Paulo")      # 2024-12-25T07:00:00-03:00
 espera_ms(10)                                       # cochilo de 10ms
 ```
+
+### Formato amigavel: `formata_data` e `le_data`
+
+Sem decorar o `2006-01-02` do Go. Os marcadores sao minusculos e nao tem
+ambiguidade: **`mm` e sempre mes**, minuto e **`mi`**.
+
+| Marcador | Vira | Marcador | Vira |
+| --- | --- | --- | --- |
+| `aaaa` | `2026` | `aa` | `26` |
+| `mm` | `10` | `mmm` / `mmmm` | `out` / `outubro` |
+| `dd` | `08` | `ddd` / `dddd` | `qui` / `quinta-feira` |
+| `hh` | `14` (00-23) | `mi` / `ss` | minuto / segundo |
+
+Texto entre aspas simples sai literal (`'de'`, `'as'`); duas aspas simples
+(`''`) viram uma. O resto (`/`, `:`, `-`, espaco, virgula) passa reto.
+
+O 3o argumento opcional e o fuso: nome IANA (`"America/Sao_Paulo"`), `"UTC"`
+ou `"local"`. Sem ele, o `formata_data` usa o fuso que veio no instante — e o
+`agora()` e UTC, entao pra mostrar a hora de Brasilia passe o fuso. O
+`le_data` sem fuso le em UTC. Na leitura, nome de mes e de dia aceita
+maiuscula e falta de acento (`"MARCO"`, `"sabado"`), e data que nao existe
+(`31/02`) da erro.
+
+```gambiarrascript
+bota t = "2026-10-08T14:05:09Z"
+mostra formata_data(t, "dd/mm/aaaa hh:mi:ss")              # 08/10/2026 14:05:09
+mostra formata_data(t, "dddd, dd 'de' mmmm 'de' aaaa")     # quinta-feira, 08 de outubro de 2026
+mostra formata_data(t, "hh'h'mi", "America/Sao_Paulo")     # 11h05
+mostra le_data("08/10/2026", "dd/mm/aaaa")                 # 2026-10-08T00:00:00Z
+mostra le_data("25/12/2026 20:00", "dd/mm/aaaa hh:mi", "America/Sao_Paulo")
+# 2026-12-25T20:00:00-03:00
+```
+
+`formata_tempo`/`parse_tempo` (layout do Go) continuam valendo.
 
 ## Crypto, codificacao e compressao
 
@@ -638,6 +674,58 @@ Detalhes em [Arruma / quebrou](/docs/erros).
 
 A palavra-chave `bora fn(args)` dispara a gambiarra numa goroutine e devolve
 um futuro. Detalhes em [Concorrencia](/docs/concorrencia).
+
+## Tarefas agendadas
+
+| Builtin | Assinatura | Devolve |
+| --- | --- | --- |
+| `a_cada(segundos, fn)` | `(numero, gambiarra)` | agendamento — roda `fn()` de tantos em tantos segundos |
+| `depois_de(segundos, fn)` | `(numero, gambiarra)` | agendamento — roda `fn()` uma vez so |
+| `agenda(cron, fn)` | `(texto, gambiarra)` | agendamento — roda `fn()` quando o cron bater |
+| `cancela(ag)` | `(agendamento)` | `deu_bom` se ainda tava ativo, `deu_ruim` se ja tinha acabado |
+
+Os segundos aceitam fracao (`0.5`). A gambiarra nao recebe argumento e roda na
+**propria goroutine** (as colecoes ja sao seguras entre goroutines; pra
+operacao composta use `com_trava`). Duas execucoes do mesmo agendamento nunca
+se sobrepoem: se uma demora mais que o intervalo, os disparos perdidos sao
+pulados. **Erro dentro da tarefa vai pro stderr e o agendamento continua.**
+`sai(codigo)` dentro de uma tarefa cancela todos e encerra o processo com o
+codigo.
+
+O cron tem os 5 campos classicos, no **fuso local** da maquina (variavel
+`TZ`): `minuto hora dia mes dia_semana` (0-59, 0-23, 1-31, 1-12, 0-6 com
+0 = domingo; 7 tambem e domingo). Cada campo aceita `*`, numero, lista
+(`1,15,30`), faixa (`9-18`) e passo (`*/5`, `0-30/10`). Se dia **e**
+dia_semana forem restritos, basta um dos dois bater (igual ao cron do Unix).
+Atalhos: `@minuto`, `@hora`, `@diario`, `@semanal`, `@mensal`, `@anual` (e os
+nomes em ingles `@hourly`, `@daily`...). Cron invalido ou que nunca acontece
+(`0 0 30 2 *`) da erro na hora.
+
+```gambiarrascript
+bota visitas = {"n": 0}
+
+a_cada(30, gambiarra()
+    log_info("ainda de pe", {"visitas": visitas["n"]})
+acabou_finalmente)
+
+agenda("0 9 * * 1-5", gambiarra()       # dias uteis, 9h
+    mostra "bom dia, tropa"
+acabou_finalmente)
+
+bota lembrete = depois_de(5, gambiarra() mostra "5 segundos depois" acabou_finalmente)
+cancela(lembrete)                       # desisti
+```
+
+<Callout title="O script fica de pe enquanto tiver agendamento">
+  Quando o script principal termina, o `gs roda` **espera** enquanto houver
+  agendamento ativo (escreve `agendamentos rodando (ctrl+c pra parar)` no
+  stderr). Ctrl+C (ou SIGTERM, o que o `docker stop` manda) cancela tudo,
+  espera ate 10s as tarefas que estao rodando e sai. Se so tinha `depois_de`,
+  o processo sai sozinho depois do ultimo disparo. Com `escuta` o servidor ja
+  segura o processo, e o Ctrl+C que derruba o servidor para os agendamentos
+  junto. No `gs testa` o que sobrar de agendamento e cancelado no fim de cada
+  arquivo; no playground (navegador) esses builtins dao erro.
+</Callout>
 
 ## Testes
 
