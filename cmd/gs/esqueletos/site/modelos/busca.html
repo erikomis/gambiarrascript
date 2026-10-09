@@ -1,0 +1,10 @@
+{{ usa "base.html" }}
+{{ bloco "titulo" }}busca: {{ q }} · {{ site.nome }}{{ acabou }}
+{{ bloco "conteudo" }}
+    <h1>Busca por "{{ q }}"</h1>
+    {{ pra_cada artigo em achados }}
+    {{ inclui "parciais/cartao.html" }}
+    {{ se_nao_colar }}
+    <p>nada encontrado.</p>
+    {{ acabou }}
+{{ acabou }}

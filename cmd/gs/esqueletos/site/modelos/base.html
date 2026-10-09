@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ bloco "titulo" }}{{ site.nome }}{{ acabou }}</title>
+  <link rel="stylesheet" href="/estatico/estilo.css">
+</head>
+<body>
+  {{ inclui "parciais/cabecalho.html" }}
+  <main>
+    {{ bloco "conteudo" }}
+    <p>nada por aqui</p>
+    {{ acabou }}
+  </main>
+  {{ inclui "parciais/rodape.html" }}
+</body>
+</html>

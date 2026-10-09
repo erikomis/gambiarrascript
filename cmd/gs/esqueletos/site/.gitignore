@@ -1,0 +1,6 @@
+.env
+*.gsc
+gs_modulos/
+
+# binario do `gs build`
+/__NOME__

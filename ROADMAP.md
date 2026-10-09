@@ -926,6 +926,18 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       atalho de `campos`; `"_estrito"` recusa campo a mais. Esquema errado
       quebra (não vira item da lista). Pura, mesma função nos 2 engines;
       `examples/api_rest.gs` responde `400` com a lista.
+- [x] **`gs novo <api | site | script> <nome>`** — scaffold com os modelos
+      embutidos no binário (`go:embed all:esqueletos` em `cmd/gs`). A `api`
+      junta tudo que já existia: `.env` + `opcoes`, `conecta` sqlite +
+      `migra` na subida, cadastro (`hash_senha` + `valida`, 409 no email
+      repetido via `quebrou ... se`), login com JWT (hash falso pro email que
+      não existe gastar o mesmo tempo), middleware de log e de JWT, CRUD com
+      dono por usuário (o de outro dá 404), `migracoes/`, testes dos
+      ajudantes puros, `Dockerfile` na imagem oficial. `site` tem layout +
+      parciais + laço + `serve_pasta`; `script`, `opcoes` + `--ajuda`.
+      Recusa pasta com conteúdo; nome em minúscula (vira tag Docker). O teste
+      em Go confere que todo `.gs` gerado parseia, passa no lint sem aviso,
+      já está formatado e que os `*_test.gs` do projeto passam.
 
 **Editor / LSP**
 

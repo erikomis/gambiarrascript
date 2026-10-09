@@ -129,6 +129,8 @@ func main() {
 		cmdCheck(os.Args[2:])
 	case "init":
 		cmdInit(os.Args[2:])
+	case "novo":
+		cmdNovo(os.Args[2:])
 	case "bench":
 		cmdBench(os.Args[2:])
 	case "get":
@@ -163,6 +165,7 @@ func uso() {
 	fmt.Println("  gs formata -w <arquivo.gs>...         # formata e sobrescreve no disco")
 	fmt.Println("  gs check <arquivo.gs>...               # parse + lint (erros e avisos)")
 	fmt.Println("  gs init [nome]                         # cria gambiarra.json + principal.gs")
+	fmt.Println("  gs novo <api|site|script> <nome>       # cria um projeto pronto pra rodar (gs novo lista os tipos)")
 	fmt.Println("  gs bench [--tree] <arquivo.gs> [n]     # mede o tempo de execucao (n rodadas)")
 	fmt.Println("  gs get <url | github.com/u/r/x.gs@ref> # baixa um modulo pra gs_modulos/ (+ lock)")
 	fmt.Println("  gs instala [--atualiza]                # instala as dependencias, conferindo o gambiarra.lock")

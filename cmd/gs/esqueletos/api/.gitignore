@@ -1,0 +1,13 @@
+# segredos e config local
+.env
+
+# banco sqlite local (a pasta dados/ fica, o conteudo nao)
+dados/*
+!dados/.gitkeep
+
+# bytecode do `gs roda --cache` e dependencias do `gs instala`
+*.gsc
+gs_modulos/
+
+# binario do `gs build`
+/__NOME__

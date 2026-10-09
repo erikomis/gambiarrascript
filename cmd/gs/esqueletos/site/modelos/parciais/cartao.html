@@ -1,0 +1,5 @@
+<article class="cartao">
+  <h2><a href="/artigos/{{ artigo.slug }}">{{ artigo.titulo }}</a></h2>
+  <p class="meta">{{ artigo.data }} · {{ artigo.tags | junta ", " }}</p>
+  <p>{{ artigo.resumo }}</p>
+</article>

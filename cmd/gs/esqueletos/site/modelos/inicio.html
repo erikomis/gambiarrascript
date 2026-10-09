@@ -1,0 +1,15 @@
+{{ usa "base.html" }}
+{{# pagina inicial: o layout e o base.html; aqui so os blocos }}
+{{ bloco "conteudo" }}
+    <h1>Artigos</h1>
+    <p class="tags">
+      {{ pra_cada tag em tags }}
+      <a href="/busca?q={{ tag }}">#{{ tag }}</a>
+      {{ acabou }}
+    </p>
+    {{ pra_cada artigo em artigos }}
+    {{ inclui "parciais/cartao.html" }}
+    {{ se_nao_colar }}
+    <p>nenhum artigo ainda.</p>
+    {{ acabou }}
+{{ acabou }}

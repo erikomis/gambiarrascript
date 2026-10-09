@@ -139,6 +139,21 @@ gs roda examples/texto.gs
 Sao um bom ponto de partida pra fuçar [Biblioteca padrao](/docs/biblioteca)
 e [Receitas](/docs/exemplos).
 
+## Comecando um projeto
+
+Pra um projeto de verdade, o `gs novo` monta a pasta inteira, ja rodando e
+com testes:
+
+```bash
+gs novo api minha-api      # API REST: sqlite, migracoes, login com JWT, CRUD
+gs novo site meu-site      # site com modelos HTML (layout, parciais, laco)
+gs novo script meu-script  # script de linha de comando com flags e --ajuda
+cd minha-api && gs testa && gs roda principal.gs
+```
+
+Cada um vem com um `README.md` explicando como rodar, testar e fazer o
+deploy. Detalhes em [Linha de comando](/docs/cli#gs-novo).
+
 ## Proximos passos
 
 - [Vocabulario](/docs/vocabulario) — referencia rapida das palavras-chave

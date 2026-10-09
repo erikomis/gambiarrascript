@@ -143,6 +143,21 @@ gs roda examples/texto.gs
 They're a good starting point to poke around the
 [Standard library](/docs/en/biblioteca) and [Recipes](/docs/en/exemplos).
 
+## Starting a project
+
+For a real project, `gs novo` scaffolds the whole folder, already running
+and with tests:
+
+```bash
+gs novo api minha-api      # REST API: sqlite, migrations, JWT login, CRUD
+gs novo site meu-site      # site with HTML templates (layout, partials, loop)
+gs novo script meu-script  # command-line script with flags and --ajuda
+cd minha-api && gs testa && gs roda principal.gs
+```
+
+Each one comes with a `README.md` explaining how to run, test and deploy it.
+Details in [Command line](/docs/en/cli#gs-novo).
+
 ## Next steps
 
 - [Vocabulary](/docs/en/vocabulario) — quick reference of the keywords

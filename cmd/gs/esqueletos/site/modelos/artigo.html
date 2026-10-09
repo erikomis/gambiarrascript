@@ -1,0 +1,12 @@
+{{ usa "base.html" }}
+{{ bloco "titulo" }}{{ artigo.titulo }} · {{ site.nome }}{{ acabou }}
+{{ bloco "conteudo" }}
+    <article>
+      <h1>{{ artigo.titulo }}</h1>
+      <p class="meta">{{ artigo.data }} · {{ artigo.tags | junta ", " }}</p>
+      {{ pra_cada paragrafo em artigo.paragrafos }}
+      <p>{{ paragrafo }}</p>
+      {{ acabou }}
+    </article>
+    <p><a href="/">&larr; voltar</a></p>
+{{ acabou }}

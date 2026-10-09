@@ -493,6 +493,7 @@ Além de `roda`, `repl` e `lsp`, o CLI tem:
 | `gs testa [<dir>]`       | roda os `*_test.gs` e soma os asserts |
 | `gs testa --cobertura [<dir>]` | idem + % de linhas que rodaram por arquivo (`--cobertura-perfil arq` grava `arquivo:linha contagem`, `--cobertura-html arq` gera o relatório colorido) |
 | `gs init [nome]`         | cria o esqueleto do projeto (`gambiarra.json` + `principal.gs`) |
+| `gs novo <api \| site \| script> <nome>` | cria a pasta `<nome>` com um projeto pronto pra rodar, com testes, README e (api/site) Dockerfile; `gs novo` sozinho lista os tipos |
 | `gs bench [--vm] <arq.gs> [n]` | mede o tempo de execução em `n` rodadas |
 | `gs debug [--tree] <arq.gs> [args]` | depurador no terminal: breakpoints (com condição), passo a passo, pilha e variáveis (`gs debug --dap` é o adapter que a extensão do VSCode usa) |
 | `gs get <url \| github.com/u/repo/mod.gs@tag> [nome.gs]` | baixa um módulo `.gs` pra `gs_modulos/` e fixa no `gambiarra.lock` (URL + sha256) |
@@ -502,6 +503,23 @@ Além de `roda`, `repl` e `lsp`, o CLI tem:
 | `gs migra [sobe \| desce [n] \| status \| novo nome]` | migrações SQL de `migracoes/NNN_nome.sobe.sql` (e `.desce.sql`), anotadas em `gs_migracoes` com checksum; banco por `--banco URL` ou `GS_BANCO`, pasta por `--pasta` |
 
 Roda `gs` sem argumentos (ou `gs --help`) pra ver a ajuda completa.
+
+### Começando uma API
+
+```bash
+gs novo api minha-api
+cd minha-api
+gs testa                       # os testes que vêm junto passam de cara
+gs roda principal.gs --porta 3000
+```
+
+Sai uma API REST de tarefas com SQLite: migrações aplicadas na subida
+(`migra`), cadastro com `hash_senha` + `valida`, login que devolve JWT,
+middleware de log e de autenticação, CRUD com `:id` em que cada usuário só vê
+as próprias tarefas, `.env.exemplo` e `Dockerfile` em cima da imagem oficial.
+O `README.md` gerado ensina a testar com `curl`, migrar e fazer o deploy.
+`gs novo site` e `gs novo script` montam um site com modelos HTML e um script
+de linha de comando.
 
 ## Rodando os testes
 

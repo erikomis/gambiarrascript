@@ -17,6 +17,7 @@ gs testa [--tree] [-so nome] [<dir>]             roda os *_test.gs e soma os ass
 gs testa --cobertura [<dir>]                     + % de linhas que rodaram (perfil/HTML)
 gs doc [<arquivo.gs | diretorio>...]             gera markdown das gambiarras documentadas
 gs init [nome]                                   cria gambiarra.json + principal.gs
+gs novo <api | site | script> <nome>             cria um projeto pronto pra rodar (sem args: lista)
 gs get <url | github.com/u/repo/mod.gs@tag>      baixa um modulo pra gs_modulos/ (+ lock)
 gs instala [--atualiza]                          instala as dependencias, conferindo o lock
 gs build <arquivo.gs> [-o saida]                 gera binario standalone com o script
@@ -245,6 +246,41 @@ gs init meu_app
 
 Cria `gambiarra.json` (nome, versao, principal, dependencias) e um
 `principal.gs` de hello world. Nunca sobrescreve arquivo existente.
+
+## `gs novo`
+
+```bash
+gs novo                       # lista os tipos
+gs novo api minha-api         # API REST completa
+gs novo site meu-site         # site com modelos HTML
+gs novo script limpa-fotos    # script de linha de comando
+```
+
+Cria a pasta `<nome>` com um projeto que ja roda, testa e passa no
+`gs check` e no `gs formata` sem mexer em nada. Os modelos vem **dentro do
+binario** (funciona offline). O nome vira pasta, nome do `gambiarra.json` e
+tag da imagem Docker, entao so aceita letra minuscula, numero, `-` e `_`,
+comecando com letra. Pasta que ja existe e nao ta vazia e recusada — o
+`gs novo` nunca passa por cima de nada.
+
+| tipo | o que vem |
+| --- | --- |
+| `api` | `principal.gs` (carrega o `.env`, `opcoes` com `--porta`, conecta no SQLite, `migra()` na subida, middleware de log e de JWT, `cors()`, `escuta`), `rotas/usuarios.gs` (cadastro com `hash_senha` + `valida`, login devolvendo JWT, `GET /eu` protegido), `rotas/tarefas.gs` (CRUD com `:id`, cada usuario so ve as suas), `lib/http.gs`, `migracoes/`, testes, `.env.exemplo`, `Dockerfile`, `.gitignore` e `README.md` |
+| `site` | `principal.gs` com `rota` + `responde_html` + `serve_pasta`, `modelos/` com layout (`usa`/`bloco`), parciais (`inclui`) e paginas com laco, `estatico/estilo.css`, conteudo + teste, `Dockerfile` |
+| `script` | `principal.gs` com `opcoes()` (flags tipadas e `--ajuda` de graca), `gambiarra.json`, `README.md` |
+
+```bash
+$ gs novo api minha-api && cd minha-api
+$ gs testa
+rodando 3 arquivo(s) no VM:
+  OK  http_test.gs  (20/20 asserts)
+  OK  tarefas_test.gs  (10/10 asserts)
+  OK  usuarios_test.gs  (10/10 asserts)
+$ gs roda principal.gs --porta 3000
+```
+
+O `README.md` gerado explica como rodar, testar, migrar (`gs migra`) e fazer
+o deploy (Docker com a [imagem oficial](/docs/instalacao) ou `gs build`).
 
 ## `gs get`
 

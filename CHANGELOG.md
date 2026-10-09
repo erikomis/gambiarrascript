@@ -21,6 +21,18 @@ no [ROADMAP](ROADMAP.md).
   do formato antigo põe `?parseTime=false` na url. A tabela do que cada tipo
   de coluna vira está em
   [Banco de dados](https://erikomis.github.io/gambiarrascript/docs/biblioteca#banco-de-dados).
+- **`gs novo <tipo> <nome>`**: cria um projeto pronto pra rodar, com os
+  modelos embutidos no binário. `gs novo api minha-api` monta uma API REST
+  com SQLite (`migra` na subida + `migracoes/` com `.sobe`/`.desce`),
+  cadastro com `hash_senha` + `valida`, login que devolve JWT, middleware de
+  log e de autenticação, CRUD de tarefas com `:id` e dono por usuário,
+  testes (`gs testa`), `.env.exemplo`, `Dockerfile` na imagem oficial e um
+  README de como rodar, testar, migrar e fazer o deploy. `gs novo site` traz
+  modelos HTML (layout, parciais, laço) + `serve_pasta`; `gs novo script`, um
+  script com `opcoes()` e `--ajuda`. `gs novo` sozinho lista os tipos; pasta
+  que já existe com conteúdo é recusada. Tudo que ele gera passa no
+  `gs check` e no `gs formata` sem mudança. Veja
+  [Linha de comando](https://erikomis.github.io/gambiarrascript/docs/cli#gs-novo).
 
 ## v0.8.0 — 2026-10-08
 
