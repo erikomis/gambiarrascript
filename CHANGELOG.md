@@ -4,7 +4,7 @@ Mudanças de cada versão do GambiarraScript que importam pra quem usa a
 linguagem. O detalhe (o porquê de cada decisão) está nas mensagens de commit e
 no [ROADMAP](ROADMAP.md).
 
-## Não lançado
+## v0.8.0 — 2026-10-08
 
 - **Geradores**: `rende valor` dentro de uma gambiarra (nomeada, lambda ou
   método) faz dela um gerador — chamar não roda o corpo, devolve um valor
