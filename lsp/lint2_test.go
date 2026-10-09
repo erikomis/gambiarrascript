@@ -146,3 +146,14 @@ mostra dobra(3)`)
 		t.Fatalf("sem importa devia avisar: %v", diags)
 	}
 }
+
+func TestLintTernarioContaComoUso(t *testing.T) {
+	diags := diagsDeTypecheck(t, `gambiarra rotulo(n)
+    bota limite = 10
+    bota grande = "grande"
+    funciona se_colar n > limite entao grande se_nao_colar "pequeno"
+acabou_finalmente`)
+	if contemMsg(diags, "nunca usada") {
+		t.Fatalf("variavel lida so no ternario nao e nao-usada: %v", diags)
+	}
+}

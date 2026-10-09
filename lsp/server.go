@@ -1082,6 +1082,11 @@ func (tc *typechecker) walkExpr(e ast.Expression) {
 	case *ast.InfixExpression:
 		tc.walkExpr(n.Left)
 		tc.walkExpr(n.Right)
+	case *ast.TernarioExpression:
+		// se_colar c entao a se_nao_colar b: os tres lados sao leitura
+		tc.walkExpr(n.Cond)
+		tc.walkExpr(n.SeVerdadeiro)
+		tc.walkExpr(n.SeFalso)
 	case *ast.CallExpression:
 		tc.walkExpr(n.Function)
 		for _, a := range n.Arguments {
