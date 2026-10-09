@@ -393,6 +393,13 @@ the pattern is an error — better than silently skipping a migration.
   `status` flags it with `[!]` (and exits with code 1).
 - `desce [n]` reverts the `n` applied migrations with the highest versions
   (default 1), running each `.desce.sql` and removing it from the table.
+- Tested for real against SQLite, **Postgres 16** and **MySQL 8** (the CI
+  `banco` job): `sobe`/`status`/`desce`, files with several statements, `;`
+  inside strings and comments, the checksum refusal and each database's
+  rollback behavior. On Postgres the whole file goes to the server at once,
+  so a `$$ ... $$` function body with `;` inside works. On MySQL the file is
+  split on the `;` outside strings and comments: a procedure/trigger with `;`
+  in its body (what the client needs `DELIMITER` for) doesn't work there.
 
 For the server to migrate on its own at startup there's the builtin
 `migra(conexao, [pasta])` (see [Library](/docs/en/biblioteca#database)).

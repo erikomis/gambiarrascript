@@ -4,6 +4,24 @@ Mudanças de cada versão do GambiarraScript que importam pra quem usa a
 linguagem. O detalhe (o porquê de cada decisão) está nas mensagens de commit e
 no [ROADMAP](ROADMAP.md).
 
+## Não lançado
+
+- **Banco testado contra Postgres 16 e MySQL 8 de verdade**: o CI ganhou o job
+  `banco` (com os dois bancos como serviço) rodando `conecta`/`consulta`/
+  `executa`, `gs migra` e `migra()` neles, inclusive um script `.gs` nos dois
+  motores. Pra rodar local: `GS_TESTE_POSTGRES=postgres://...` e/ou
+  `GS_TESTE_MYSQL=mysql://...` e `go test -p 1 -run Integracao ./interpreter
+  ./migracao ./cmd/gs` (sem as variáveis esses testes pulam).
+- **Correções de tipo** (cobertas pelos testes novos): coluna `FLOAT` do MySQL voltava
+  `texto` e `REAL` do Postgres voltava `1.100000023841858` em vez de `1.1`
+  (agora os dois voltam `numero`); `BIGINT UNSIGNED` do MySQL virava `texto`.
+- **Mudança**: no MySQL o `conecta` liga o `parseTime` sozinho, então
+  `DATETIME`/`DATE` voltam no mesmo formato do Postgres
+  (`"2024-03-05T10:20:30Z"`) em vez de `"2024-03-05 10:20:30"`. Quem precisa
+  do formato antigo põe `?parseTime=false` na url. A tabela do que cada tipo
+  de coluna vira está em
+  [Banco de dados](https://erikomis.github.io/gambiarrascript/docs/biblioteca#banco-de-dados).
+
 ## v0.8.0 — 2026-10-08
 
 - **Geradores**: `rende valor` dentro de uma gambiarra (nomeada, lambda ou

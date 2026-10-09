@@ -13,8 +13,10 @@ func TestUrlParaDriver(t *testing.T) {
 		{"sqlite::memory:", "sqlite", ":memory:"},
 		{"sqlite://meu.db", "sqlite", "meu.db"},
 		{"postgres://u:p@host/db", "pgx", "postgres://u:p@host/db"},
-		{"mysql://u:p@host:3306/db", "mysql", "u:p@tcp(host:3306)/db"},
-		{"mariadb://u:p@host:3306/db", "mysql", "u:p@tcp(host:3306)/db"},
+		{"mysql://u:p@host:3306/db", "mysql", "u:p@tcp(host:3306)/db?parseTime=true"},
+		{"mariadb://u:p@host:3306/db", "mysql", "u:p@tcp(host:3306)/db?parseTime=true"},
+		{"mysql://u@host/db?charset=utf8mb4", "mysql", "u@tcp(host)/db?charset=utf8mb4&parseTime=true"},
+		{"mysql://u:p@host/db?parseTime=false", "mysql", "u:p@tcp(host)/db?parseTime=false"},
 	}
 	for _, c := range casos {
 		d, dsn, err := urlParaDriver(c.url)
@@ -27,6 +29,37 @@ func TestUrlParaDriver(t *testing.T) {
 	}
 	if _, _, err := urlParaDriver("oracle://x"); err == nil {
 		t.Fatal("banco desconhecido deveria dar erro")
+	}
+}
+
+// Tipos que o driver do mysql devolve e que antes viravam texto.
+func TestGoParaObjTiposDosDrivers(t *testing.T) {
+	casos := []struct {
+		v    interface{}
+		quer string
+		int  bool
+	}{
+		{float32(1.1), "1.1", false},
+		{float32(2.5), "2.5", false},
+		{uint64(42), "42", true},
+		{uint64(18446744073709551615), "18446744073709551615", false},
+		{uint32(7), "7", true},
+		{int32(-3), "-3", true},
+		{int16(5), "5", true},
+		{int8(-1), "-1", true},
+	}
+	for _, c := range casos {
+		o := goParaObj(c.v)
+		if o.Inspect() != c.quer {
+			t.Errorf("%T(%v) => %s, esperado %s", c.v, c.v, o.Inspect(), c.quer)
+		}
+		n, ehNum := o.(*object.Numero)
+		if c.int && (!ehNum || !n.EhInt) {
+			t.Errorf("%T(%v) devia virar inteiro, veio %T", c.v, c.v, o)
+		}
+	}
+	if _, ok := goParaObj(uint64(18446744073709551615)).(*object.Texto); !ok {
+		t.Error("uint64 acima do int64 devia virar texto")
 	}
 }
 

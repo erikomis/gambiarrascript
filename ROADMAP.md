@@ -907,6 +907,18 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       marca `[!]`. Banco por `--banco` (url do `conecta`) ou `GS_BANCO`.
       Builtin `migra(conexao, [pasta])` pro servidor migrar na subida
       (stub no wasm).
+- [x] **Integração com Postgres e MySQL de verdade** — job `banco` no CI
+      (`services:` postgres:16 + mysql:8) roda os testes `*Integracao*`
+      (`interpreter`, `migracao`, `cmd/gs`; pulam sem `GS_TESTE_POSTGRES` /
+      `GS_TESTE_MYSQL`): placeholders de cada driver, tipos de cada coluna
+      (int, real, texto, bool, null, data, decimal) nos protocolos texto e
+      binário do MySQL, erros, `gs migra` sobe/status/desce, recusa por
+      checksum, rollback do Postgres × commit por comando do MySQL, função
+      `$$` no Postgres e um script `.gs` nos dois engines. Corrigido junto:
+      `FLOAT` do MySQL e `REAL` do Postgres voltavam texto/ruído
+      (`1.100000023841858`), `BIGINT UNSIGNED` virava texto e data do MySQL
+      vinha `"2024-03-05 10:20:30"` (agora `parseTime` por padrão, RFC 3339
+      igual ao Postgres).
 - [x] **Validação de entrada** — `valida(valor, esquema)` → lista de erros
       com caminho (`"itens[2].preco: obrigatorio"`). Tipo por nome
       (`"texto?"` = opcional) ou regra `{tipo, obrigatorio, min, max, padrao,

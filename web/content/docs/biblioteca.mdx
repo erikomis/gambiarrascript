@@ -573,7 +573,25 @@ SQLite, MySQL/MariaDB e Postgres. Nao funciona no playground (wasm).
 | `migra(con, [pasta])` | `(conexao, [texto])` | `lista` das versoes aplicadas agora (vazia = banco em dia) |
 
 Os params podem vir soltos ou numa lista; o placeholder e o do driver (`?` no
-sqlite/mysql, `$1` no postgres).
+sqlite/mysql, `$1` no postgres). Cada `executa` faz commit sozinho (nao tem
+builtin de transacao).
+
+Testado de verdade contra **Postgres 16** e **MySQL 8** (job `banco` do CI, a
+cada push), alem do SQLite. O que cada coluna vira no dicionario:
+
+| Coluna | Vira |
+| --- | --- |
+| `INTEGER`, `BIGINT`, `COUNT(*)` | `numero` inteiro (exato em 64 bits) |
+| `REAL`, `FLOAT`, `DOUBLE PRECISION` | `numero` com casas (`1.1` volta `1.1`) |
+| `VARCHAR`, `TEXT` | `texto` |
+| `BOOLEAN` | `deu_bom`/`deu_ruim` no Postgres; `1`/`0` no MySQL e no SQLite (la e inteiro) |
+| `TIMESTAMP`, `DATETIME`, `DATE` | `texto` RFC 3339: `"2024-03-05T10:20:30Z"` |
+| `NUMERIC`, `DECIMAL` (Postgres, MySQL) | `texto` (`"12.34"`), pra nao perder casa |
+| `NULL` | `nada` |
+
+No MySQL o `conecta` liga o `parseTime` do driver sozinho, pra data voltar
+igual ao Postgres; `?parseTime=false` na url desliga (data volta texto
+`"2024-03-05 10:20:30"`).
 
 ```gambiarrascript
 bota c = conecta("sqlite::memory:")

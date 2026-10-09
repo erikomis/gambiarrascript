@@ -577,7 +577,25 @@ SQLite, MySQL/MariaDB and Postgres. Doesn't work in the playground (wasm).
 | `migra(con, [pasta])` | `(conexao, [texto])` | `lista` of the versions applied now (empty = database up to date) |
 
 The params can come loose or in a list; the placeholder is the driver's (`?` on
-sqlite/mysql, `$1` on postgres).
+sqlite/mysql, `$1` on postgres). Each `executa` commits on its own (there is
+no transaction builtin).
+
+Tested for real against **Postgres 16** and **MySQL 8** (the CI `banco` job,
+on every push), besides SQLite. What each column becomes in the dictionary:
+
+| Column | Becomes |
+| --- | --- |
+| `INTEGER`, `BIGINT`, `COUNT(*)` | integer `numero` (exact up to 64 bits) |
+| `REAL`, `FLOAT`, `DOUBLE PRECISION` | decimal `numero` (`1.1` comes back as `1.1`) |
+| `VARCHAR`, `TEXT` | `texto` |
+| `BOOLEAN` | `deu_bom`/`deu_ruim` on Postgres; `1`/`0` on MySQL and SQLite (it is an integer there) |
+| `TIMESTAMP`, `DATETIME`, `DATE` | RFC 3339 `texto`: `"2024-03-05T10:20:30Z"` |
+| `NUMERIC`, `DECIMAL` (Postgres, MySQL) | `texto` (`"12.34"`), so no decimal place is lost |
+| `NULL` | `nada` |
+
+On MySQL `conecta` turns on the driver's `parseTime` by itself, so dates come
+back the same as on Postgres; `?parseTime=false` in the url turns it off (the
+date comes back as the text `"2024-03-05 10:20:30"`).
 
 ```gambiarrascript
 bota c = conecta("sqlite::memory:")

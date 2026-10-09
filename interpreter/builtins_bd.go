@@ -9,7 +9,9 @@ package interpreter
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,10 +61,14 @@ func dsnMySQL(u *url.URL) string {
 	}
 	banco := strings.TrimPrefix(u.Path, "/")
 	dsn := fmt.Sprintf("%s@tcp(%s)/%s", cred, host, banco)
-	if u.RawQuery != "" {
-		dsn += "?" + u.RawQuery
+	// parseTime=true por padrao: sem ele DATETIME/DATE chegam como bytes
+	// ("2024-01-02 10:00:00") e o resultado ficava diferente do postgres
+	// (RFC3339). Quem passar parseTime na url manda.
+	q := u.Query()
+	if q.Get("parseTime") == "" {
+		q.Set("parseTime", "true")
 	}
-	return dsn
+	return dsn + "?" + q.Encode()
 }
 
 func builtinConecta(args []object.Object) object.Object {
@@ -155,6 +161,14 @@ func builtinConsulta(args []object.Object) object.Object {
 	if err != nil {
 		return erroBuiltin("nao peguei colunas: %v", err)
 	}
+	// postgres REAL (float4) chega como float64(float32): 1.1 viraria
+	// 1.100000023841858. Marca essas colunas pra voltar ao float32.
+	float4 := make([]bool, len(cols))
+	if tipos, err := rows.ColumnTypes(); err == nil && con.driver == "pgx" {
+		for i, tp := range tipos {
+			float4[i] = tp.DatabaseTypeName() == "FLOAT4"
+		}
+	}
 	linhas := []object.Object{}
 	for rows.Next() {
 		valores := make([]interface{}, len(cols))
@@ -167,8 +181,12 @@ func builtinConsulta(args []object.Object) object.Object {
 		}
 		dic := object.NovoDicionario()
 		for i, c := range cols {
+			v := valores[i]
+			if f, ok := v.(float64); ok && float4[i] {
+				v = float32(f)
+			}
 			chave := &object.Texto{Value: c}
-			dic.Bota(chave.ChaveHash(), object.ParDic{Chave: chave, Valor: goParaObj(valores[i])})
+			dic.Bota(chave.ChaveHash(), object.ParDic{Chave: chave, Valor: goParaObj(v)})
 		}
 		linhas = append(linhas, dic)
 	}
@@ -287,6 +305,25 @@ func goParaObj(v interface{}) object.Object {
 		return object.NumInt(x)
 	case int:
 		return object.NumInt(int64(x))
+	case int32:
+		return object.NumInt(int64(x))
+	case int16:
+		return object.NumInt(int64(x))
+	case int8:
+		return object.NumInt(int64(x))
+	case uint64:
+		// mysql BIGINT UNSIGNED; acima do int64 nao cabe, vira texto.
+		if x > math.MaxInt64 {
+			return &object.Texto{Value: strconv.FormatUint(x, 10)}
+		}
+		return object.NumInt(int64(x))
+	case uint32:
+		return object.NumInt(int64(x))
+	case float32:
+		// mysql FLOAT chega como float32; passa pelo texto pra 1.1 nao virar
+		// 1.100000023841858.
+		f, _ := strconv.ParseFloat(strconv.FormatFloat(float64(x), 'g', -1, 32), 64)
+		return &object.Numero{Value: f}
 	case float64:
 		return &object.Numero{Value: x}
 	case bool:

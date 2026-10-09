@@ -39,6 +39,62 @@ jobs:
       - name: go test
         run: go test ./...
 
+  # conecta/consulta/executa, gs migra e migra() contra postgres e mysql de
+  # verdade (no testa so roda sqlite; os testes *Integracao* pulam sem as
+  # variaveis). -p 1 porque os pacotes dividem o banco e a gs_migracoes.
+  banco:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gs
+          POSTGRES_PASSWORD: gs
+          POSTGRES_DB: gs_teste
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U gs -d gs_teste"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 30
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: raiz
+          MYSQL_DATABASE: gs_teste
+          MYSQL_USER: gs
+          MYSQL_PASSWORD: gs
+        ports:
+          - 3306:3306
+        # -h 127.0.0.1: o servidor temporario do init nao ouve TCP, entao so
+        # fica saudavel quando o mysql de verdade sobe
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -ugs -pgs"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 40
+    env:
+      GS_TESTE_POSTGRES: postgres://gs:gs@127.0.0.1:5432/gs_teste?sslmode=disable
+      GS_TESTE_MYSQL: mysql://gs:gs@127.0.0.1:3306/gs_teste
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: testes de integracao (postgres 16 + mysql 8)
+        run: |
+          set -o pipefail
+          go test -count=1 -p 1 -v -run 'Integracao' ./interpreter ./migracao ./cmd/gs | tee /tmp/banco.log
+          # com as variaveis setadas nada pode pular calado
+          if grep -q -- '--- SKIP' /tmp/banco.log; then
+            echo "::error::teste de integracao pulou com o banco no ar"
+            exit 1
+          fi
+
   # O pages.yml so roda na main e falha DEPOIS do push; aqui a doc quebrada
   # (MDX com {chaves} fora de codigo, link morto...) e pega no PR.
   site:

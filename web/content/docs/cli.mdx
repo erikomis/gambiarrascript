@@ -385,6 +385,13 @@ que pular calado uma migracao.
   com `[!]` (e sai com codigo 1).
 - `desce [n]` desfaz as `n` aplicadas de versao mais alta (padrao 1), rodando
   o `.desce.sql` de cada e tirando da tabela.
+- Testado de verdade contra SQLite, **Postgres 16** e **MySQL 8** (job
+  `banco` do CI): `sobe`/`status`/`desce`, arquivo com varios comandos, `;`
+  dentro de texto e de comentario, a recusa por checksum e o rollback de cada
+  banco. No Postgres o arquivo vai inteiro pro banco, entao corpo de funcao
+  `$$ ... $$` com `;` dentro funciona. No MySQL o arquivo e quebrado nos `;`
+  fora de texto e comentario: procedure/trigger com `;` no corpo (o que no
+  cliente pede `DELIMITER`) nao funciona la.
 
 Pra o servidor migrar sozinho na subida tem a builtin `migra(conexao, [pasta])`
 (veja [Biblioteca](/docs/biblioteca#banco-de-dados)).
