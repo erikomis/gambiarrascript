@@ -161,7 +161,11 @@ func (f *formatter) emitStmt(s ast.Statement, nivel int, primeiro *bool) {
 			for i, v := range braco.Values {
 				vals[i] = f.emitExpr(v)
 			}
-			f.linha(nivel, "caso "+strings.Join(vals, ", "), f.cabeca(braco.Body))
+			guarda := ""
+			if braco.Guarda != nil {
+				guarda = " se " + f.emitExpr(braco.Guarda)
+			}
+			f.linha(nivel, "caso "+strings.Join(vals, ", ")+guarda, f.cabeca(braco.Body))
 			f.emitBlock(braco.Body, nivel+1)
 		}
 		if n.Default != nil {
@@ -206,6 +210,16 @@ func (f *formatter) emitStmt(s ast.Statement, nivel int, primeiro *bool) {
 		default:
 			simples(n.Nome.Value)
 		}
+	case *ast.CardapioDecl:
+		f.abre(s, nivel, primeiro, "cardapio "+n.Nome.Value, f.cabeca(n))
+		linhas := make([]ast.Statement, len(n.Membros))
+		for i, m := range n.Membros {
+			linhas[i] = m
+		}
+		f.emitStmts(linhas, nivel+1, f.fim(s))
+		f.linha(nivel, "acabou_finalmente", f.fim(s))
+	case *ast.MembroCardapio:
+		simples(n.Nome.Value)
 	case *ast.CombinadoDecl:
 		f.abre(s, nivel, primeiro, "combinado "+n.Nome.Value, f.cabeca(n))
 		linhas := make([]ast.Statement, len(n.Metodos))
@@ -306,6 +320,8 @@ func (f *formatter) emitExprPrec(e ast.Expression, parent int) string {
 	switch n := e.(type) {
 	case *ast.Identifier:
 		return n.Value
+	case *ast.PadraoNome, *ast.PadraoLista, *ast.PadraoDict, *ast.PadraoTreta:
+		return f.emitPadrao(e)
 	case *ast.NumeroLiteral:
 		return n.TokenLiteral()
 	case *ast.TextoLiteral:
@@ -488,4 +504,43 @@ func citaInterpolado(lit string) string {
 	sb.WriteString(q[1 : len(q)-1])
 	sb.WriteByte('"')
 	return sb.String()
+}
+
+// emitPadrao escreve um padrao de caso (sempre numa linha so).
+func (f *formatter) emitPadrao(e ast.Expression) string {
+	switch n := e.(type) {
+	case *ast.PadraoNome:
+		return n.Nome.Value
+	case *ast.PadraoLista:
+		partes := make([]string, 0, len(n.Elementos)+1)
+		for _, el := range n.Elementos {
+			partes = append(partes, f.emitPadrao(el))
+		}
+		if n.Resto != nil {
+			partes = append(partes, "..."+n.Resto.Value)
+		}
+		return "[" + strings.Join(partes, ", ") + "]"
+	case *ast.PadraoDict:
+		partes := make([]string, len(n.Chaves))
+		for i := range n.Chaves {
+			if n.Curto[i] {
+				partes[i] = f.emitPadrao(n.Valores[i])
+				continue
+			}
+			partes[i] = f.emitExpr(n.Chaves[i]) + ": " + f.emitPadrao(n.Valores[i])
+		}
+		return "{" + strings.Join(partes, ", ") + "}"
+	case *ast.PadraoTreta:
+		partes := make([]string, len(n.Valores))
+		for i, v := range n.Valores {
+			switch {
+			case n.Posicional, n.Curto[i]:
+				partes[i] = f.emitPadrao(v)
+			default:
+				partes[i] = n.Nomes[i].Value + ": " + f.emitPadrao(v)
+			}
+		}
+		return f.emitExpr(n.Tipo) + "{" + strings.Join(partes, ", ") + "}"
+	}
+	return f.emitExpr(e)
 }

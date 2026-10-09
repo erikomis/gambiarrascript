@@ -415,7 +415,7 @@ func (s *Servidor) renomear(uri string, pos Posicao, novo string) (map[string]in
 		}
 		for _, x := range ocs {
 			if x.lig == ligDesestruturaChave {
-				return nil, "`" + o.nome + "` vem de `bota {...} = dict`: o nome e a chave do dicionario, renomear mudaria o que e lido"
+				return nil, "`" + o.nome + "` vem de `bota {...} = dict` ou da forma curta de um padrao (`{nome}`, `Tipo{nome}`): o nome e a chave/campo, renomear mudaria o que e lido"
 			}
 		}
 		if msg := conflitoRenomear(doc, r, ocs, novo); msg != "" {

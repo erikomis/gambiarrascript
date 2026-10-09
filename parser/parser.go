@@ -786,6 +786,8 @@ func (p *Parser) parseStatementCru() ast.Statement {
 		return p.parseTreta()
 	case token.COMBINADO:
 		return p.parseCombinado()
+	case token.CARDAPIO:
+		return p.parseCardapio()
 	case token.ARRUMA:
 		return p.parseArruma()
 	case token.ESCOLHE:
@@ -877,7 +879,7 @@ func (p *Parser) parseCrava() ast.Statement {
 // parseEscolhe monta o switch:
 //
 //	escolhe <expr>
-//	caso <v1>[, <v2>...]  <bloco>
+//	caso <v1>[, <v2>...] [se <guarda>]  <bloco>   (v = valor ou padrao)
 //	...
 //	se_nao_colar <bloco>      (opcional)
 //	acabou_finalmente
@@ -899,11 +901,19 @@ func (p *Parser) parseEscolhe() ast.Statement {
 		braco := ast.CasoBraco{}
 		casoTok := p.curToken
 		p.nextToken()
-		braco.Values = append(braco.Values, p.parseExpression(LOWEST))
+		braco.Values = append(braco.Values, p.parseValorCaso())
 		for p.peekTokenIs(token.COMMA) {
 			p.nextToken() // vai pra virgula
 			p.nextToken() // vai pro proximo valor
-			braco.Values = append(braco.Values, p.parseExpression(LOWEST))
+			braco.Values = append(braco.Values, p.parseValorCaso())
+		}
+		// guarda: `caso [x, y] se x > y`. `se` e palavra-chave so aqui
+		// (contextual, na mesma linha do caso), igual o filtro do quebrou.
+		if p.peekToken.Type == token.IDENT && p.peekToken.Literal == "se" &&
+			p.peekToken.Line == p.curToken.Line {
+			p.nextToken() // vai pro `se`
+			p.nextToken() // comeco da condicao
+			braco.Guarda = p.parseExpression(LOWEST)
 		}
 		p.nextToken()
 		braco.Body = p.parseBlockStatement()

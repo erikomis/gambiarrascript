@@ -133,9 +133,11 @@ func (ch *checaCrava) stmt(s Statement) {
 	case *EscolheStatement:
 		ch.expr(n.Subject)
 		for _, braco := range n.Casos {
+			// nome solto dentro de padrao amarra: conta como atribuicao
 			for _, v := range braco.Values {
-				ch.expr(v)
+				PercorrePadrao(v, ch.atribui, ch.expr)
 			}
+			ch.expr(braco.Guarda)
 			ch.bloco(braco.Body)
 		}
 		ch.bloco(n.Default)
@@ -160,6 +162,8 @@ func (ch *checaCrava) stmt(s Statement) {
 		}
 		ch.atribui(n.Nome)
 	case *CombinadoDecl:
+		ch.atribui(n.Nome)
+	case *CardapioDecl:
 		ch.atribui(n.Nome)
 	case *MetodoDecl:
 		ch.funcao(n.ParametrosComReceptor(), n.Body)

@@ -1,6 +1,6 @@
 ---
 title: OOP (treta and combinado)
-description: Object orientation the Go way — treta (struct), methods with a receiver, combinado (implicit interface) and puxadinho (embedding). No class, this, new or inheritance.
+description: Object orientation the Go way — treta (struct), methods with a receiver, combinado (implicit interface), puxadinho (embedding) and cardapio (enum). No class, this, new or inheritance.
 ---
 
 GambiarraScript copies Go's way of doing OOP: **composition instead of
@@ -21,7 +21,8 @@ onto another).
 | interface | `combinado Forma` ... `acabou_finalmente` | `type Forma interface` |
 | embedding | a field that's just the treta's name (`Animal`) | same |
 | constructor | `gambiarra nova_ponto(x, y)` | `func NewPonto(x, y)` |
-| type switch | `escolhe tipo(v)` / `caso "Ponto"` | `switch v.(type)` |
+| type switch | `escolhe tipo(v)` / `caso "Ponto"` (or the pattern `caso Ponto{x, y}`) | `switch v.(type)` |
+| enum | `cardapio Cor` ... `acabou_finalmente`, `Cor.vermelho` | `const ( Vermelho Cor = iota ... )` |
 | type assertion | `como_tipo(v, Ponto)` | `v.(Ponto)` |
 
 ## treta: the fields
@@ -182,6 +183,41 @@ mostra descreve("oi")               # sei la: texto
 `tipo(Circulo)` (the type, not an instance) is `"treta"`; `tipo(Forma)` is
 `"combinado"`.
 
+Want the fields too? The treta pattern in `escolhe` checks the type **and**
+binds the fields in one go (see
+[pattern matching](/docs/en/estruturas#pattern-matching-in-caso)):
+
+```gambiarrascript
+treta Ponto
+    x
+    y
+acabou_finalmente
+
+gambiarra onde(p)
+    escolhe p
+    caso Ponto{x: 0, y: 0}
+        funciona "na origem"
+    caso Ponto{x: 0, y}
+        funciona "no eixo y, altura ${y}"
+    caso Ponto{x, y} se x == y
+        funciona "na diagonal"
+    caso Ponto{_, _}
+        funciona "em algum lugar"
+    se_nao_colar
+        funciona "nem e ponto"
+    acabou_finalmente
+acabou_finalmente
+
+mostra onde(Ponto{0, 0})   # na origem
+mostra onde(Ponto{0, 3})   # no eixo y, altura 3
+mostra onde(Ponto{2, 2})   # na diagonal
+mostra onde(42)            # nem e ponto
+```
+
+With `field:` it goes **by name** (only the fields you list; a lone `y` means
+`y: y`); without any `:` it goes **in field order**, all of them (like the
+literal).
+
 ## Puxadinho: composition (embedding)
 
 A treta line that's **just the name of another treta** bolts it on inside. The
@@ -225,6 +261,62 @@ mostra rex                   # Cachorro{Animal: Animal{nome: "rex", patas: 3}, r
 - Same conflict rule as Go: the **shallowest** name wins; if the same name
   shows up in two puxadinhos at the same depth, it's only an error when
   someone accesses it (use the full path).
+
+## cardapio (enum)
+
+A closed set of named options (a **cardapio** is a "menu"): `cardapio Name`,
+one option per line, `acabou_finalmente`. Each option is a value of its own,
+accessed with a dot.
+
+```gambiarrascript
+cardapio Sinal
+    verde
+    amarelo
+    vermelho
+acabou_finalmente
+
+gambiarra proximo(s)
+    escolhe s
+    caso Sinal.verde
+        funciona Sinal.amarelo
+    caso Sinal.amarelo
+        funciona Sinal.vermelho
+    caso Sinal.vermelho
+        funciona Sinal.verde
+    acabou_finalmente
+acabou_finalmente
+
+bota s = Sinal.verde
+mostra s                     # Sinal.verde
+mostra proximo(s)            # Sinal.amarelo
+mostra tipo(s)               # Sinal
+mostra s.nome                # verde
+mostra s.indice              # 0
+mostra s == Sinal.verde      # deu_bom
+mostra s == "verde"          # deu_ruim
+pra_cada op em Sinal
+    mostra op.nome           # verde, amarelo, vermelho
+acabou_finalmente
+bota tempo = {Sinal.verde: 30, Sinal.vermelho: 20}
+mostra tempo[Sinal.verde]    # 30
+```
+
+- An option is only equal to **itself**: it is neither a number nor a text
+  (`Sinal.verde == "verde"` is `deu_ruim`). To convert, use `.nome` (the
+  text) and `.indice` (the position, starting at 0).
+- `mostra` prints `Sinal.verde`; `tipo()` gives the cardapio's name. The
+  cardapio itself prints `<cardapio Sinal>` and its `tipo()` is
+  `"cardapio"`.
+- `pra_cada op em Sinal` walks the options in declaration order (with two
+  names you get index and option).
+- Works as a dictionary key and a set item. `pra_json` turns it into its
+  name: `pra_json({"s": Sinal.verde})` is `{"s":"verde"}`.
+- An option that doesn't exist (`Sinal.azul`) is an error right away. Like a
+  treta: capitalized name, declared at the **top** of the file, and from
+  another module it works through the alias (`m.Sinal.verde`).
+- Works in `escolhe`, including inside patterns (`caso [Sinal.verde, n]`).
+  `gs check` warns about an `escolhe` that only tests options of one
+  cardapio, forgets some of them and has no `se_nao_colar`.
 
 ## Printing, comparing, JSON
 

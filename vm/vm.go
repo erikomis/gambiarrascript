@@ -68,6 +68,10 @@ type VM struct {
 	// erros: pilha de handlers de arruma/quebrou. Throw pega o mais interno.
 	errStack []tryHandler
 
+	// amarras: o que o ultimo OpCasa amarrou (lido pelos OpAmarrado logo
+	// em seguida, antes de qualquer chamada)
+	amarras []object.Object
+
 	out io.Writer
 
 	builtinIdx map[string]int
@@ -916,6 +920,9 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				// retrato dos itens na ordem de insercao; com dois nomes o
 				// OpIterPar trata como lista (indice, item)
 				vm.push(object.NovaLista(c.Valores()))
+			case *object.Cardapio:
+				// as opcoes na ordem da declaracao (igual lista)
+				vm.push(object.NovaLista(c.ListaOpcoes()))
 			default:
 				panic(VMError{err: &object.Erro{Message: fmt.Sprintf("pra_cada ... em ... so funciona com lista, dicionario ou conjunto, e isso ai e %s", it.Type()), Kind: "runtime"}})
 			}
@@ -1456,6 +1463,12 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				ip += 3
 				continue
 			}
+			// pattern matching e cardapio (padrao.go): raros, fora do
+			// switch quente
+			if n := vm.execPadrao(op, fn.Bytecode[ip+1:]); n > 0 {
+				ip += n
+				continue
+			}
 			return fmt.Errorf("opcode desconhecido: %d", op)
 		}
 	}
@@ -1860,6 +1873,12 @@ func vmIndex(cont, idx object.Object) (object.Object, error) {
 		return par.Valor, nil
 	case *object.Instancia:
 		return membroVM(c, idx)
+	}
+	if v, msg, ok := object.MembroDePonto(cont, idx); ok {
+		if msg != "" {
+			return nil, fmt.Errorf("%s", msg)
+		}
+		return v, nil
 	}
 	// lista, texto e dicionario sao indexaveis.
 	return nil, fmt.Errorf("so da pra indexar lista, texto ou dicionario, e isso ai e %s", cont.Type())

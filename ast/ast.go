@@ -104,9 +104,11 @@ type EscolheStatement struct {
 	Default *BlockStatement // bloco do se_nao_colar (opcional)
 }
 
-// CasoBraco e um braco `caso v1, v2, ...` com o corpo.
+// CasoBraco e um braco `caso v1, v2, ... [se GUARDA]` com o corpo. Cada
+// valor e uma expressao comparada com == ou um padrao (ver padrao.go).
 type CasoBraco struct {
 	Values []Expression
+	Guarda Expression // `se COND` depois dos valores (nil = sem guarda)
 	Body   *BlockStatement
 }
 
@@ -120,7 +122,11 @@ func (s *EscolheStatement) String() string {
 		for i, v := range c.Values {
 			vals[i] = v.String()
 		}
-		sb.WriteString("caso " + strings.Join(vals, ", ") + " " + c.Body.String())
+		guarda := ""
+		if c.Guarda != nil {
+			guarda = " se " + c.Guarda.String()
+		}
+		sb.WriteString("caso " + strings.Join(vals, ", ") + guarda + " " + c.Body.String())
 	}
 	if s.Default != nil {
 		sb.WriteString("se_nao_colar " + s.Default.String())

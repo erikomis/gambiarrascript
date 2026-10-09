@@ -132,6 +132,15 @@ const (
 	// statement que comeca aqui. So existe em bytecode compilado com
 	// compiler.Instrumentar: o bytecode normal nunca tem OpLinha.
 	OpLinha // sitioIdx (2)
+	// --- pattern matching e cardapio ---
+	// OpCasa: descritor object.DescPadrao; pop NValores valores (os do
+	// padrao, em pre-ordem), pop o subject; empilha deu_bom/deu_ruim. Se casou,
+	// guarda o que amarrar na VM (lido logo depois pelo OpAmarrado).
+	OpCasa // descIdx (2)
+	// OpAmarrado: empilha o valor amarrado no slot pelo ultimo OpCasa.
+	OpAmarrado // slot (1)
+	// OpCardapio: descritor object.DescCardapio; empilha o *object.Cardapio.
+	OpCardapio // descIdx (2)
 )
 
 type Definition struct {
@@ -229,6 +238,10 @@ var definitions = map[Opcode]*Definition{
 	OpInstancia: {"OpInstancia", []int{2}},
 	// instrumentacao
 	OpLinha: {"OpLinha", []int{2}},
+	// pattern matching e cardapio
+	OpCasa:     {"OpCasa", []int{2}},
+	OpAmarrado: {"OpAmarrado", []int{1}},
+	OpCardapio: {"OpCardapio", []int{2}},
 }
 
 func Lookup(op byte) (*Definition, error) {

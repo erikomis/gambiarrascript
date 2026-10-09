@@ -16,7 +16,7 @@ Decorou essa tabela, decorou a lingua.
 | `se_colar`          | `if`                 | abre condicional |
 | `se_nao_colar`      | `else` / `else if`   | clausula do `se_colar`; pega condicao (vira else-if) ou nao (else final) |
 | `se_colar c entao a se_nao_colar b` | `c ? a : b` | ternario (expressao, sem `acabou_finalmente`) |
-| `escolhe` / `caso`  | `switch` / `case`    | compara com `==`, sem fallthrough; `se_nao_colar` e o default |
+| `escolhe` / `caso`  | `switch` / `match`   | compara com `==` ou casa um padrao (`caso [a, ...resto]`, `caso Ponto{x, y}`), com guarda `caso ... se cond`; sem fallthrough; `se_nao_colar` e o default — veja [Estruturas](/docs/estruturas#pattern-matching-no-caso) |
 | `enquanto`          | `while`              | loop enquanto condicao for verdadeira |
 | `pra_cada i de A ate B` | `for i in range(A, B+1)` | loop numerico inclusivo (so sobe) |
 | `pra_cada x em colecao` | `for x in ...`   | for-each em lista, dicionario ou conjunto (no dic, as **chaves**) |
@@ -36,7 +36,8 @@ Decorou essa tabela, decorou a lingua.
 | `e` / `ou` / `nao`  | `and` / `or` / `not` | logicos (sempre devolvem booleano) |
 | `treta`             | `type X struct`      | declara uma struct (campos + metodos) — veja [POO](/docs/poo) |
 | `combinado`         | `type X interface`   | declara uma interface, satisfeita de forma implicita |
-| `acabou_finalmente` | `}`                  | fecha **qualquer** bloco (`se_colar`, `escolhe`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`, `treta`, `combinado`) |
+| `cardapio`          | `enum`               | declara um enum: `cardapio Cor` + uma opcao por linha, usado como `Cor.vermelho` — veja [POO](/docs/poo#cardapio-enum) |
+| `acabou_finalmente` | `}`                  | fecha **qualquer** bloco (`se_colar`, `escolhe`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`, `treta`, `combinado`, `cardapio`) |
 
 As palavras-chave sao fixas: nao tem alias pra escolher a que voce gosta mais
 (e nenhuma delas pode virar nome de variavel — nem `e`, `de` ou `em`). O que

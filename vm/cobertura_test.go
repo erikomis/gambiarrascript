@@ -456,6 +456,7 @@ func TestCoberturaExemplos(t *testing.T) {
 		"matematica2.gs", "poo.gs", "constantes.gs", "conta.gs",
 		"indice.gs", "comentarios.gs", "salve.gs", "stats.gs", "json.gs",
 		"tier3.gs", "tipo_spread.gs", "tropa.gs", "modulos/principal.gs",
+		"padroes.gs",
 	}
 	for _, nome := range puros {
 		t.Run(nome, func(t *testing.T) {

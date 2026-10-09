@@ -20,9 +20,11 @@ func TestEfeitoPilhaCobreTodoOpcode(t *testing.T) {
 		&object.DescTreta{},
 		&object.DescCombinado{},
 		&object.DescLiteral{},
+		&object.DescPadrao{},
 	}
 	idxConst := map[code.Opcode]int{
 		code.OpTreta: 1, code.OpCombinado: 2, code.OpInstancia: 3,
+		code.OpCasa: 4,
 	}
 	// definidos mas nunca emitidos (a VM nao executa)
 	mortos := map[code.Opcode]bool{code.OpVaza: true, code.OpContinua: true}

@@ -43,7 +43,8 @@ const (
 	ligDesestruturaChave // bota {x, y} = dict: o nome E a chave
 	ligImporta           // alias do `importa "x.gs" como m`
 	ligComposta          // x += 1: le e escreve
-	ligTipo              // treta/combinado (POO)
+	ligTipo              // treta/combinado/cardapio
+	ligPadrao            // nome solto dentro de padrao de caso (`caso [a, b]`)
 )
 
 type escopo struct {
@@ -373,8 +374,9 @@ func (a *analise) andaStmt(s ast.Statement, esc *escopo, m mapaPos) {
 		a.andaExpr(n.Subject, esc, m)
 		for _, braco := range n.Casos {
 			for _, v := range braco.Values {
-				a.andaExpr(v, esc, m)
+				a.andaPadrao(v, esc, m)
 			}
+			a.andaExpr(braco.Guarda, esc, m)
 			a.andaBloco(braco.Body, esc, m)
 		}
 		a.andaBloco(n.Default, esc, m)
@@ -410,6 +412,8 @@ func (a *analise) andaStmt(s ast.Statement, esc *escopo, m mapaPos) {
 			a.andaExpr(c.Embutida, esc, m)
 			a.andaExpr(c.Padrao, esc, m)
 		}
+	case *ast.CardapioDecl:
+		a.anota(n.Nome, esc, ligTipo, m)
 	case *ast.CombinadoDecl:
 		a.anota(n.Nome, esc, ligTipo, m)
 		for _, ass := range n.Metodos {
@@ -508,6 +512,46 @@ func (a *analise) andaExpr(e ast.Expression, esc *escopo, m mapaPos) *ocorrencia
 		a.andaGenerico(e, esc, m)
 	}
 	return nil
+}
+
+// andaPadrao visita um valor de caso: valor comum e expressao; dentro de
+// padrao, nome solto liga (ligPadrao) e a forma curta `{nome}`/`Tipo{nome}`
+// liga com o nome sendo tambem a chave/campo (nao da pra renomear so ele).
+func (a *analise) andaPadrao(e ast.Expression, esc *escopo, m mapaPos) {
+	switch p := e.(type) {
+	case *ast.PadraoNome:
+		if !p.Curinga() {
+			a.anota(p.Nome, esc, ligPadrao, m)
+		}
+	case *ast.PadraoLista:
+		for _, el := range p.Elementos {
+			a.andaPadrao(el, esc, m)
+		}
+		if p.Resto != nil && p.Resto.Value != "_" {
+			a.anota(p.Resto, esc, ligPadrao, m)
+		}
+	case *ast.PadraoDict:
+		for i, v := range p.Valores {
+			a.andaPadraoCurto(v, p.Curto[i], esc, m)
+		}
+	case *ast.PadraoTreta:
+		a.andaExpr(p.Tipo, esc, m)
+		for i, v := range p.Valores {
+			a.andaPadraoCurto(v, !p.Posicional && p.Curto[i], esc, m)
+		}
+	default:
+		a.andaExpr(e, esc, m)
+	}
+}
+
+func (a *analise) andaPadraoCurto(v ast.Expression, curto bool, esc *escopo, m mapaPos) {
+	if pn, ok := v.(*ast.PadraoNome); ok && curto {
+		if !pn.Curinga() {
+			a.anota(pn.Nome, esc, ligDesestruturaChave, m)
+		}
+		return
+	}
+	a.andaPadrao(v, esc, m)
 }
 
 // andaGenerico visita, por reflexao, os filhos de um no que esta analise nao

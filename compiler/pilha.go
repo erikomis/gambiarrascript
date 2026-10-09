@@ -231,6 +231,14 @@ func efeitoPilha(op code.Opcode, operandos []byte, consts []object.Object) (efei
 			return efeito{}, false
 		}
 		return efeito{tira: d.N + 1, poe: 1}, true
+	case code.OpCasa:
+		d, ok := constAt(consts, u16(0)).(*object.DescPadrao)
+		if !ok {
+			return efeito{}, false
+		}
+		return efeito{tira: d.NValores + 1, poe: 1}, true
+	case code.OpAmarrado, code.OpCardapio:
+		return efeito{poe: 1}, true
 	}
 	// OpVaza/OpContinua: definidos mas nunca emitidos (a VM nao executa)
 	return efeito{}, false

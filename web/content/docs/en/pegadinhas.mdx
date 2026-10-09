@@ -105,8 +105,38 @@ In `pra_cada i de A ate B`, `i` keeps the last value it ran with (`B`).
 ## Keywords can't be names
 
 `e`, `ou`, `nao`, `de`, `ate`, `em`, `como`, `entao`, `caso`, `escolhe`,
-`finalmente`, `nada`... are keywords. `quebrou e` or `bota de = 1` is a syntax
-error. Use `quebrou erro`, `bota inicio = 1`.
+`finalmente`, `nada`, `cardapio`... are keywords. `quebrou e` or
+`bota de = 1` is a syntax error. Use `quebrou erro`, `bota inicio = 1`.
+
+## `caso x` compares, `caso [x]` binds
+
+In `escolhe`, a bare name **outside** a pattern is still a comparison with
+the variable; only **inside** `[ ]`, `{ }` or `Tipo{ }` does a name become a
+new variable (and match anything):
+
+```gambiarrascript
+bota limite = 10
+escolhe [3]
+caso [limite]              # binds: limite becomes 3 (doesn't compare with 10!)
+    mostra "casou, limite = ${limite}"
+acabou_finalmente
+
+bota alvo = 5
+escolhe [5]
+caso [n] se n == alvo      # to compare with a variable, use a guard
+    mostra "e o alvo"
+acabou_finalmente
+```
+
+And since a pattern binds in the function scope (like `bota`), it
+**replaces** the variable with the same name. Two consequences for code that
+used lists or dicts in a `caso` before pattern matching:
+
+- `caso [a, b]` used to mean "equal to the list `[a, b]`"; now it matches
+  **any** 2-item list. Literals inside still compare: `caso [1, 2]` behaves
+  the same.
+- `caso {"tipo": "x"}` used to be whole-dict equality; now it is a
+  **subset** match (extra keys in the value still match).
 
 ## `bota` to assign, but `+=` doesn't need it
 

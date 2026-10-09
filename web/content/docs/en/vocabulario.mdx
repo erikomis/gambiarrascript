@@ -16,7 +16,7 @@ Memorize this table and you've memorized the language.
 | `se_colar`          | `if`                 | opens a conditional |
 | `se_nao_colar`      | `else` / `else if`   | clause of `se_colar`; takes a condition (becomes else-if) or not (final else) |
 | `se_colar c entao a se_nao_colar b` | `c ? a : b` | ternary (an expression, no `acabou_finalmente`) |
-| `escolhe` / `caso`  | `switch` / `case`    | compares with `==`, no fallthrough; `se_nao_colar` is the default |
+| `escolhe` / `caso`  | `switch` / `match`   | compares with `==` or matches a pattern (`caso [a, ...resto]`, `caso Ponto{x, y}`), with a guard `caso ... se cond`; no fallthrough; `se_nao_colar` is the default — see [Control flow](/docs/en/estruturas#pattern-matching-in-caso) |
 | `enquanto`          | `while`              | loops while the condition is true |
 | `pra_cada i de A ate B` | `for i in range(A, B+1)` | inclusive numeric loop (counts up only) |
 | `pra_cada x em colecao` | `for x in ...`   | for-each over a list, dict or set (for a dict, the **keys**) |
@@ -34,7 +34,10 @@ Memorize this table and you've memorized the language.
 | `deu_bom` / `deu_ruim` | `true` / `false`  | booleans |
 | `nada`              | `null` / `None`      | the one and only null value |
 | `e` / `ou` / `nao`  | `and` / `or` / `not` | logical operators (always return a boolean) |
-| `acabou_finalmente` | `}`                  | closes **any** block (`se_colar`, `escolhe`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`) |
+| `treta`             | `type X struct`      | declares a struct (fields + methods) — see [OOP](/docs/en/poo) |
+| `combinado`         | `type X interface`   | declares an interface, satisfied implicitly |
+| `cardapio`          | `enum`               | declares an enum: `cardapio Cor` + one option per line, used as `Cor.vermelho` — see [OOP](/docs/en/poo#cardapio-enum) |
+| `acabou_finalmente` | `}`                  | closes **any** block (`se_colar`, `escolhe`, `enquanto`, `pra_cada`, `gambiarra`, `arruma`, `treta`, `combinado`, `cardapio`) |
 
 The keywords are fixed: there's no alias for you to pick the one you like best
 (and none of them can become a variable name — not even `e`, `de` or `em`).

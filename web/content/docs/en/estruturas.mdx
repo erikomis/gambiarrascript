@@ -1,6 +1,6 @@
 ---
 title: Control flow
-description: se_colar, enquanto, pra_cada, escolhe/caso, the ternary and closing blocks with acabou_finalmente.
+description: se_colar, enquanto, pra_cada, escolhe/caso (with pattern matching), the ternary and closing blocks with acabou_finalmente.
 ---
 
 Every opened block is closed with `acabou_finalmente` ("finally over").
@@ -63,6 +63,89 @@ mostra clima("neblina")    # sei la, olha pela janela
 
 Heads up: `escolhe` ("pick") is a keyword; the random-pick builtin is
 `escolhe_um`.
+
+## Pattern matching in caso
+
+Besides a value compared with `==`, a `caso` accepts a **pattern**: it checks
+the shape of the value and, when it matches, **binds** the pieces to
+variables.
+
+```gambiarrascript
+gambiarra descreve(v)
+    escolhe v
+    caso []
+        funciona "lista vazia"
+    caso [x]
+        funciona "so o ${x}"
+    caso [primeiro, ...resto]
+        funciona "${primeiro} e mais ${tamanho(resto)}"
+    caso {"tipo": "erro", "msg": m}
+        funciona "deu ruim: " + m
+    caso {"tipo": "ok", valor}
+        funciona "ok: ${valor}"
+    se_nao_colar
+        funciona "sei la"
+    acabou_finalmente
+acabou_finalmente
+
+mostra descreve([7])                            # so o 7
+mostra descreve([1, 2, 3])                      # 1 e mais 2
+mostra descreve({"tipo": "erro", "msg": "caiu"}) # deu ruim: caiu
+mostra descreve({"tipo": "ok", "valor": 42, "extra": 1})  # ok: 42
+```
+
+| Pattern | Matches |
+| ------- | ------- |
+| `[a, b]` | a list with **exactly** 2 items |
+| `[a, ...resto]` | a list with at least 1 item; `resto` becomes a new list with the rest |
+| `[]` | the empty list |
+| `{"tipo": "erro", "msg": m}` | a dict that **has** those keys with matching values (extra keys are fine) |
+| `{nome}` | shorthand for `{"nome": nome}` |
+| `Ponto{x: 0, y}` | an instance of the `Ponto` treta with `x == 0`; binds `y` (by name: only the fields you list) |
+| `Ponto{0, y}` | in field order (like the literal, all fields required) |
+| `_` | anything, without binding (the wildcard) |
+| `1`, `"x"`, `deu_bom`, `nada`, `-1`, `Cor.vermelho` | compared with `==` |
+
+Patterns nest (`[{"n": n}, [a, ..._]]`) and each `caso` still accepts several
+of them separated by commas — the first one that matches wins.
+
+### Guard: caso ... se
+
+After the pattern (or value), `se COND` on the same line is the **guard**: the
+caso only counts if the condition holds. The condition already sees what the
+pattern bound.
+
+```gambiarrascript
+gambiarra compara(par)
+    escolhe par
+    caso [a, b] se a > b
+        funciona "desce"
+    caso [a, b] se a < b
+        funciona "sobe"
+    caso [_, _]
+        funciona "empate"
+    acabou_finalmente
+acabou_finalmente
+
+mostra compara([3, 1])   # desce
+mostra compara([2, 2])   # empate
+```
+
+- **A bare name only binds INSIDE a pattern** (`[ ]`, `{ }`, `Tipo{ }`).
+  Outside them, `caso x` still compares with the variable `x`, as it always
+  did.
+- A bound name is a regular variable of the scope: inside a gambiarra it is
+  local to the whole function (like `bota`), at the top level it is a global.
+  It is bound before the guard runs, so it keeps its value even when the
+  guard fails.
+- The same name twice in one pattern (`[x, x]`) is an error: to require
+  equal values, use a guard (`caso [a, b] se a == b`).
+- Inside a pattern only literals, names, `_` or dotted paths (`Cor.vermelho`,
+  `modulo.LIMITE`) are allowed. Arithmetic (`x + 1`) goes in the guard.
+- Nothing matched and there is no `se_nao_colar`: nothing runs (as before).
+- To match on the **type**, use the usual type switch
+  (`escolhe tipo(v)` / `caso "numero"`) or a guard
+  (`caso [n] se tipo(n) == "numero"`).
 
 ## enquanto (while)
 

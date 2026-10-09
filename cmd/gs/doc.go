@@ -26,7 +26,7 @@ func geraDoc(fonte string) (string, error) {
 		case *ast.CravaStatement:
 			escreveDocCrava(&b, n, linhas)
 			continue
-		case *ast.TretaDecl, *ast.CombinadoDecl:
+		case *ast.TretaDecl, *ast.CombinadoDecl, *ast.CardapioDecl:
 			escreveDocTipo(&b, n, linhas)
 			continue
 		case *ast.MetodoDecl:
@@ -89,6 +89,9 @@ func escreveDocTipo(b *strings.Builder, s ast.Statement, linhas []string) {
 		for _, c := range n.Campos {
 			corpo = append(corpo, campoDoc(c))
 		}
+	case *ast.CardapioDecl:
+		kw, nome, linha = "cardapio", n.Nome.Value, n.Token.Line
+		corpo = n.NomesMembros()
 	case *ast.CombinadoDecl:
 		kw, nome, linha = "combinado", n.Nome.Value, n.Token.Line
 		for _, m := range n.Metodos {

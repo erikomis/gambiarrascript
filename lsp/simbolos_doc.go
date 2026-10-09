@@ -25,6 +25,8 @@ const (
 	kindVariavel  = 13
 	kindConstante = 14
 	kindStruct    = 23
+	kindEnum      = 10
+	kindOpcao     = 22 // EnumMember
 )
 
 type SimboloDoc struct {
@@ -179,6 +181,12 @@ func (m *montaSimbolos) doEscopo(st ast.Statement, out *[]SimboloDoc, vistos map
 			filhos = append(filhos, m.linhaFilha(a.Nome, a.Token, kind, detalhe))
 		}
 		m.tipo(n.Nome, n.Token, kindInterface, "combinado", filhos, out, vistos)
+	case *ast.CardapioDecl:
+		filhos := make([]SimboloDoc, 0, len(n.Membros))
+		for _, op := range n.Membros {
+			filhos = append(filhos, m.linhaFilha(op.Nome, op.Token, kindOpcao, ""))
+		}
+		m.tipo(n.Nome, n.Token, kindEnum, "cardapio", filhos, out, vistos)
 	case *ast.MetodoDecl:
 		chave := n.Tipo.Value + "." + n.Nome.Value
 		if vistos[chave] {

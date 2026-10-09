@@ -105,6 +105,9 @@ const (
 	// POO no modelo do Go (Tier 8)
 	TRETA     = "TRETA"     // treta Nome <campos> acabou_finalmente (struct)
 	COMBINADO = "COMBINADO" // combinado Nome <assinaturas> acabou_finalmente (interface)
+
+	// enum: cardapio Nome <um membro por linha> acabou_finalmente
+	CARDAPIO = "CARDAPIO"
 )
 
 var keywords = map[string]TokenType{
@@ -140,6 +143,7 @@ var keywords = map[string]TokenType{
 	"como":              COMO,
 	"treta":             TRETA,
 	"combinado":         COMBINADO,
+	"cardapio":          CARDAPIO,
 }
 
 // LookupIdent devolve o TokenType de uma keyword, ou IDENT se for um nome comum.

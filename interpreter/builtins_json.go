@@ -146,6 +146,9 @@ func escreveJsonRec(buf *bytes.Buffer, o object.Object, emCurso map[object.Objec
 		}
 		delete(emCurso, val)
 		buf.WriteByte('}')
+	case *object.Opcao:
+		// opcao de cardapio vira o nome dela ("vermelho")
+		escreveTextoJson(buf, val.Nome)
 	default:
 		return erroBuiltin("nao da pra virar json: %s", o.Type())
 	}
@@ -172,6 +175,8 @@ func chaveJson(o object.Object) string {
 		return object.FormatNumero(k.Value)
 	case *object.Booleano:
 		return k.Inspect()
+	case *object.Opcao:
+		return k.Nome
 	}
 	return o.Inspect()
 }

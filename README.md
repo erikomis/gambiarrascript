@@ -39,6 +39,8 @@ acabou_finalmente
 | `deu_bom` / `deu_ruim` | true / false     |
 | `nada`              | null                |
 | `treta` / `combinado` | struct / interface (POO estilo Go) |
+| `escolhe` / `caso`  | switch / match (com pattern matching) |
+| `cardapio`          | enum                |
 | `acabou_finalmente` | fecha o bloco       |
 
 ## POO no estilo Go (treta e combinado)
@@ -77,6 +79,40 @@ mostra tipo(rex)              # Cachorro (type switch: escolhe tipo(v) / caso "C
   achata o puxadinho igual o `encoding/json`.
 
 Guia completo em `web/content/docs/poo.mdx`; exemplo rodando em `examples/poo.gs`.
+
+## Pattern matching e cardapio (enum)
+
+O `caso` do `escolhe` casa formato e amarra os pedaços; `cardapio` é o enum.
+
+```
+cardapio Forma
+    circulo
+    quadrado
+acabou_finalmente
+
+gambiarra trata(v)
+    escolhe v
+    caso [Forma.circulo, r]                # cardapio dentro de padrao
+        funciona 3 * r * r
+    caso [primeiro, ...resto] se primeiro > 0   # lista + guarda
+        funciona "comeca com ${primeiro}, sobram ${tamanho(resto)}"
+    caso {"tipo": "erro", msg}             # dicionario: so as chaves listadas
+        funciona "erro: " + msg
+    caso Ponto{x: 0, y}                    # treta: confere o tipo e amarra
+        funciona "no eixo y em ${y}"
+    se_nao_colar
+        funciona "sei la"
+    acabou_finalmente
+acabou_finalmente
+```
+
+- Nome solto só amarra **dentro** de `[ ]`, `{ }` e `Tipo{ }`; `caso x`
+  continua comparando com a variável `x`. `_` é o curinga.
+- `Forma.circulo` imprime `Forma.circulo`, `tipo()` dá `"Forma"`, compara por
+  identidade e tem `.nome`/`.indice`; `pra_cada f em Forma` anda nas opções.
+- `gs check` avisa `escolhe` sobre um cardapio que esquece opção sem
+  `se_nao_colar`. Guia em `web/content/docs/estruturas.mdx` e `poo.mdx`;
+  exemplo em `examples/padroes.gs`.
 
 ## Falando com o mundo (HTTP)
 

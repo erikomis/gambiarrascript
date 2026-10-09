@@ -42,7 +42,22 @@ no [ROADMAP](ROADMAP.md).
   `se_colar` com comparação, comentário, parcial (`inclui`) e layout (`usa` +
   `bloco`). Erro diz o modelo e a linha. Exemplo em `examples/site.gs`, doc
   em [Modelos](https://erikomis.github.io/gambiarrascript/docs/modelos/).
-- Cache `.gsc` antigo é descartado sozinho (formato 17: builtins novas).
+- **Pattern matching no `escolhe`**: `caso [primeiro, ...resto]`,
+  `caso {"tipo": "erro", "msg": m}` (subconjunto das chaves),
+  `caso Ponto{x: 0, y}` / `caso Ponto{0, y}`, curinga `_`, padrões aninhados e
+  guarda `caso [a, b] se a > b`. Nome solto só amarra dentro de `[ ]`, `{ }` e
+  `Tipo{ }` — `caso x` continua comparando com a variável. **Muda** o sentido
+  de `caso` com lista/dicionário que tinha nome dentro (`caso [a, b]` agora
+  amarra) e de `caso {...}` (agora é subconjunto, não igualdade).
+- **`cardapio` (enum)**: `cardapio Cor` / uma opção por linha /
+  `acabou_finalmente`; `Cor.vermelho` compara por identidade, imprime
+  `Cor.vermelho`, `tipo()` dá `"Cor"`, tem `.nome` e `.indice`, `pra_cada op
+  em Cor` percorre as opções, serve de chave e vira o nome no `pra_json`.
+  `cardapio` passa a ser palavra reservada.
+- `gs check` avisa o `escolhe` sobre opções de um cardápio que esquece alguma
+  e não tem `se_nao_colar`.
+- Cache `.gsc` antigo é descartado sozinho (formato 18: builtins e opcodes
+  novos).
 
 ## v0.7.1 — 2026-10-08
 

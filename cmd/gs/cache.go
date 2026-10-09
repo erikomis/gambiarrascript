@@ -28,6 +28,9 @@ func init() {
 	gob.Register(&object.DescTreta{})
 	gob.Register(&object.DescCombinado{})
 	gob.Register(&object.DescLiteral{})
+	// pattern matching e cardapio
+	gob.Register(&object.DescPadrao{})
+	gob.Register(&object.DescCardapio{})
 }
 
 // formatoGSC e a versao do formato do bytecode. Sobe toda vez que mudar
@@ -57,7 +60,9 @@ func init() {
 // 16 = a_cada, depois_de, agenda, cancela, formata_data e le_data no fim da
 // lista de builtins.
 // 17 = templates: renderiza, renderiza_arquivo e responde_html no fim da lista.
-const formatoGSC = 17
+// 18 = pattern matching no caso (OpCasa/OpAmarrado, descritor DescPadrao) e
+// cardapio (OpCardapio, descritor DescCardapio).
+const formatoGSC = 18
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

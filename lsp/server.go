@@ -48,6 +48,7 @@ var keywords = []string{
 	"bora", // bora fn(args) -> Futuro (concorrencia)
 	"entao", "como",
 	"treta", "combinado", // POO (Tier 8)
+	"cardapio", // enum
 }
 
 // builtinsCompletion são as funções nativas da linguagem expostas no autocomplete.
@@ -236,7 +237,7 @@ var docsBuiltin = map[string]string{
 	"escreve_csv":      "escreve_csv(caminho, lista, [cabecalhos]): escreve uma lista de dicts num CSV. 3o arg opcional reordena/seleciona colunas.",
 	"gzip_comprime":    "gzip_comprime(texto) -> texto (base64): comprime o texto com gzip e devolve em base64.",
 	"gzip_descomprime": "gzip_descomprime(texto) -> texto: recebe um base64 de gzip_comprime e devolve o texto original.",
-	"tipo":             "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"trava\", \"nativo\", \"treta\", \"combinado\"). Gambiarra, lambda, builtin e metodo sao todas \"funcao\". Instancia de treta da o nome dela (\"Ponto\") — e o type switch: `escolhe tipo(v)` / `caso \"Ponto\"`.",
+	"tipo":             "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"trava\", \"nativo\", \"treta\", \"combinado\", \"cardapio\"). Gambiarra, lambda, builtin e metodo sao todas \"funcao\". Instancia de treta da o nome dela (\"Ponto\") e opcao de cardapio o nome do cardapio (\"Cor\") — e o type switch: `escolhe tipo(v)` / `caso \"Ponto\"`.",
 	"satisfaz":         "satisfaz(valor, Tipo) -> booleano: Tipo combinado = o valor tem todos os metodos (satisfacao implicita, igual Go; confere quantos parametros cada metodo aceita); Tipo treta = o valor e instancia dela. Combinado vazio aceita qualquer coisa.",
 	"como_tipo":        "como_tipo(valor, Tipo) -> valor: o type assertion do Go (`v.(Ponto)`). Devolve o proprio valor se ele satisfaz o Tipo (treta ou combinado); senao quebra com o motivo (\"esperava Ponto, veio Circulo\" / \"falta o metodo area\").",
 	"migra":            "migra(conexao, [pasta]) -> lista: aplica as migracoes pendentes da pasta (padrao \"migracoes\": NNN_nome.sobe.sql, em ordem) e devolve as versoes aplicadas agora (vazia = banco em dia). Anota em gs_migracoes com checksum; arquivo aplicado que mudou = quebra. Desfazer e pelo `gs migra desce`.",
@@ -295,8 +296,7 @@ var docsKeyword = map[string]string{
 	"enquanto":          "enquanto condicao ... acabou_finalmente: laco while.",
 	"pra_cada":          "pra_cada var de A ate B / pra_cada var em lista ... acabou_finalmente: laco for.",
 	"gambiarra":         "gambiarra nome(params) ... acabou_finalmente: declara uma funcao. Sem nome (`gambiarra(x) ... acabou_finalmente`) e uma lambda anonima usavel como expressao.",
-	"escolhe":           "escolhe x / caso v1, v2 <bloco> / se_nao_colar <bloco> / acabou_finalmente: switch — casa o primeiro caso igual (==) e sai, sem fallthrough.",
-	"caso":              "caso v1[, v2...]: um braco do escolhe. Aceita varios valores separados por virgula.",
+	"escolhe":           "escolhe x / caso v1, v2 <bloco> / se_nao_colar <bloco> / acabou_finalmente: switch — casa o primeiro caso que bater (valor por ==, ou padrao `[a, ...r]`/`{\"k\": v}`/`Tipo{x}` com guarda `se`) e sai, sem fallthrough.",
 	"funciona":          "funciona valor: return de uma gambiarra.",
 	"arruma":            "arruma ... quebrou erro ... acabou_finalmente: try/catch. Aceita varios quebrou (`quebrou erro se CONDICAO`), tentados em ordem.",
 	"quebrou":           "quebrou nome [se condicao]: captura o erro do arruma. Com `se`, so pega se a condicao colar (multi-catch: varios quebrou, o primeiro que colar pega; sem filtro so o ultimo; nenhum colou = o erro sobe).",
@@ -315,6 +315,8 @@ var docsKeyword = map[string]string{
 	"entao":             "entao: separador do ternario `se_colar cond entao a se_nao_colar b`.",
 	"como":              "como: alias pra importa — `importa \"x.gs\" como alias` cria um namespace.",
 	"treta":             "treta Nome / campos (um por linha: `x`, `x = padrao`, ou `Outra` pra puxadinho) / acabou_finalmente: declara uma struct (POO estilo Go, sem heranca). Instancia: `Nome{x: 1}` ou `Nome{1, 2}` (campo faltando = padrao ou nada). Metodo: `gambiarra (p Nome) metodo() ... acabou_finalmente`, chamado com `p.metodo()` — tudo por referencia, o metodo muda a treta.",
+	"cardapio":          "cardapio Nome / uma opcao por linha / acabou_finalmente: enum. `Nome.opcao` e o valor (compara por identidade, imprime `Nome.opcao`, `tipo()` da \"Nome\"); `.nome` e `.indice` da opcao; `pra_cada op em Nome` percorre as opcoes na ordem. Bom no `escolhe`: `caso Cor.vermelho`.",
+	"caso":              "caso v1, v2 [se guarda]: braco do escolhe. Valor comum compara com ==; padrao estrutural casa e amarra: `[a, ...resto]`, `{\"tipo\": t}`, `Ponto{x: 0, y}`; `_` e o curinga. So DENTRO de [ ], { } e Tipo{ } nome solto amarra — `caso x` compara com a variavel x.",
 	"combinado":         "combinado Nome / assinaturas (`escreve(texto)`, ou `Outro` pra embutir) / acabou_finalmente: interface estilo Go, satisfeita de forma implicita — qualquer treta com esses metodos serve. Confere com `satisfaz(v, Nome)`; assertion com `como_tipo(v, Nome)`.",
 }
 
@@ -593,6 +595,9 @@ type typechecker struct {
 	globaisDoTopo map[string]bool
 	// paralelo a scopes: o que se sabe da funcao dona do escopo (nil no topo)
 	funcs []*escopoFunc
+	// cardapios declarados no topo deste arquivo: nome -> opcoes (lint de
+	// escolhe que esquece opcao)
+	cardapios map[string][]string
 }
 
 // escopoFunc guarda, pra uma gambiarra/lambda/metodo, os nomes que viram
@@ -768,6 +773,12 @@ func (tc *typechecker) walkProgram(prog *ast.Program) {
 			tc.globaisDoTopo[n.Nome.Value] = true
 		case *ast.CombinadoDecl:
 			tc.globaisDoTopo[n.Nome.Value] = true
+		case *ast.CardapioDecl:
+			tc.globaisDoTopo[n.Nome.Value] = true
+			if tc.cardapios == nil {
+				tc.cardapios = map[string][]string{}
+			}
+			tc.cardapios[n.Nome.Value] = n.NomesMembros()
 		}
 	}
 	for _, s := range prog.Statements {
@@ -838,14 +849,20 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 	case *ast.EscolheStatement:
 		tc.walkExpr(n.Subject)
 		for _, braco := range n.Casos {
+			// nome solto dentro de padrao amarra; o resto (valor, tipo da
+			// treta) e leitura
 			for _, v := range braco.Values {
-				tc.walkExpr(v)
+				ast.PercorrePadrao(v, func(id *ast.Identifier) { tc.define(id.Value) }, tc.walkExpr)
+			}
+			if braco.Guarda != nil {
+				tc.walkExpr(braco.Guarda)
 			}
 			tc.walkBlock(braco.Body)
 		}
 		if n.Default != nil {
 			tc.walkBlock(n.Default)
 		}
+		tc.checaCardapioCompleto(n)
 	case *ast.FuncionaStatement:
 		if n.Value != nil {
 			tc.walkExpr(n.Value)
@@ -875,6 +892,8 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 				tc.walkExpr(m.Embutido)
 			}
 		}
+	case *ast.CardapioDecl:
+		tc.define(n.Nome.Value)
 	case *ast.MetodoDecl:
 		tc.walkExpr(n.Tipo)
 		tc.entraFuncao(n.ParametrosComReceptor(), n.Body)
@@ -952,10 +971,59 @@ func posDoStmt(s ast.Statement) (int, int) {
 		return n.Token.Line, n.Token.Coluna
 	case *ast.CombinadoDecl:
 		return n.Token.Line, n.Token.Coluna
+	case *ast.CardapioDecl:
+		return n.Token.Line, n.Token.Coluna
 	case *ast.MetodoDecl:
 		return n.Token.Line, n.Token.Coluna
 	}
 	return 0, 0
+}
+
+// checaCardapioCompleto avisa o escolhe que, sem se_nao_colar, so testa
+// opcoes de UM cardapio deste arquivo (`caso Cor.vermelho`) e esquece
+// alguma. So quando da pra ter certeza: todo valor de todo caso e
+// `Cardapio.opcao` do mesmo cardapio (padrao, guarda ou qualquer outra coisa
+// = nao e obvio, nao avisa).
+func (tc *typechecker) checaCardapioCompleto(n *ast.EscolheStatement) {
+	if n.Default != nil || len(tc.cardapios) == 0 {
+		return
+	}
+	card := ""
+	cobertas := map[string]bool{}
+	for _, braco := range n.Casos {
+		if braco.Guarda != nil {
+			return
+		}
+		for _, v := range braco.Values {
+			ix, ok := v.(*ast.IndexExpression)
+			if !ok || !ix.Dot || ix.Safe {
+				return
+			}
+			id, ok1 := ix.Left.(*ast.Identifier)
+			op, ok2 := ix.Index.(*ast.TextoLiteral)
+			if !ok1 || !ok2 || (card != "" && id.Value != card) {
+				return
+			}
+			if _, existe := tc.cardapios[id.Value]; !existe {
+				return
+			}
+			card = id.Value
+			cobertas[op.Value] = true
+		}
+	}
+	if card == "" {
+		return
+	}
+	var faltam []string
+	for _, op := range tc.cardapios[card] {
+		if !cobertas[op] {
+			faltam = append(faltam, card+"."+op)
+		}
+	}
+	if len(faltam) == 0 {
+		return
+	}
+	tc.warn(n.Token.Line, n.Token.Coluna, "esse escolhe sobre o cardapio "+card+" esquece "+strings.Join(faltam, ", ")+" e nao tem se_nao_colar: se cair numa dessas, nada roda")
 }
 
 func (tc *typechecker) walkExpr(e ast.Expression) {

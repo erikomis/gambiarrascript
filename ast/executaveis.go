@@ -9,7 +9,7 @@ import "sort"
 // statements (topo do programa ou corpo de bloco) — em qualquer profundidade:
 // corpo de se_colar/enquanto/pra_cada/escolhe/arruma, de gambiarra, de metodo
 // e de lambda (inclusive lambda dentro de expressao). Declaracoes (gambiarra,
-// treta, combinado, metodo, importa) contam: elas rodam (ligam o nome) quando
+// treta, combinado, cardapio, metodo, importa) contam: elas rodam (ligam o nome) quando
 // a execucao passa por elas. Ficam de fora o BlockStatement em si (so os
 // filhos contam), as linhas de campo da treta e de assinatura do combinado
 // (nunca rodam soltas) e statement sintetico dos engines (desugar), que nao
@@ -85,6 +85,8 @@ func LinhaDoStatement(s Statement) int {
 	case *TretaDecl:
 		return n.Token.Line
 	case *CombinadoDecl:
+		return n.Token.Line
+	case *CardapioDecl:
 		return n.Token.Line
 	case *MetodoDecl:
 		return n.Token.Line
@@ -172,6 +174,7 @@ func (w *coletaExec) filhos(s Statement) {
 			for _, v := range braco.Values {
 				w.expr(v)
 			}
+			w.expr(braco.Guarda)
 			w.bloco(braco.Body)
 		}
 		w.bloco(n.Default)

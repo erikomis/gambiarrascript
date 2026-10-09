@@ -1,6 +1,6 @@
 ---
 title: POO (treta e combinado)
-description: Orientacao a objeto no modelo do Go — treta (struct), metodo com receiver, combinado (interface implicita) e puxadinho (embedding). Sem class, this, new nem heranca.
+description: Orientacao a objeto no modelo do Go — treta (struct), metodo com receiver, combinado (interface implicita), puxadinho (embedding) e cardapio (enum). Sem class, this, new nem heranca.
 ---
 
 GambiarraScript copia o jeito do Go de fazer POO: **composicao no lugar de
@@ -16,7 +16,8 @@ heranca**, interface satisfeita **pelo comportamento** (sem declarar nada) e
 | interface | `combinado Forma` ... `acabou_finalmente` | `type Forma interface` |
 | embedding | um campo que e so o nome da treta (`Animal`) | idem |
 | construtor | `gambiarra nova_ponto(x, y)` | `func NewPonto(x, y)` |
-| type switch | `escolhe tipo(v)` / `caso "Ponto"` | `switch v.(type)` |
+| type switch | `escolhe tipo(v)` / `caso "Ponto"` (ou o padrao `caso Ponto{x, y}`) | `switch v.(type)` |
+| enum | `cardapio Cor` ... `acabou_finalmente`, `Cor.vermelho` | `const ( Vermelho Cor = iota ... )` |
 | type assertion | `como_tipo(v, Ponto)` | `v.(Ponto)` |
 
 ## treta: os campos
@@ -172,6 +173,41 @@ mostra descreve("oi")               # sei la: texto
 `tipo(Circulo)` (o tipo, nao uma instancia) e `"treta"`; `tipo(Forma)` e
 `"combinado"`.
 
+Quer os campos tambem? O padrao de treta do `escolhe` confere o tipo **e**
+amarra os campos de uma vez (veja
+[pattern matching](/docs/estruturas#pattern-matching-no-caso)):
+
+```gambiarrascript
+treta Ponto
+    x
+    y
+acabou_finalmente
+
+gambiarra onde(p)
+    escolhe p
+    caso Ponto{x: 0, y: 0}
+        funciona "na origem"
+    caso Ponto{x: 0, y}
+        funciona "no eixo y, altura ${y}"
+    caso Ponto{x, y} se x == y
+        funciona "na diagonal"
+    caso Ponto{_, _}
+        funciona "em algum lugar"
+    se_nao_colar
+        funciona "nem e ponto"
+    acabou_finalmente
+acabou_finalmente
+
+mostra onde(Ponto{0, 0})   # na origem
+mostra onde(Ponto{0, 3})   # no eixo y, altura 3
+mostra onde(Ponto{2, 2})   # na diagonal
+mostra onde(42)            # nem e ponto
+```
+
+Com `campo:` e **por nome** (so os campos que voce listar; `y` sozinho e
+`y: y`); sem nenhum `:` e **na ordem** dos campos, todos eles (igual o
+literal).
+
 ## Puxadinho: composicao (embedding)
 
 Uma linha da treta que e **so o nome de outra treta** encaixa ela dentro. Os
@@ -214,6 +250,60 @@ mostra rex                   # Cachorro{Animal: Animal{nome: "rex", patas: 3}, r
 - Regra de conflito igual Go: o nome mais **raso** ganha; se o mesmo nome
   aparecer em dois puxadinhos na mesma profundidade, so da erro quando alguem
   acessar ele (use o caminho completo).
+
+## cardapio (enum)
+
+Um conjunto fechado de opcoes com nome: `cardapio Nome`, uma opcao por linha,
+`acabou_finalmente`. Cada opcao e um valor proprio, acessado com ponto.
+
+```gambiarrascript
+cardapio Sinal
+    verde
+    amarelo
+    vermelho
+acabou_finalmente
+
+gambiarra proximo(s)
+    escolhe s
+    caso Sinal.verde
+        funciona Sinal.amarelo
+    caso Sinal.amarelo
+        funciona Sinal.vermelho
+    caso Sinal.vermelho
+        funciona Sinal.verde
+    acabou_finalmente
+acabou_finalmente
+
+bota s = Sinal.verde
+mostra s                     # Sinal.verde
+mostra proximo(s)            # Sinal.amarelo
+mostra tipo(s)               # Sinal
+mostra s.nome                # verde
+mostra s.indice              # 0
+mostra s == Sinal.verde      # deu_bom
+mostra s == "verde"          # deu_ruim
+pra_cada op em Sinal
+    mostra op.nome           # verde, amarelo, vermelho
+acabou_finalmente
+bota tempo = {Sinal.verde: 30, Sinal.vermelho: 20}
+mostra tempo[Sinal.verde]    # 30
+```
+
+- A opcao so e igual a **ela mesma**: nao e numero nem texto (`Sinal.verde ==
+  "verde"` e `deu_ruim`). Pra converter, use `.nome` (o texto) e `.indice`
+  (a posicao, comecando em 0).
+- `mostra` imprime `Sinal.verde`; `tipo()` da o nome do cardapio. O cardapio
+  em si imprime `<cardapio Sinal>` e o `tipo()` dele e `"cardapio"`.
+- `pra_cada op em Sinal` anda nas opcoes na ordem da declaracao (com dois
+  nomes vem indice e opcao).
+- Serve de chave de dicionario e item de conjunto. No `pra_json` vira o nome:
+  `pra_json({"s": Sinal.verde})` e `{"s":"verde"}`.
+- Opcao que nao existe (`Sinal.azul`) e erro na hora. Igual a treta: nome com
+  maiuscula, declarado no **topo** do arquivo, e de outro modulo funciona com
+  o alias (`m.Sinal.verde`).
+- Funciona no `escolhe`, inclusive dentro de padrao (`caso [Sinal.verde, n]`).
+  O `gs check` avisa o `escolhe` que so testa opcoes de um cardapio, esquece
+  alguma e nao tem `se_nao_colar`.
 
 ## Imprimir, comparar, JSON
 

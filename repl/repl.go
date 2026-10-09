@@ -167,7 +167,7 @@ func startRico(stdin *os.File) bool {
 }
 
 // profundidadeBlocos conta aberturas de bloco (se_colar, enquanto, pra_cada,
-// gambiarra, arruma, escolhe, treta, combinado) menos os acabou_finalmente. O `se_nao_colar
+// gambiarra, arruma, escolhe, treta, combinado, cardapio) menos os acabou_finalmente. O `se_nao_colar
 // se_colar` (elif) NAO abre bloco novo — a cadeia inteira fecha com um so
 // acabou_finalmente.
 func profundidadeBlocos(src string) int {
@@ -184,7 +184,7 @@ func profundidadeBlocos(src string) int {
 			if prev != token.SE_NAO_COLAR {
 				depth++
 			}
-		case token.ENQUANTO, token.PRA_CADA, token.GAMBIARRA, token.ARRUMA, token.ESCOLHE, token.TRETA, token.COMBINADO:
+		case token.ENQUANTO, token.PRA_CADA, token.GAMBIARRA, token.ARRUMA, token.ESCOLHE, token.TRETA, token.COMBINADO, token.CARDAPIO:
 			depth++
 		case token.ACABOU:
 			depth--

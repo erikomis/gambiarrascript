@@ -59,6 +59,10 @@ func NomeTipo(o Object) string {
 	if inst, ok := o.(*Instancia); ok {
 		return inst.Tipo.Nome
 	}
+	// opcao de cardapio: o nome do cardapio (`tipo(Cor.vermelho)` == "Cor")
+	if op, ok := o.(*Opcao); ok {
+		return op.Cardapio.Nome
+	}
 	return strings.ToLower(string(o.Type()))
 }
 

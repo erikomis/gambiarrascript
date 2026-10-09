@@ -20,6 +20,11 @@ are no type declarations at all.
 | Pipe        | `cano()`                                   | `<cano sincrono>` | `"cano"` |
 | Error       | whatever `quebrou` catches                 | the message | `"erro"` |
 | Native      | `conecta(...)` (database connection)       | `<nativo: conexao sqlite>` | `"nativo"` |
+| Treta (the type) | `treta Ponto ... acabou_finalmente`    | `<treta Ponto>` | `"treta"` |
+| Instance    | `Ponto{x: 1, y: 2}` or `Ponto{1, 2}`       | `Ponto{x: 1, y: 2}` | `"Ponto"` (the treta's name) |
+| Combinado   | `combinado Forma ... acabou_finalmente`    | `<combinado Forma>` | `"combinado"` |
+| Cardapio (the enum) | `cardapio Cor ... acabou_finalmente` | `<cardapio Cor>` | `"cardapio"` |
+| Option      | `Cor.vermelho`                             | `Cor.vermelho` | `"Cor"` (the cardapio's name) |
 
 `nada` ("nothing") is the only null value — there are no separate
 `null`/`undefined`. `deu_bom` / `deu_ruim` are "it worked" / "it went wrong",

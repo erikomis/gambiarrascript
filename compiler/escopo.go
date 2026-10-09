@@ -169,9 +169,11 @@ func (v *varredura) stmt(s ast.Statement) {
 	case *ast.EscolheStatement:
 		v.expr(n.Subject)
 		for _, braco := range n.Casos {
+			// padrao: os nomes soltos dentro dele amarram (locais da funcao)
 			for _, val := range braco.Values {
-				v.expr(val)
+				ast.PercorrePadrao(val, v.amarra, v.expr)
 			}
+			v.expr(braco.Guarda)
 			v.bloco(braco.Body)
 		}
 		v.bloco(n.Default)
@@ -199,6 +201,8 @@ func (v *varredura) stmt(s ast.Statement) {
 				v.aninhada(nil, &ast.BlockStatement{Statements: []ast.Statement{&ast.FuncionaStatement{Value: c.Padrao}}})
 			}
 		}
+	case *ast.CardapioDecl:
+		v.amarra(n.Nome)
 	case *ast.CombinadoDecl:
 		v.amarra(n.Nome)
 		for _, m := range n.Metodos {

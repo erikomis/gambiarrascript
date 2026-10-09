@@ -103,8 +103,37 @@ No `pra_cada i de A ate B`, `i` fica com o ultimo valor que rodou (`B`).
 ## Palavra-chave nao vira nome
 
 `e`, `ou`, `nao`, `de`, `ate`, `em`, `como`, `entao`, `caso`, `escolhe`,
-`finalmente`, `nada`... sao palavras-chave. `quebrou e` ou `bota de = 1` da
-erro de sintaxe. Use `quebrou erro`, `bota inicio = 1`.
+`finalmente`, `nada`, `cardapio`... sao palavras-chave. `quebrou e` ou
+`bota de = 1` da erro de sintaxe. Use `quebrou erro`, `bota inicio = 1`.
+
+## `caso x` compara, `caso [x]` amarra
+
+No `escolhe`, nome solto **fora** de padrao continua sendo comparacao com a
+variavel; so **dentro** de `[ ]`, `{ }` ou `Tipo{ }` o nome vira variavel
+nova (e casa qualquer coisa):
+
+```gambiarrascript
+bota limite = 10
+escolhe [3]
+caso [limite]              # amarra: limite vira 3 (nao compara com 10!)
+    mostra "casou, limite = ${limite}"
+acabou_finalmente
+
+bota alvo = 5
+escolhe [5]
+caso [n] se n == alvo      # pra comparar com variavel, use guarda
+    mostra "e o alvo"
+acabou_finalmente
+```
+
+E como o padrao amarra no escopo da funcao (igual `bota`), ele **troca** a
+variavel de mesmo nome. Duas consequencias de quem escrevia `caso` com lista
+ou dicionario antes do pattern matching:
+
+- `caso [a, b]` era "igual a lista `[a, b]`"; agora casa **qualquer** lista de
+  2 itens. Literal dentro continua comparando: `caso [1, 2]` segue igual.
+- `caso {"tipo": "x"}` era igualdade do dicionario inteiro; agora e
+  **subconjunto** (chave a mais no valor tambem casa).
 
 ## `bota` pra atribuir, mas `+=` dispensa
 

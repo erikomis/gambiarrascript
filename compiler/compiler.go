@@ -753,6 +753,13 @@ func (c *Compiler) compile(node ast.Node) error {
 	// POO (poo.go)
 	case *ast.TretaDecl:
 		return c.compileTretaDecl(node)
+	case *ast.CardapioDecl:
+		if err := c.exigeTopo("cardapio", node.Token.Line); err != nil {
+			return err
+		}
+		sym := c.defineVar(node.Nome.Value)
+		c.emit(code.OpCardapio, c.addConstant(&object.DescCardapio{Nome: node.Nome.Value, Membros: node.NomesMembros()}))
+		c.emitVarSet(sym)
 	case *ast.CombinadoDecl:
 		return c.compileCombinadoDecl(node)
 	case *ast.MetodoDecl:
@@ -1187,10 +1194,15 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 //
 //	<subject> -> __esc_gs
 //	caso N: pra cada valor { get tmp; <valor>; OpEqual; JumpIfTrue corpoN }
+//	        pra cada padrao { get tmp; <valores do padrao>; OpCasa;
+//	                          JumpIfFalse proxAlt; OpAmarrado+set por nome;
+//	                          Jump corpoN; proxAlt: }
 //	        Jump proximoCaso
-//	corpoN: <corpo>; Jump fim
+//	corpoN: [<guarda>; JumpIfFalse proximoCaso]; <corpo>; Jump fim
 //	default (se_nao_colar): <corpo>
 //	fim:
+//
+// Sem padrao nem guarda o codigo e o mesmo de antes do pattern matching.
 func (c *Compiler) compileEscolhe(node *ast.EscolheStatement) error {
 	if err := c.compile(node.Subject); err != nil {
 		return err
@@ -1202,6 +1214,15 @@ func (c *Compiler) compileEscolhe(node *ast.EscolheStatement) error {
 	for _, braco := range node.Casos {
 		var jmpsCorpo []int
 		for _, v := range braco.Values {
+			if ast.EhPadrao(v) {
+				jmpNao, err := c.compileCasaPadrao(v, tmp)
+				if err != nil {
+					return err
+				}
+				jmpsCorpo = append(jmpsCorpo, c.emit(code.OpJump, 9999))
+				c.backpatch(jmpNao, len(c.instructions))
+				continue
+			}
 			c.emitVarGet(tmp)
 			if err := c.compile(v); err != nil {
 				return err
@@ -1214,11 +1235,21 @@ func (c *Compiler) compileEscolhe(node *ast.EscolheStatement) error {
 		for _, j := range jmpsCorpo {
 			c.backpatch(j, corpoAddr)
 		}
+		jmpGuarda := -1
+		if braco.Guarda != nil {
+			if err := c.compile(braco.Guarda); err != nil {
+				return err
+			}
+			jmpGuarda = c.emit(code.OpJumpIfFalse, 9999)
+		}
 		if err := c.compile(braco.Body); err != nil {
 			return err
 		}
 		jmpsFim = append(jmpsFim, c.emit(code.OpJump, 9999))
 		c.backpatch(jmpProximo, len(c.instructions))
+		if jmpGuarda >= 0 {
+			c.backpatch(jmpGuarda, len(c.instructions))
+		}
 	}
 	if node.Default != nil {
 		if err := c.compile(node.Default); err != nil {
@@ -1230,6 +1261,32 @@ func (c *Compiler) compileEscolhe(node *ast.EscolheStatement) error {
 		c.backpatch(j, fim)
 	}
 	return nil
+}
+
+// compileCasaPadrao emite o teste de UM padrao contra o subject (em tmp):
+// OpCasa, o JumpIfFalse de "nao casou" (devolvido pro chamador remendar) e,
+// se casou, a amarracao de cada nome.
+func (c *Compiler) compileCasaPadrao(pad ast.Expression, tmp Symbol) (int, error) {
+	desc, valores := object.MontaPadrao(pad)
+	if len(desc.Nomes) > 255 {
+		return 0, fmt.Errorf("linha %d: padrao com nome demais (mais de 255)", linhaDe(pad))
+	}
+	c.emitVarGet(tmp)
+	for _, v := range valores {
+		if err := c.compile(v); err != nil {
+			return 0, err
+		}
+	}
+	if l := linhaDe(pad); l > 0 {
+		c.linhaAtual = l
+	}
+	c.emit(code.OpCasa, c.addConstant(desc))
+	jmpNao := c.emit(code.OpJumpIfFalse, 9999)
+	for k, nome := range desc.Nomes {
+		c.emit(code.OpAmarrado, k)
+		c.emitVarSet(c.defineVar(nome))
+	}
+	return jmpNao, nil
 }
 
 // compileDesestrutura: avalia o valor UMA vez num temp e amarra cada nome via
@@ -2042,6 +2099,8 @@ func nomesDeTopo(prog *ast.Program) []string {
 		case *ast.TretaDecl:
 			add(n.Nome)
 		case *ast.CombinadoDecl:
+			add(n.Nome)
+		case *ast.CardapioDecl:
 			add(n.Nome)
 		}
 	}

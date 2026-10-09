@@ -17,7 +17,7 @@ var palavrasChave = []string{
 	"finalmente", "vaza", "continua", "deu_bom", "deu_ruim", "nada",
 	"acabou_finalmente", "e", "ou", "nao", "importa", "como", "bora",
 	"escolhe", "caso", "entao",
-	"treta", "combinado",
+	"treta", "combinado", "cardapio",
 }
 
 // ehIdentChar diz se o byte faz parte de um identificador (ASCII + digitos + _).

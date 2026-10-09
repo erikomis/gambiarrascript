@@ -56,6 +56,10 @@ type Interpreter struct {
 	// tarefas agendadas (a_cada/depois_de/agenda); criado na primeira
 	agenda   *agendador
 	muAgenda sync.Mutex
+
+	// padroes: o DescPadrao montado de cada padrao de caso (montar e puro;
+	// o mesmo no roda muitas vezes num laco). ast.Expression -> *padraoMontado
+	padroes sync.Map
 }
 
 func New(out io.Writer) *Interpreter {
@@ -351,6 +355,9 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		return i.evalMetodoDecl(node, env)
 	case *ast.TretaLiteral:
 		return i.evalTretaLiteral(node, env)
+	case *ast.CardapioDecl:
+		env.Set(node.Nome.Value, object.NovoCardapio(node.Nome.Value, node.NomesMembros()))
+		return NADA
 	}
 	return NADA
 }
@@ -469,29 +476,108 @@ func (i *Interpreter) evalIdentifier(node *ast.Identifier, env *object.Environme
 	return newError(node.Token.Line, "cade o `%s`? voce nao botou isso ainda", node.Value)
 }
 
-// evalEscolhe: casa o subject contra cada `caso` (semantica do ==, via
-// iguais) e roda o primeiro corpo que bater. Sem fallthrough. Se nada casar,
-// roda o se_nao_colar (se existir).
+// evalEscolhe: casa o subject contra cada `caso` (valor comum pela semantica
+// do ==, via iguais; padrao via object.Casa) e roda o primeiro corpo que
+// bater e passar na guarda. Sem fallthrough. Se nada casar, roda o
+// se_nao_colar (se existir).
 func (i *Interpreter) evalEscolhe(node *ast.EscolheStatement, env *object.Environment) object.Object {
 	subject := i.Eval(node.Subject, env)
 	if isError(subject) {
 		return subject
 	}
 	for _, braco := range node.Casos {
+		casou := false
 		for _, vexpr := range braco.Values {
+			if ast.EhPadrao(vexpr) {
+				ok, err := i.casaPadrao(vexpr, subject, env)
+				if err != nil {
+					return err
+				}
+				if ok {
+					casou = true
+					break
+				}
+				continue
+			}
 			v := i.Eval(vexpr, env)
 			if isError(v) {
 				return v
 			}
 			if iguais(subject, v) {
-				return i.evalBlock(braco.Body, env)
+				casou = true
+				break
 			}
 		}
+		if !casou {
+			continue
+		}
+		if braco.Guarda != nil {
+			g := i.Eval(braco.Guarda, env)
+			if isError(g) {
+				return g
+			}
+			if !isTruthy(g) {
+				continue
+			}
+		}
+		return i.evalBlock(braco.Body, env)
 	}
 	if node.Default != nil {
 		return i.evalBlock(node.Default, env)
 	}
 	return NADA
+}
+
+type padraoMontado struct {
+	desc    *object.DescPadrao
+	valores []ast.Expression
+}
+
+// casaPadrao avalia os valores do padrao (em pre-ordem, igual a VM), casa e,
+// se casou, amarra os nomes no escopo.
+func (i *Interpreter) casaPadrao(pad ast.Expression, subject object.Object, env *object.Environment) (bool, object.Object) {
+	var pm *padraoMontado
+	if v, ok := i.padroes.Load(pad); ok {
+		pm = v.(*padraoMontado)
+	} else {
+		d, vals := object.MontaPadrao(pad)
+		pm = &padraoMontado{desc: d, valores: vals}
+		i.padroes.Store(pad, pm)
+	}
+	valores := make([]object.Object, len(pm.valores))
+	for k, e := range pm.valores {
+		v := i.Eval(e, env)
+		if isError(v) {
+			return false, v
+		}
+		valores[k] = v
+	}
+	amarras := make([]object.Object, len(pm.desc.Nomes))
+	ok, msg := object.Casa(pm.desc, subject, valores, amarras, iguais)
+	if msg != "" {
+		return false, newError(linhaDoPadrao(pad), "%s", msg)
+	}
+	if !ok {
+		return false, nil
+	}
+	for k, nome := range pm.desc.Nomes {
+		env.Set(nome, amarras[k])
+	}
+	return true, nil
+}
+
+func linhaDoPadrao(e ast.Expression) int {
+	switch p := e.(type) {
+	case *ast.PadraoLista:
+		return p.Token.Line
+	case *ast.PadraoDict:
+		return p.Token.Line
+	case *ast.PadraoTreta:
+		return p.Token.Line
+	case *ast.PadraoNome:
+		return p.Token.Line
+	}
+	return 0
 }
 
 // evalDesestrutura amarra os nomes do padrao aos valores correspondentes.
@@ -816,6 +902,12 @@ func (i *Interpreter) evalDicionario(node *ast.DicionarioLiteral, env *object.En
 }
 
 func (i *Interpreter) evalIndex(left, index object.Object, linha int) object.Object {
+	if v, msg, ok := object.MembroDePonto(left, index); ok {
+		if msg != "" {
+			return newError(linha, "%s", msg)
+		}
+		return v
+	}
 	switch c := left.(type) {
 	case *object.Lista:
 		idx, ok := index.(*object.Numero)
@@ -1091,6 +1183,10 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 	// fosse lista (com dois nomes vem indice e item — igual a VM)
 	if conj, ok := it.(*object.Conjunto); ok {
 		it = object.NovaLista(conj.Valores())
+	}
+	// cardapio: as opcoes na ordem da declaracao (igual lista)
+	if card, ok := it.(*object.Cardapio); ok {
+		it = object.NovaLista(card.ListaOpcoes())
 	}
 
 	switch c := it.(type) {

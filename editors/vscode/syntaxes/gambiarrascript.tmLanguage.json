@@ -60,7 +60,7 @@
       "name": "constant.language.gambiarrascript"
     },
     "tipodecl": {
-      "match": "\\b(treta|combinado)\\s+([A-Z][a-zA-Z0-9_]*)",
+      "match": "\\b(treta|combinado|cardapio)\\s+([A-Z][a-zA-Z0-9_]*)",
       "captures": {
         "1": { "name": "keyword.declaration.gambiarrascript" },
         "2": { "name": "entity.name.type.gambiarrascript" }
@@ -101,11 +101,21 @@
           }
         },
         {
+          "comment": "guarda do caso: `se` so e palavra-chave na linha de um `caso`",
+          "begin": "\\b(caso)\\b",
+          "beginCaptures": { "1": { "name": "keyword.control.gambiarrascript" } },
+          "end": "$",
+          "patterns": [
+            { "match": "\\bse\\b", "name": "keyword.control.gambiarrascript" },
+            { "include": "$self" }
+          ]
+        },
+        {
           "match": "\\b(se_colar|se_nao_colar|enquanto|pra_cada|de|ate|em|vaza|continua|arruma|quebrou|finalmente|acabou_finalmente|escolhe|caso|funciona|importa|bora|entao|como)\\b",
           "name": "keyword.control.gambiarrascript"
         },
         {
-          "match": "\\b(bota|crava|gambiarra|mostra|treta|combinado)\\b",
+          "match": "\\b(bota|crava|gambiarra|mostra|treta|combinado|cardapio)\\b",
           "name": "keyword.declaration.gambiarrascript"
         },
         {

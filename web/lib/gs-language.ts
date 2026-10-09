@@ -35,6 +35,7 @@ const keywords = new Set([
   "como",
   "treta",
   "combinado",
+  "cardapio",
 ]);
 const booleanos = new Set(["deu_bom", "deu_ruim"]);
 
@@ -49,6 +50,8 @@ interface Estado {
   // multi-catch: 1 = logo depois de `quebrou`, 2 = depois do nome do erro
   // (ai um `se` na mesma linha e palavra-chave do filtro)
   quebrou: number;
+  // guarda do caso: depois de `caso`, um `se` na mesma linha e palavra-chave
+  caso: boolean;
 }
 
 const ident = /^[\p{L}_][\p{L}\p{N}_]*/u;
@@ -74,7 +77,11 @@ function tokenTexto(stream: StringStream, estado: Estado): string {
 }
 
 function tokenCodigo(stream: StringStream, estado: Estado): string | null {
-  if (stream.sol()) estado.quebrou = 0; // o `se` do filtro e na mesma linha
+  if (stream.sol()) {
+    // o `se` do filtro (quebrou) e da guarda (caso) e na mesma linha
+    estado.quebrou = 0;
+    estado.caso = false;
+  }
   if (stream.eatSpace()) return null;
 
   // so o token logo depois de `gambiarra` conta (gambiarra(x) anonima nao)
@@ -130,8 +137,10 @@ function tokenCodigo(stream: StringStream, estado: Estado): string | null {
     if (keywords.has(palavra)) {
       if (palavra === "gambiarra") estado.defineFuncao = true;
       if (palavra === "quebrou") estado.quebrou = 1;
+      if (palavra === "caso") estado.caso = true;
       return "keyword";
     }
+    if (estado.caso && palavra === "se") return "keyword";
     if (passoQuebrou === 1) {
       estado.quebrou = 2; // o nome do erro
       return "variableName";
@@ -177,6 +186,7 @@ export const gambiarraScript = StreamLanguage.define<Estado>({
     interp: [],
     defineFuncao: false,
     quebrou: 0,
+    caso: false,
   }),
   copyState: (e) => ({ ...e, interp: [...e.interp] }),
   token(stream, estado) {

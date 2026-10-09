@@ -19,6 +19,16 @@
     "body": ["combinado ${1:Nome}", "\t${2:metodo}(${3})", "acabou_finalmente"],
     "description": "Interface estilo Go: satisfeita de forma implicita por quem tem os metodos"
   },
+  "Cardapio (enum)": {
+    "prefix": "cardapio",
+    "body": ["cardapio ${1:Nome}", "\t${2:opcao}", "acabou_finalmente"],
+    "description": "Enum: uma opcao por linha, usada como Nome.opcao"
+  },
+  "Escolhe com padrao": {
+    "prefix": "escolhe",
+    "body": ["escolhe ${1:valor}", "caso [${2:primeiro}, ...${3:resto}]", "\t${0}", "se_nao_colar", "\t", "acabou_finalmente"],
+    "description": "Escolhe/caso com pattern matching (lista, {\"chave\": v}, Tipo{campo}, guarda com se)"
+  },
   "Crava (constante)": {
     "prefix": "crava",
     "body": ["crava ${1:NOME} = ${0:valor}"],

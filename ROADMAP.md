@@ -158,7 +158,8 @@ Histórico por versão no [CHANGELOG](CHANGELOG.md).
 - [x] **Destructuring** — `bota [a, b] = lista` (posição) e `bota {x, y} = dict`
       (chave); faltante vira `nada` (lenient). VM via `OpIndexOuNada`.
 - [x] **match/switch** — `escolhe x / caso v1, v2 / se_nao_colar /
-      acabou_finalmente`, sem fallthrough, igualdade do `==`.
+      acabou_finalmente`, sem fallthrough, igualdade do `==`. Ganhou pattern
+      matching no Tier 9 (lista/dicionario/treta, `_`, guarda `se`).
 - [x] **Generics** — N/A: a linguagem é dinâmica, toda gambiarra já é genérica
       por natureza. Fechado sem código.
 - [x] **Records + métodos** — via dicts + dot access: `obj.campo` lê,
@@ -745,6 +746,24 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       de parse.
 - [x] **multi-catch** — entregue no Tier 2 do jeito sugerido aqui:
       `quebrou erro se erro_tipo(erro) == "rede"`.
+- [x] **Pattern matching no `caso`** — `caso [a, ...resto]`,
+      `caso {"tipo": "erro", msg}` (subconjunto das chaves),
+      `caso Ponto{x: 0, y}` (por nome) / `caso Ponto{0, y}` (na ordem, todos
+      os campos), curinga `_`, aninhado e guarda `caso ... se cond` (`se`
+      contextual, igual o multi-catch). Nome solto so amarra DENTRO de
+      `[ ]`/`{ }`/`Tipo{ }` — `caso x` segue comparando (compat). O nome
+      amarrado e local da funcao (escopo.go/crava). Regra unica em
+      `object/padrao.go` (`MontaPadrao` + `Casa`), usada pelos 2 engines; a
+      VM ganhou `OpCasa`/`OpAmarrado` fora do switch quente (sem padrao o
+      bytecode do `escolhe` e o mesmo de antes). Padrao de tipo
+      (`caso numero n`) ficou de fora: guarda com `tipo()` cobre.
+- [x] **`cardapio` (enum)** — `cardapio Cor` / uma opcao por linha;
+      `Cor.vermelho` compara por identidade, imprime `Cor.vermelho`,
+      `tipo()` = "Cor", `.nome`/`.indice`, `pra_cada op em Cor`, chave de
+      dicionario/conjunto, `pra_json` = nome. `OpCardapio` com descritor.
+      Nome `opcoes` foi descartado (colide com o builtin `opcoes()`).
+      `gs check` avisa `escolhe` sobre opcoes de um cardapio que esquece
+      alguma sem `se_nao_colar` (so quando todo caso e `Cardapio.opcao`).
 - [x] **Tarefas agendadas** — `a_cada(seg, f)`, `depois_de(seg, f)`,
       `agenda("cron", f)` e `cancela(h)` (`interpreter/builtins_agenda.go`).
       Cron de 5 campos próprio (`cron.go`: `*`, listas, faixas, passos, regra
