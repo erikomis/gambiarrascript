@@ -532,7 +532,7 @@ log_info("subiu", {"porta": cfg.porta, "extras": cfg._})
 | --- | --- | --- |
 | `busca(url, [opcoes])` | `(texto, [dicionario])` | `dicionario` `{status, ok, corpo, cabecalhos, [corpo_base64]}` |
 | `rota(metodo, caminho, handler)` | `(texto, texto, gambiarra)` | `nada` — registers the route (`/usuarios/:id`, `/arquivos/*resto`) |
-| `escuta(porta, [opcoes])` | `(numero ou texto, [dicionario])` | blocks while serving (each request in parallel); ctrl+c shuts down gracefully. HTTPS with `{"tls": {"cert": "cert.pem", "chave": "chave.pem"}}` |
+| `escuta(porta, [opcoes])` | `(numero ou texto, [dicionario])` | blocks while serving (each request in parallel); ctrl+c shuts down gracefully. HTTPS with `{"tls": {"cert": "cert.pem", "chave": "chave.pem"}}`; max body with `{"max_corpo": bytes}` (default 10 MB, over it = 413) |
 | `responde_json(valor, [status])` | `(valor, [numero])` | response `dicionario` with the JSON |
 | `responde_html(html, [status])` | `(texto, [numero])` | response `dicionario` with `Content-Type: text/html; charset=utf-8` ([Templates](/docs/en/modelos)) |
 | `antes(handler)` | `(gambiarra(pedido))` | `nada` — middleware before the routes |
@@ -540,6 +540,12 @@ log_info("subiu", {"porta": cfg.porta, "extras": cfg._})
 | `cors([opcoes])` | `([dicionario])` | `nada` — turns on CORS + preflight |
 | `serve_pasta(prefixo, pasta)` | `(texto, texto)` | `nada` — static files |
 | `rota_ws(caminho, handler)` | `(texto, gambiarra(ws, pedido))` | `nada` — WebSocket endpoint |
+| `salva_arquivo(arquivo, pasta, [nome])` | `(dicionario, texto, [texto])` | `texto` — writes a `pedido.arquivos` item inside the folder (sanitized name, no `..`, never overwrites) |
+| `define_cookie(resposta, nome, valor, [opcoes])` | `(dicionario, texto, texto, [dicionario])` | the `resposta` with the `Set-Cookie` (HttpOnly + SameSite=Lax by default; `segredo` signs it) |
+| `le_cookie(pedido, nome, [segredo])` | `(dicionario, texto, [texto])` | `texto` or `nada` (with a secret: bad signature = `nada`) |
+| `usa_sessao(opcoes)` | `(dicionario)` | `nada` — `pedido.sessao` kept in a signed cookie (HMAC; `encripta` = AES-GCM) |
+| `limita(opcoes)` | `(dicionario)` | `nada` — per-client rate limit (`por_minuto`, `rajada`, `chave`, `prefixo`); over it = 429 + `Retry-After` |
+| `comprime([opcoes])` | `([dicionario])` | `nada` — gzip on text responses (`minimo`, `nivel`) with `Vary: Accept-Encoding` |
 | `conecta_ws(url, [opcoes])` | `(texto, [dicionario])` | WebSocket connection (use `envia`/`recebe`/`fecha`) |
 | `gera_certificado([hosts])` | `([lista de texto])` | `dicionario` `{cert, chave}` in PEM — self-signed, **dev only** |
 

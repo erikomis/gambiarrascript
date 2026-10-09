@@ -529,7 +529,7 @@ log_info("subiu", {"porta": cfg.porta, "extras": cfg._})
 | --- | --- | --- |
 | `busca(url, [opcoes])` | `(texto, [dicionario])` | `dicionario` `{status, ok, corpo, cabecalhos, [corpo_base64]}` |
 | `rota(metodo, caminho, handler)` | `(texto, texto, gambiarra)` | `nada` — registra a rota (`/usuarios/:id`, `/arquivos/*resto`) |
-| `escuta(porta, [opcoes])` | `(numero ou texto, [dicionario])` | bloqueia servindo (cada requisicao em paralelo); ctrl+c desliga com calma. HTTPS com `{"tls": {"cert": "cert.pem", "chave": "chave.pem"}}` |
+| `escuta(porta, [opcoes])` | `(numero ou texto, [dicionario])` | bloqueia servindo (cada requisicao em paralelo); ctrl+c desliga com calma. HTTPS com `{"tls": {"cert": "cert.pem", "chave": "chave.pem"}}`; corpo maximo com `{"max_corpo": bytes}` (padrao 10 MB, passou = 413) |
 | `responde_json(valor, [status])` | `(valor, [numero])` | `dicionario` de resposta com o JSON |
 | `responde_html(html, [status])` | `(texto, [numero])` | `dicionario` de resposta com `Content-Type: text/html; charset=utf-8` ([Modelos](/docs/modelos)) |
 | `antes(handler)` | `(gambiarra(pedido))` | `nada` — middleware antes das rotas |
@@ -537,6 +537,12 @@ log_info("subiu", {"porta": cfg.porta, "extras": cfg._})
 | `cors([opcoes])` | `([dicionario])` | `nada` — liga CORS + preflight |
 | `serve_pasta(prefixo, pasta)` | `(texto, texto)` | `nada` — arquivos estaticos |
 | `rota_ws(caminho, handler)` | `(texto, gambiarra(ws, pedido))` | `nada` — endpoint WebSocket |
+| `salva_arquivo(arquivo, pasta, [nome])` | `(dicionario, texto, [texto])` | `texto` — grava um item do `pedido.arquivos` dentro da pasta (nome sanitizado, sem `..`, nunca sobrescreve) |
+| `define_cookie(resposta, nome, valor, [opcoes])` | `(dicionario, texto, texto, [dicionario])` | a `resposta` com o `Set-Cookie` (HttpOnly + SameSite=Lax por padrao; `segredo` assina) |
+| `le_cookie(pedido, nome, [segredo])` | `(dicionario, texto, [texto])` | `texto` ou `nada` (com segredo: assinatura errada = `nada`) |
+| `usa_sessao(opcoes)` | `(dicionario)` | `nada` — `pedido.sessao` guardado em cookie assinado (HMAC; `encripta` = AES-GCM) |
+| `limita(opcoes)` | `(dicionario)` | `nada` — limite de pedidos por cliente (`por_minuto`, `rajada`, `chave`, `prefixo`); passou = 429 + `Retry-After` |
+| `comprime([opcoes])` | `([dicionario])` | `nada` — gzip nas respostas de texto (`minimo`, `nivel`) com `Vary: Accept-Encoding` |
 | `conecta_ws(url, [opcoes])` | `(texto, [dicionario])` | conexao WebSocket (usa `envia`/`recebe`/`fecha`) |
 | `gera_certificado([hosts])` | `([lista de texto])` | `dicionario` `{cert, chave}` em PEM — autoassinado, **so pra dev** |
 

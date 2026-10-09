@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>upload gambiarra</title>
+<h1>Manda um arquivo, parca</h1>
+<p>Voce ja visitou essa pagina {{ visitas }} vez(es) nessa sessao.</p>
+<form method="post" action="/upload" enctype="multipart/form-data">
+  <input name="descricao" placeholder="descricao">
+  <input type="file" name="arquivo" multiple>
+  <button>manda</button>
+</form>
+<h2>Seus uploads</h2>
+<ul>
+{{ pra_cada u em uploads }}  <li>{{ u.nome }} ({{ u.tamanho }} bytes) — {{ u.descricao }}</li>
+{{ se_nao_colar }}  <li>nada ainda</li>
+{{ acabou }}</ul>

@@ -65,7 +65,7 @@ func init() {
 // 19 = geradores (OpGerador/OpRende), pra_cada com OpIterProx (OpIterSeq
 // empilha orig/seq/tamanho; treta com itera()) e proximo/acabou/pega/lista
 // no fim da lista de builtins.
-const formatoGSC = 19
+const formatoGSC = 20
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

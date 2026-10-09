@@ -33,6 +33,30 @@ no [ROADMAP](ROADMAP.md).
   que já existe com conteúdo é recusada. Tudo que ele gera passa no
   `gs check` e no `gs formata` sem mudança. Veja
   [Linha de comando](https://erikomis.github.io/gambiarrascript/docs/cli#gs-novo).
+- **Upload e formulário**: corpo `application/x-www-form-urlencoded` ou
+  `multipart/form-data` chega aberto em `pedido.campos` (campo repetido vira
+  lista) e `pedido.arquivos` (`{"nome", "tipo", "tamanho",
+  "conteudo_base64"}`, nome já sanitizado: `../../etc/passwd` vira `passwd`).
+  `salva_arquivo(arquivo, pasta, [nome])` grava dentro da pasta, recusa nome
+  com `/` ou `..` e nunca sobrescreve (`foto-1.png`).
+- **Corpo máximo**: 10 MB por padrão; passou → `413`. Troca com
+  `escuta(porta, {"max_corpo": bytes})`. **Mudança**: antes não tinha limite.
+- **Cookies**: `define_cookie(resposta, nome, valor, [opcoes])` (HttpOnly e
+  SameSite=Lax por padrão; `expira_em`, `seguro`, `mesmo_site`, `caminho`,
+  `dominio`, `segredo` pra assinar) e `le_cookie(pedido, nome, [segredo])`
+  (assinatura errada = `nada`).
+- **Sessão sem banco**: `usa_sessao({"segredo": ...})` faz de `pedido.sessao`
+  um dicionário guardado num cookie assinado com HMAC-SHA256 (com
+  `"encripta": deu_bom`, cifrado com AES-256-GCM). Cookie adulterado, de
+  outro segredo ou vencido = sessão vazia.
+- **Limite de pedidos**: `limita({"por_minuto": 60})` (balde de fichas por ip
+  ou pela chave de uma gambiarra, `rajada`, `prefixo`) responde `429` com
+  `Retry-After`; memória limitada (`max_chaves`).
+- **Compressão**: `comprime([{"minimo", "nivel"}])` manda resposta de texto
+  em gzip pra quem aceita, com `Vary: Accept-Encoding`, sem comprimir duas
+  vezes; vale pro `serve_pasta` também.
+- Exemplo novo: `examples/upload.gs` (upload + sessão + limite + gzip).
+- `.gsc` antigo é recompilado sozinho (6 builtins novas).
 
 ## v0.8.0 — 2026-10-08
 

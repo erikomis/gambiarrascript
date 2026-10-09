@@ -317,7 +317,7 @@ func TestTLSErrosDeConfig(t *testing.T) {
 		{`escuta("127.0.0.1:0", {"tls": {"cert": "` + c.cert + `"}})`,
 			"builtin | deu ruim: escuta(): \"tls\" precisa de \"cert\" e \"chave\" (caminho do .pem ou o PEM em si)"},
 		{`escuta("127.0.0.1:0", {"tsl": {}})`,
-			"builtin | deu ruim: escuta(): opcao \"tsl\" nao existe (a que existe: tls)"},
+			"builtin | deu ruim: escuta(): opcao \"tsl\" nao existe (as que existem: tls, max_corpo)"},
 		{`escuta("127.0.0.1:0", {"tls": deu_bom})`,
 			"builtin | deu ruim: escuta(): \"tls\" tem que ser um dicionario {\"cert\": \"cert.pem\", \"chave\": \"chave.pem\"}, veio BOOLEANO"},
 		{`escuta_tcp("127.0.0.1:0", gambiarra(c) acabou_finalmente, {"tls": {"cert": "` + c.cert + `", "chave": "/nao/existe.pem"}})`,

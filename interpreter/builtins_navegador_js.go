@@ -46,6 +46,19 @@ func (s *servidorEstado) builtinServePasta(args []object.Object) object.Object {
 	return erroNavegador("serve_pasta")
 }
 
+func (s *servidorEstado) builtinUsaSessao(args []object.Object) object.Object {
+	return erroNavegador("usa_sessao")
+}
+func (s *servidorEstado) builtinLimita(args []object.Object) object.Object {
+	return erroNavegador("limita")
+}
+func (s *servidorEstado) builtinComprime(args []object.Object) object.Object {
+	return erroNavegador("comprime")
+}
+func builtinSalvaArquivo(args []object.Object) object.Object { return erroNavegador("salva_arquivo") }
+func builtinDefineCookie(args []object.Object) object.Object { return erroNavegador("define_cookie") }
+func builtinLeCookie(args []object.Object) object.Object     { return erroNavegador("le_cookie") }
+
 func builtinBusca(args []object.Object) object.Object        { return erroNavegador("busca") }
 func builtinRespondeJson(args []object.Object) object.Object { return erroNavegador("responde_json") }
 func builtinRespondeHtml(args []object.Object) object.Object { return erroNavegador("responde_html") }

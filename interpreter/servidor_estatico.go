@@ -75,7 +75,7 @@ func dentro(raiz, alvo string) bool {
 	return alvo == raiz || strings.HasPrefix(alvo, raiz+string(filepath.Separator))
 }
 
-func (p *pastaEstatica) serve(w http.ResponseWriter, r *http.Request) {
+func (p *pastaEstatica) serve(w http.ResponseWriter, r *http.Request, comp *configCompressao) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
 		escreveTexto(w, http.StatusMethodNotAllowed, "pasta estatica so atende GET e HEAD, parca")
@@ -132,6 +132,9 @@ func (p *pastaEstatica) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
+	if comp.serveGzipEstatico(w, r, f, info) {
+		return
+	}
 	// ServeContent: Content-Type pela extensao (ou farejando), Range,
 	// If-Modified-Since e HEAD sem corpo.
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)

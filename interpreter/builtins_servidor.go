@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -18,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -50,6 +52,15 @@ type servidorEstado struct {
 	cors       *configCors
 	pastas     []*pastaEstatica
 	i          *Interpreter
+
+	// maxCorpo e o limite do corpo em bytes (0 = maxCorpoPadrao); o escuta
+	// troca com {"max_corpo": n}.
+	maxCorpo atomic.Int64
+	// sessao (usa_sessao), limitadores (limita) e compressao (comprime):
+	// middlewares embutidos, configurados antes do escuta.
+	sessao     *configSessao
+	limites    []*limitador
+	compressao *configCompressao
 
 	// conexoes WebSocket abertas: o desligamento manda "going away" pra elas
 	// (o Shutdown do net/http nao enxerga conexao sequestrada).
@@ -219,25 +230,35 @@ func enderecoDeEscuta(arg object.Object) (string, *object.Erro) {
 	return "", erroBuiltin("escuta(): a porta tem que ser numero ou texto (\":8080\"), veio %s", arg.Type())
 }
 
-// opcoesDeEscuta le o segundo argumento do escuta: {"tls": {"cert", "chave"}}.
-// Devolve o tls.Config (nil = HTTP puro).
-func opcoesDeEscuta(o object.Object) (*tls.Config, *object.Erro) {
+// opcoesDeEscuta le o segundo argumento do escuta: {"tls": {"cert", "chave"},
+// "max_corpo": bytes}. Devolve o tls.Config (nil = HTTP puro) e o limite do
+// corpo (0 = nao mexe).
+func opcoesDeEscuta(o object.Object) (*tls.Config, int64, *object.Erro) {
 	d, ok := o.(*object.Dicionario)
 	if !ok {
-		return nil, erroBuiltin("escuta(): as opcoes tem que ser dicionario, tipo {\"tls\": {\"cert\": \"cert.pem\", \"chave\": \"chave.pem\"}}, veio %s", o.Type())
+		return nil, 0, erroBuiltin("escuta(): as opcoes tem que ser dicionario, tipo {\"tls\": {\"cert\": \"cert.pem\", \"chave\": \"chave.pem\"}}, veio %s", o.Type())
 	}
 	var cfg *tls.Config
+	var maxCorpo int64
 	for _, par := range d.Pares() {
-		k, ok := par.Chave.(*object.Texto)
-		if !ok || k.Value != "tls" {
-			return nil, erroBuiltin("escuta(): opcao %s nao existe (a que existe: tls)", chaveComAspas(par.Chave))
-		}
-		var e *object.Erro
-		if cfg, e = configTLSServidor("escuta", par.Valor); e != nil {
-			return nil, e
+		k, _ := par.Chave.(*object.Texto)
+		switch {
+		case k != nil && k.Value == "tls":
+			var e *object.Erro
+			if cfg, e = configTLSServidor("escuta", par.Valor); e != nil {
+				return nil, 0, e
+			}
+		case k != nil && k.Value == "max_corpo":
+			n, ok := par.Valor.(*object.Numero)
+			if !ok || !ehInteiro(n) || n.Value < 1 {
+				return nil, 0, erroBuiltin("escuta(): \"max_corpo\" tem que ser um numero inteiro de bytes maior que 0, veio %s", par.Valor.Inspect())
+			}
+			maxCorpo = int64(n.Value)
+		default:
+			return nil, 0, erroBuiltin("escuta(): opcao %s nao existe (as que existem: tls, max_corpo)", chaveComAspas(par.Chave))
 		}
 	}
-	return cfg, nil
+	return cfg, maxCorpo, nil
 }
 
 func (s *servidorEstado) builtinEscuta(args []object.Object) object.Object {
@@ -252,8 +273,12 @@ func (s *servidorEstado) builtinEscuta(args []object.Object) object.Object {
 	// na hora, nao um servidor de pe que derruba todo handshake
 	var cfgTLS *tls.Config
 	if len(args) == 2 {
-		if cfgTLS, erro = opcoesDeEscuta(args[1]); erro != nil {
+		var maxCorpo int64
+		if cfgTLS, maxCorpo, erro = opcoesDeEscuta(args[1]); erro != nil {
 			return erro
+		}
+		if maxCorpo > 0 {
+			s.maxCorpo.Store(maxCorpo)
 		}
 	}
 	ln, err := net.Listen("tcp", endereco)
@@ -413,7 +438,10 @@ func (s *servidorEstado) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if pasta := s.achaPasta(r.URL.Path); pasta != nil {
-			pasta.serve(w, r)
+			s.mu.RLock()
+			comp := s.compressao
+			s.mu.RUnlock()
+			pasta.serve(w, r, comp)
 			return
 		}
 		escreveTexto(w, http.StatusNotFound, "rota nao encontrada, parca")
@@ -432,11 +460,22 @@ func (s *servidorEstado) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.RLock()
+	cfgSessao := s.sessao
+	s.mu.RUnlock()
+	var sessao *sessaoCarregada
+	if cfgSessao != nil {
+		var dic *object.Dicionario
+		dic, sessao = cfgSessao.carrega(r)
+		dicBota(pedido, "sessao", dic)
+	}
+
 	if rota.ws {
+		// no websocket a sessao e so leitura: o handshake ja respondeu
 		s.atendeWS(w, r, rota, pedido, cors)
 		return
 	}
-	s.atendeRequisicao(w, r, rota, pedido)
+	s.atendeRequisicao(w, r, rota, pedido, sessao)
 }
 
 func pedeUpgradeWS(r *http.Request) bool {
@@ -468,8 +507,11 @@ func (s *servidorEstado) rodaAntes(w http.ResponseWriter, r *http.Request, rota 
 // atendeRequisicao roda antes → handler → depois e escreve a resposta. O
 // net/http ja entrega cada request numa goroutine propria, entao as
 // requisicoes rodam em paralelo de verdade.
-func (s *servidorEstado) atendeRequisicao(w http.ResponseWriter, r *http.Request, rota *rotaHTTP, pedido *object.Dicionario) {
-	resp := s.rodaAntes(w, r, rota, pedido)
+func (s *servidorEstado) atendeRequisicao(w http.ResponseWriter, r *http.Request, rota *rotaHTTP, pedido *object.Dicionario, sessao *sessaoCarregada) {
+	resp := s.rodaLimites(r, rota, pedido)
+	if resp == nil {
+		resp = s.rodaAntes(w, r, rota, pedido)
+	}
 	if resp == nil {
 		res := s.chamaAdaptado(rota.handler, []object.Object{pedido}, rota.rotulo())
 		resp = s.normaliza(r, rota.rotulo(), res)
@@ -487,6 +529,16 @@ func (s *servidorEstado) atendeRequisicao(w http.ResponseWriter, r *http.Request
 		}
 		resp = s.normaliza(r, "depois() de "+rota.rotulo(), res)
 	}
+	if sessao != nil {
+		if e := sessao.salva(pedido, resp); e != nil {
+			s.logaErroHandler(r, "sessao de "+rota.rotulo(), e)
+			resp = respostaErroInterno()
+		}
+	}
+	s.mu.RLock()
+	compressao := s.compressao
+	s.mu.RUnlock()
+	compressao.comprimeResposta(r, resp)
 	resp.escreve(w)
 }
 
@@ -495,14 +547,27 @@ func (s *servidorEstado) atendeRequisicao(w http.ResponseWriter, r *http.Request
 func (s *servidorEstado) montaPedido(w http.ResponseWriter, r *http.Request, params [][2]string, leCorpo bool) (*object.Dicionario, int, string) {
 	var corpo []byte
 	if leCorpo {
+		max := s.maxCorpo.Load()
+		if max <= 0 {
+			max = maxCorpoPadrao
+		}
+		msg413 := "corpo grande demais, parca (o limite e " + strconv.FormatInt(max, 10) + " bytes)"
+		if r.ContentLength > max {
+			w.Header().Set("Connection", "close")
+			return nil, http.StatusRequestEntityTooLarge, msg413
+		}
 		// prazo so pra ler o corpo (ResponseController: Go 1.20+). Em writer
 		// que nao suporta (httptest.Recorder) o erro e ignorado.
 		rc := http.NewResponseController(w)
 		_ = rc.SetReadDeadline(time.Now().Add(prazoCorpo))
 		var err error
-		corpo, err = io.ReadAll(r.Body)
+		corpo, err = io.ReadAll(http.MaxBytesReader(w, r.Body, max))
 		_ = rc.SetReadDeadline(time.Time{})
 		if err != nil {
+			var grande *http.MaxBytesError
+			if errors.As(err, &grande) {
+				return nil, http.StatusRequestEntityTooLarge, msg413
+			}
 			return nil, http.StatusBadRequest, "nao consegui ler o corpo do pedido, parca"
 		}
 	}
@@ -514,6 +579,10 @@ func (s *servidorEstado) montaPedido(w http.ResponseWriter, r *http.Request, par
 			return nil, http.StatusBadRequest, "esse json do corpo ta quebrado, parca: " + err.Error()
 		}
 		jsonCorpo = v
+	}
+	campos, arquivos := object.NovoDicionario(), object.NovoDicionario()
+	if err := leFormulario(r.Header.Get("Content-Type"), corpo, campos, arquivos); err != nil {
+		return nil, http.StatusBadRequest, "esse formulario do corpo ta quebrado, parca: " + err.Error()
 	}
 
 	dic := object.NovoDicionario()
@@ -528,6 +597,8 @@ func (s *servidorEstado) montaPedido(w http.ResponseWriter, r *http.Request, par
 	}
 	dicBota(dic, "params", ps)
 	dicBota(dic, "json", jsonCorpo)
+	dicBota(dic, "campos", campos)
+	dicBota(dic, "arquivos", arquivos)
 	ip := r.RemoteAddr
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		ip = host

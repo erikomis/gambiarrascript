@@ -1,6 +1,6 @@
 ---
 title: HTTP server
-description: rota(), escuta(), HTTPS, middleware, CORS, static files and WebSocket — REST APIs and real-time stuff in GambiarraScript.
+description: rota(), escuta(), HTTPS, middleware, CORS, static files, uploads, cookies, sessions, rate limiting, gzip and WebSocket — REST APIs and real-time stuff in GambiarraScript.
 ---
 
 ```gambiarrascript
@@ -13,8 +13,9 @@ escuta(8080)
 ```
 
 `rota` is a "route", `escuta` means "listen" and `pedido` is the incoming
-"request". Full examples: `examples/api_rest.gs` (CRUD with auth and CORS) and
-`examples/chat_ws.gs` (chat with WebSocket broadcast).
+"request". Full examples: `examples/api_rest.gs` (CRUD with auth and CORS),
+`examples/chat_ws.gs` (chat with WebSocket broadcast) and `examples/upload.gs`
+(upload + session + rate limit + gzip).
 
 ## rota(metodo, caminho, handler)
 
@@ -54,6 +55,9 @@ fine. It gets the `pedido` dictionary:
 | `json`       | value | body already parsed when the `Content-Type` is `application/json` (or `...+json`); `nada` if it isn't JSON or is empty |
 | `ip`         | text  | the caller's IP (from the connection; behind a proxy, read `X-Forwarded-For` in the headers) |
 | `cookies`    | dict  | request cookies (`name → value`)                  |
+| `campos`     | dict  | form fields (`application/x-www-form-urlencoded` or `multipart/form-data`); a repeated field becomes a list |
+| `arquivos`   | dict  | `multipart/form-data` files: `field → {"nome", "tipo", "tamanho", "conteudo_base64"}` (a list if the field repeats) |
+| `sessao`     | dict  | only with `usa_sessao()`: the user's session (see below) |
 
 A repeated header or query parameter arrives joined with `", "`.
 
@@ -260,6 +264,187 @@ serve_pasta("/", "./site")          # whole static site
 - A `rota()` registered on the same path beats the folder. The folder path is
   relative to where `gs` was run.
 
+## Forms and uploads
+
+An `application/x-www-form-urlencoded` body (the default `<form>`) or a
+`multipart/form-data` one (`<form enctype="multipart/form-data">` with
+`<input type="file">`) arrives already parsed (`campos` = "fields",
+`arquivos` = "files"):
+
+```gambiarrascript
+rota("POST", "/perfil", gambiarra(pedido)
+    bota nome = pedido.campos.nome  # text
+    bota foto = pedido.arquivos.foto  # nada if nothing was sent
+    se_colar foto != nada
+        bota caminho = salva_arquivo(foto, "uploads")
+        mostra "${nome} sent ${foto.nome} (${foto.tamanho} bytes, ${foto.tipo}) → ${caminho}"
+    acabou_finalmente
+    funciona responde_json({"ok": deu_bom}, 201)
+acabou_finalmente)
+```
+
+- `pedido.campos`: the text fields. A repeated field (checkbox,
+  `<select multiple>`) becomes a **list**; a single one stays plain text.
+- `pedido.arquivos`: each file becomes a dictionary with `nome` (name), `tipo`
+  (content type), `tamanho` (size in bytes) and `conteudo_base64` (content).
+  `<input type="file" multiple>` (a repeated field) becomes a list. A file
+  input with no file chosen doesn't show up.
+- `nome` is already **sanitized**: no directory at all (`../../etc/passwd`
+  becomes `passwd`, `C:\fotos\a.png` becomes `a.png`), no control characters,
+  no leading dot (no `.htaccess`) and a bounded length.
+- `tipo` is what the **client** claimed (`image/png`): check the content
+  before trusting it.
+- `corpo` still holds the raw body; a broken form →
+  `400 esse formulario do corpo ta quebrado, parca`.
+- The `escuta` body limit (10 MB by default) applies to the whole upload.
+
+### salva_arquivo(arquivo, pasta, [nome])
+
+Writes the uploaded file **inside** `pasta` (created if missing) and returns
+the final path. The name comes from the file itself (sanitized again, even if
+the dictionary was built by hand) or from the 3rd argument — which must be
+just a name: `/`, `\` or `..` is an error (`nada de sair da pasta, parca`).
+It **never overwrites**: if `foto.png` already exists it writes `foto-1.png`,
+`foto-2.png`... and returns that path.
+
+```gambiarrascript
+salva_arquivo(pedido.arquivos.doc, "uploads")  # uploads/relatorio.pdf
+salva_arquivo(pedido.arquivos.doc, "uploads", "rel.pdf")  # uploads/rel.pdf
+salva_arquivo(pedido.arquivos.doc, "uploads", "../x.sh")  # error
+```
+
+## Cookies: define_cookie and le_cookie
+
+`define_cookie(resposta, nome, valor, [opcoes])` adds a `Set-Cookie` to a
+response dictionary — the one from `responde_html`/`responde_json`, the
+`resposta` in `depois()` or an empty `{}` — and returns that same dictionary:
+
+```gambiarrascript
+rota("GET", "/tema/:cor", gambiarra(pedido)
+    bota r = responde_html("<p>theme changed</p>")
+    define_cookie(r, "tema", pedido.params.cor, {"expira_em": 30 * 24 * 3600})
+    funciona r
+acabou_finalmente)
+```
+
+The default is the safe one: `HttpOnly` (page JavaScript can't read it) and
+`SameSite=Lax` (another site can't send it along in a POST). Options:
+
+| option       | default     | what it does                                           |
+| ------------ | ----------- | ------------------------------------------------------ |
+| `expira_em`  | —           | seconds (`Max-Age`); `0` or less **deletes** the cookie |
+| `http_only`  | `deu_bom`   | `deu_ruim` lets JavaScript read it                     |
+| `seguro`     | `deu_ruim`  | `Secure`: HTTPS only                                   |
+| `mesmo_site` | `"Lax"`     | `"Strict"` or `"None"` (the latter only with `"seguro": deu_bom`) |
+| `caminho`    | `"/"`       | `Path`                                                 |
+| `dominio`    | —           | `Domain`                                               |
+| `segredo`    | —           | **signs** the value with HMAC-SHA256 (32+ characters)  |
+
+The value is text without quotes, `;`, `\` or accents (run it through
+`base64_codifica`, or keep real data in the session).
+
+`le_cookie(pedido, nome, [segredo])` reads the cookie from the request
+(`nada` if absent). With `segredo` it only returns the value if the
+`define_cookie` signature matches: a tampered or unsigned cookie → `nada`,
+no error.
+
+```gambiarrascript
+bota SEGREDO = env("SEGREDO")
+# on login:  define_cookie(r, "usuario", texto(id), {"segredo": SEGREDO})
+# later:     bota id = le_cookie(pedido, "usuario", SEGREDO)  -- nada = forged
+```
+
+## Sessions: usa_sessao(opcoes)
+
+Sessions **without a database**: `pedido.sessao` becomes a dictionary that
+comes back on the next request from the same browser. It lives entirely in a
+cookie signed with HMAC-SHA256 — the user may read it but can't change it.
+
+```gambiarrascript
+usa_sessao({"segredo": env("SEGREDO")})  # gera_chave() once and keep it in .env
+
+rota("GET", "/", gambiarra(pedido)
+    bota pedido.sessao["visitas"] = (pedido.sessao.visitas ?? 0) + 1
+    funciona "visit number ${pedido.sessao.visitas}"
+acabou_finalmente)
+
+rota("POST", "/sair", gambiarra(pedido)
+    bota pedido["sessao"] = {}  # empty session = deletes the cookie
+    funciona "bye!"
+acabou_finalmente)
+```
+
+- Changed `pedido.sessao` (in the route, in `antes` or in `depois`) → the
+  server sends the new cookie. Didn't change it → nothing is sent (and it
+  renews itself once past half of its lifetime).
+- A **tampered** cookie, one from another secret, broken or expired → an
+  **empty** session, no error.
+- Only what turns into JSON fits (text, number, boolean, nada, list,
+  dictionary), up to about 4 KB (the browser limit). Going over, or storing a
+  function → 500 with the reason on stderr. For big things, keep just an id in
+  the session.
+- On WebSocket `pedido.sessao` is read-only (the handshake is already done).
+
+| option       | default       | what it does                                       |
+| ------------ | ------------- | -------------------------------------------------- |
+| `segredo`    | required      | 32+ characters (`gera_chave()` works)              |
+| `nome`       | `"gs_sessao"` | cookie name                                        |
+| `encripta`   | `deu_ruim`    | `deu_bom` encrypts with AES-256-GCM: the user can't even read it |
+| `expira_em`  | 7 days        | seconds; an older cookie is not accepted           |
+| `seguro`, `mesmo_site`, `caminho`, `dominio`, `http_only` | as in `define_cookie` | |
+
+## Rate limiting: limita(opcoes)
+
+`limita({"por_minuto": 60})` ("60 per minute") holds each client in a
+**token bucket**: the bucket starts full (`rajada`, the burst, default =
+`por_minuto`), each request spends a token and tokens trickle back. No token
+→ `429` with `Retry-After` (in seconds) and the route doesn't even run.
+
+```gambiarrascript
+limita({"por_minuto": 120})  # global, per ip
+
+# login: 5 per minute per email (a request without email skips this limit)
+gambiarra chave_login(pedido)
+    funciona pedido.campos.email
+acabou_finalmente
+limita({"por_minuto": 5, "prefixo": "/login", "chave": chave_login})
+```
+
+| option       | default       | what it does                                       |
+| ------------ | ------------- | -------------------------------------------------- |
+| `por_minuto` | required      | tokens refilled per minute                         |
+| `rajada`     | `por_minuto`  | bucket size (how many at once)                     |
+| `chave`      | `"ip"`        | or a `gambiarra(pedido)` returning the key; `nada` = this request skips the limit |
+| `prefixo`    | everything    | only paths under it (`"/api"` covers `/api` and `/api/x`) |
+| `max_chaves` | 10000         | how many clients it remembers; beyond that it forgets the oldest |
+
+- You can call it several times: every limit applies, in order.
+- It runs **before** `antes()` (and the 429 goes through `depois()` like any
+  response). It also applies to the WebSocket handshake.
+- Behind a proxy the ip is the proxy's: use `"chave"` with the
+  `X-Forwarded-For` that **your** proxy sets.
+- Memory is bounded (`max_chaves`); a forgotten client comes back with a full
+  bucket.
+
+## Compression: comprime([opcoes])
+
+`comprime()` sends responses **gzipped** when it pays off:
+
+- the client accepts it (`Accept-Encoding: gzip`);
+- the body has at least `minimo` bytes (default 1024);
+- the type is text: `text/*`, JSON, JavaScript, XML, SVG, WASM. Images, zips
+  and videos are already compressed and go as is;
+- the response has no `Content-Encoding` yet (never compresses twice).
+
+Every response that *could* be compressed gets `Vary: Accept-Encoding` (so
+caches don't hand gzip to someone who didn't ask). It applies to routes and
+to `serve_pasta` (except requests with `Range`). Options: `minimo` (bytes) and
+`nivel` (level: 1 = fast ... 9 = smallest).
+
+```gambiarrascript
+comprime({"minimo": 512})
+```
+
 ## escuta(porta, [opcoes])
 
 Starts the server and **blocks**. Takes a number (`8080`) or text with the
@@ -276,6 +461,9 @@ servidor de pe em http://localhost:8080 (ctrl+c pra parar)
   state). A second ctrl+c kills it on the spot.
 - Timeouts: 10s for the request headers to arrive, 60s to read the body, 120s
   for an idle connection (keep-alive).
+- Maximum body: **10 MB** by default (json, text, forms, uploads). Over it →
+  `413 corpo grande demais, parca (o limite e N bytes)` without calling the
+  route. Change it with `escuta(8080, {"max_corpo": 50 * 1024 * 1024})`.
 
 Each request runs **in parallel** (one goroutine per request). So be careful
 when touching a list/dictionary shared between handlers (see

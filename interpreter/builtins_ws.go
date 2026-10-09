@@ -197,7 +197,11 @@ func (s *servidorEstado) fechaWebsockets() {
 // atendeWS: middlewares antes → handshake → handler(ws, pedido) na goroutine
 // do proprio request (uma por conexao) → fecha quando o handler volta.
 func (s *servidorEstado) atendeWS(w http.ResponseWriter, r *http.Request, rota *rotaHTTP, pedido *object.Dicionario, cors *configCors) {
-	if resp := s.rodaAntes(w, r, rota, pedido); resp != nil {
+	resp := s.rodaLimites(r, rota, pedido)
+	if resp == nil {
+		resp = s.rodaAntes(w, r, rota, pedido)
+	}
+	if resp != nil {
 		resp.escreve(w) // middleware barrou (401...): nem faz o handshake
 		return
 	}

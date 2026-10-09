@@ -294,6 +294,8 @@ var nomesBuiltins = []string{
 	"renderiza", "renderiza_arquivo", "responde_html",
 	// geradores
 	"proximo", "acabou", "pega", "lista",
+	// servidor parte 3: upload, cookies, sessao, limite de pedidos, gzip
+	"salva_arquivo", "define_cookie", "le_cookie", "usa_sessao", "limita", "comprime",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que

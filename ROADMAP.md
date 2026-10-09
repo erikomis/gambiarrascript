@@ -291,6 +291,16 @@ Ergonomia de sintaxe e correções que se sente falta no dia a dia:
       e lista/dicionário virando JSON, `antes`/`depois` (middleware), `cors()`,
       `serve_pasta`, `escuta` com endereço texto + desligamento com calma
       (SIGINT/SIGTERM) + timeouts, erro no handler = 500 genérico + log.
+- [x] **Servidor parte 3** — `pedido.campos`/`pedido.arquivos`
+      (urlencoded e multipart, nome de arquivo sanitizado) +
+      `salva_arquivo(arquivo, pasta, [nome])` que nunca sai da pasta nem
+      sobrescreve; corpo máximo (10 MB, `{"max_corpo": n}` no `escuta`, 413);
+      `define_cookie`/`le_cookie` (HttpOnly + SameSite=Lax por padrão,
+      assinatura HMAC); `usa_sessao` (sessão inteira em cookie HMAC, AES-GCM
+      opcional, adulterado = vazia); `limita` (balde de fichas por chave,
+      429 + `Retry-After`, memória limitada com LRU); `comprime` (gzip só pra
+      texto acima do mínimo, `Vary: Accept-Encoding`, nunca duas vezes, vale
+      pro `serve_pasta` também). Veja `examples/upload.gs`.
 
 ### Bugs de motor — corrigidos e abertos
 

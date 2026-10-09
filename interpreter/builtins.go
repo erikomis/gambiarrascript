@@ -19,6 +19,9 @@ var builtins = map[string]*object.Builtin{
 	// servidor/rede (o resto do servidor e por instancia, no New)
 	"responde_json":     {Nome: "responde_json", Fn: builtinRespondeJson},
 	"responde_html":     {Nome: "responde_html", Fn: builtinRespondeHtml},
+	"salva_arquivo":     {Nome: "salva_arquivo", Fn: builtinSalvaArquivo},
+	"define_cookie":     {Nome: "define_cookie", Fn: builtinDefineCookie},
+	"le_cookie":         {Nome: "le_cookie", Fn: builtinLeCookie},
 	"renderiza":         {Nome: "renderiza", Fn: builtinRenderiza},
 	"renderiza_arquivo": {Nome: "renderiza_arquivo", Fn: builtinRenderizaArquivo},
 	"conecta_ws":        {Nome: "conecta_ws", Fn: builtinConectaWs},

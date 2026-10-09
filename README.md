@@ -166,7 +166,8 @@ escuta(8080)
 `rota(metodo, caminho, handler)` registra uma rota (com parametro e curinga:
 `/usuarios/:id` → `pedido["params"]["id"]`, `/arquivos/*resto`); o `handler`
 recebe o dicionario-pedido (`metodo`, `caminho`, `corpo`, `cabecalhos`,
-`query`, `params`, `json` ja parseado, `ip`, `cookies`) e devolve texto, lista
+`query`, `params`, `json` ja parseado, `ip`, `cookies`, `campos` e `arquivos`
+de formulario/upload) e devolve texto, lista
 ou dicionario (viram JSON), `responde_json(valor, status)` ou
 `{"status", "corpo", "cabecalhos"}`. Tem middleware (`antes`/`depois`),
 `cors()`, `serve_pasta(prefixo, pasta)` e WebSocket (`rota_ws` no servidor,
@@ -177,7 +178,13 @@ generico pro cliente e o detalhe vai pro stderr. Cada requisicao roda na
 propria goroutine. O corpo se confere com `valida(pedido.json, esquema)`, que
 devolve a lista de erros com o caminho de cada um (`"itens[2].preco:
 obrigatorio"`) pra responder `400`; o banco fica em dia na subida com
-`migra(conexao)` (ou `gs migra` na linha de comando). Exemplos: `examples/api_rest.gs` e `examples/chat_ws.gs`;
+`migra(conexao)` (ou `gs migra` na linha de comando). Upload vai pro disco com
+`salva_arquivo(arquivo, pasta)` (nome sanitizado, nunca sai da pasta); cookie
+com `define_cookie`/`le_cookie` (HttpOnly + SameSite=Lax, assinado com
+`segredo`); sessao sem banco com `usa_sessao({"segredo": ...})` (cookie com
+HMAC, opcionalmente cifrado); limite de pedidos com `limita({"por_minuto":
+60})` (429 + `Retry-After`); gzip com `comprime()`; corpo maximo de 10 MB
+(`{"max_corpo": n}` no `escuta`, passou = 413). Exemplos: `examples/api_rest.gs`, `examples/chat_ws.gs` e `examples/upload.gs`;
 doc completa em [Servidor HTTP](https://erikomis.github.io/gambiarrascript/docs/servidor/).
 
 ## Páginas HTML (modelos)

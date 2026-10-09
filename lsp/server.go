@@ -290,6 +290,12 @@ var docsBuiltin = map[string]string{
 	"serve_pasta":       "serve_pasta(prefixo, pasta): serve arquivos estaticos (GET/HEAD), index.html em pasta, sem sair da pasta nem mostrar dotfile.",
 	"rota_ws":           "rota_ws(caminho, gambiarra(ws, pedido), [opcoes]): endpoint WebSocket. Use recebe(ws) (nada = cliente saiu), envia(ws, msg) e fecha(ws). So a mesma origem entra; {\"origens\": [\"https://app.com\"]} libera outras (\"*\" = qualquer uma).",
 	"conecta_ws":        "conecta_ws(url, [opcoes]) -> conexao: cliente WebSocket (ws:// ou wss://). Opcoes: cabecalhos, timeout, ca, inseguro. Usa com envia/recebe/fecha.",
+	"salva_arquivo":     "salva_arquivo(arquivo, pasta, [nome]) -> texto: grava um item do pedido.arquivos DENTRO da pasta (cria se faltar) e devolve o caminho. Nome com pasta ou \"..\" = erro; nunca sobrescreve (vira foto-1.png).",
+	"define_cookie":     "define_cookie(resposta, nome, valor, [opcoes]) -> resposta: bota um Set-Cookie no dicionario de resposta (ou {}). HttpOnly e SameSite=Lax por padrao. Opcoes: expira_em (s; 0 apaga), http_only, seguro, mesmo_site, caminho, dominio, segredo (assina).",
+	"le_cookie":         "le_cookie(pedido, nome, [segredo]) -> texto ou nada: le o cookie do pedido; com segredo so devolve se a assinatura do define_cookie bater (adulterado = nada).",
+	"usa_sessao":        "usa_sessao({\"segredo\": ...}): pedido.sessao vira um dicionario guardado num cookie assinado (HMAC) que volta no proximo pedido. Opcoes: nome (gs_sessao), encripta (AES-GCM), expira_em (7 dias), seguro, mesmo_site, caminho, dominio. Adulterado = sessao vazia.",
+	"limita":            "limita({\"por_minuto\": 60}): limite de pedidos por cliente (balde de fichas). Passou → 429 com Retry-After. Opcoes: rajada, chave (\"ip\" ou gambiarra(pedido)), prefixo, max_chaves.",
+	"comprime":          "comprime([{\"minimo\": 1024, \"nivel\": 6}]): respostas de texto (html, json, css, js...) acima do minimo vao em gzip pra quem manda Accept-Encoding: gzip. Bota Vary: Accept-Encoding; nunca comprime duas vezes.",
 	"gera_certificado":  "gera_certificado([hosts]) -> {\"cert\", \"chave\"}: certificado autoassinado (PEM) SO PRA DEV — hosts padrao localhost, 127.0.0.1, ::1. Passa direto no {\"tls\": ...} do escuta e o cert serve de {\"ca\": ...} no cliente.",
 }
 
