@@ -45,7 +45,8 @@ var keywords = []string{
 	"vaza", "continua", "deu_bom", "deu_ruim", "nada", "acabou_finalmente",
 	"finalmente", "escolhe", "caso",
 	"e", "ou", "nao", "importa",
-	"bora", // bora fn(args) -> Futuro (concorrencia)
+	"bora",  // bora fn(args) -> Futuro (concorrencia)
+	"rende", // rende valor: faz da gambiarra um gerador
 	"entao", "como",
 	"treta", "combinado", // POO (Tier 8)
 	"cardapio", // enum
@@ -97,6 +98,8 @@ var builtinsCompletion = []string{
 	"le_csv", "escreve_csv",
 	// compressao
 	"gzip_comprime", "gzip_descomprime",
+	// geradores
+	"proximo", "acabou", "pega", "lista",
 	// erros
 	"quebra", "erro_msg", "erro_linha", "erro_tipo", "erro_pilha",
 	"erro_causa", "envolve_erro",
@@ -237,7 +240,11 @@ var docsBuiltin = map[string]string{
 	"escreve_csv":      "escreve_csv(caminho, lista, [cabecalhos]): escreve uma lista de dicts num CSV. 3o arg opcional reordena/seleciona colunas.",
 	"gzip_comprime":    "gzip_comprime(texto) -> texto (base64): comprime o texto com gzip e devolve em base64.",
 	"gzip_descomprime": "gzip_descomprime(texto) -> texto: recebe um base64 de gzip_comprime e devolve o texto original.",
-	"tipo":             "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"trava\", \"nativo\", \"treta\", \"combinado\", \"cardapio\"). Gambiarra, lambda, builtin e metodo sao todas \"funcao\". Instancia de treta da o nome dela (\"Ponto\") e opcao de cardapio o nome do cardapio (\"Cor\") — e o type switch: `escolhe tipo(v)` / `caso \"Ponto\"`.",
+	"tipo":             "tipo(valor) -> texto: nome do tipo (\"numero\", \"texto\", \"booleano\", \"nada\", \"lista\", \"dicionario\", \"conjunto\", \"funcao\", \"erro\", \"futuro\", \"cano\", \"trava\", \"nativo\", \"gerador\", \"treta\", \"combinado\", \"cardapio\"). Gambiarra, lambda, builtin e metodo sao todas \"funcao\". Instancia de treta da o nome dela (\"Ponto\") e opcao de cardapio o nome do cardapio (\"Cor\") — e o type switch: `escolhe tipo(v)` / `caso \"Ponto\"`.",
+	"proximo":          "proximo(gerador, [padrao]) -> valor: o proximo valor rendido. No fim devolve nada (ou o padrao, se passou) — gerador pode render nada de proposito, entao use o padrao ou acabou(g) pra separar.",
+	"acabou":           "acabou(gerador) -> booleano: deu_bom se nao tem mais valor. Pra saber pode rodar o corpo ate o proximo rende (o valor fica guardado pro proximo pedido).",
+	"pega":             "pega(gerador, n) -> lista: puxa ate n valores do gerador (menos se ele acabar antes). O jeito de usar gerador infinito.",
+	"lista":            "lista(x) -> lista: lista nova com os valores de um gerador (consome ele inteiro), lista (copia), conjunto, dicionario (chaves) ou treta com itera().",
 	"satisfaz":         "satisfaz(valor, Tipo) -> booleano: Tipo combinado = o valor tem todos os metodos (satisfacao implicita, igual Go; confere quantos parametros cada metodo aceita); Tipo treta = o valor e instancia dela. Combinado vazio aceita qualquer coisa.",
 	"como_tipo":        "como_tipo(valor, Tipo) -> valor: o type assertion do Go (`v.(Ponto)`). Devolve o proprio valor se ele satisfaz o Tipo (treta ou combinado); senao quebra com o motivo (\"esperava Ponto, veio Circulo\" / \"falta o metodo area\").",
 	"migra":            "migra(conexao, [pasta]) -> lista: aplica as migracoes pendentes da pasta (padrao \"migracoes\": NNN_nome.sobe.sql, em ordem) e devolve as versoes aplicadas agora (vazia = banco em dia). Anota em gs_migracoes com checksum; arquivo aplicado que mudou = quebra. Desfazer e pelo `gs migra desce`.",
@@ -297,7 +304,8 @@ var docsKeyword = map[string]string{
 	"pra_cada":          "pra_cada var de A ate B / pra_cada var em lista ... acabou_finalmente: laco for.",
 	"gambiarra":         "gambiarra nome(params) ... acabou_finalmente: declara uma funcao. Sem nome (`gambiarra(x) ... acabou_finalmente`) e uma lambda anonima usavel como expressao.",
 	"escolhe":           "escolhe x / caso v1, v2 <bloco> / se_nao_colar <bloco> / acabou_finalmente: switch — casa o primeiro caso que bater (valor por ==, ou padrao `[a, ...r]`/`{\"k\": v}`/`Tipo{x}` com guarda `se`) e sai, sem fallthrough.",
-	"funciona":          "funciona valor: return de uma gambiarra.",
+	"funciona":          "funciona valor: return de uma gambiarra. Num gerador so encerra (o valor e descartado).",
+	"rende":             "rende valor: entrega um valor e pausa. A gambiarra com rende vira GERADOR: chamar nao roda o corpo, devolve um gerador; pra_cada/proximo/lista pedem os valores um por um (o corpo roda ate o proximo rende).",
 	"arruma":            "arruma ... quebrou erro ... acabou_finalmente: try/catch. Aceita varios quebrou (`quebrou erro se CONDICAO`), tentados em ordem.",
 	"quebrou":           "quebrou nome [se condicao]: captura o erro do arruma. Com `se`, so pega se a condicao colar (multi-catch: varios quebrou, o primeiro que colar pega; sem filtro so o ultimo; nenhum colou = o erro sobe).",
 	"vaza":              "vaza: break de um loop.",
@@ -586,6 +594,8 @@ func Typecheck(prog *ast.Program) []Diagnostico {
 }
 
 type typechecker struct {
+	// geradores: pilha das gambiarras sendo andadas (true = tem rende)
+	geradores  []bool
 	scopes     []map[string]bool
 	botaScopes []map[string]*varUso // paralelo a scopes: vars `bota` (p/ nao-usada)
 	diags      []Diagnostico
@@ -803,7 +813,9 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 	case *ast.GambiarraStatement:
 		tc.define(n.Name.Value)
 		tc.entraFuncao(n.Parameters, n.Body)
+		tc.geradores = append(tc.geradores, n.Gerador)
 		tc.walkBlock(n.Body)
+		tc.geradores = tc.geradores[:len(tc.geradores)-1]
 		tc.popScope()
 	case *ast.SeColarStatement:
 		for i, c := range n.Conditions {
@@ -867,6 +879,13 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 		if n.Value != nil {
 			tc.walkExpr(n.Value)
 		}
+		if _, nada := n.Value.(*ast.NadaLiteral); !nada && len(tc.geradores) > 0 && tc.geradores[len(tc.geradores)-1] {
+			tc.warn(n.Token.Line, n.Token.Coluna, "num gerador o funciona so encerra: esse valor e jogado fora (rende ele antes, ou usa `funciona nada`)")
+		}
+	case *ast.RendeStatement:
+		if n.Value != nil {
+			tc.walkExpr(n.Value)
+		}
 	case *ast.VazaStatement, *ast.ContinuaStatement:
 		// nada a checar
 	case *ast.ExpressionStatement:
@@ -897,7 +916,9 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 	case *ast.MetodoDecl:
 		tc.walkExpr(n.Tipo)
 		tc.entraFuncao(n.ParametrosComReceptor(), n.Body)
+		tc.geradores = append(tc.geradores, n.Gerador)
 		tc.walkBlock(n.Body)
+		tc.geradores = tc.geradores[:len(tc.geradores)-1]
 		tc.popScope()
 	}
 }
@@ -942,6 +963,8 @@ func posDoStmt(s ast.Statement) (int, int) {
 	case *ast.MostraStatement:
 		return n.Token.Line, n.Token.Coluna
 	case *ast.FuncionaStatement:
+		return n.Token.Line, n.Token.Coluna
+	case *ast.RendeStatement:
 		return n.Token.Line, n.Token.Coluna
 	case *ast.ExpressionStatement:
 		return n.Token.Line, n.Token.Coluna
@@ -1068,7 +1091,9 @@ func (tc *typechecker) walkExpr(e ast.Expression) {
 		}
 	case *ast.FuncaoLiteral:
 		tc.entraFuncao(n.Parameters, n.Body)
+		tc.geradores = append(tc.geradores, n.Gerador)
 		tc.walkBlock(n.Body)
+		tc.geradores = tc.geradores[:len(tc.geradores)-1]
 		tc.popScope()
 	case *ast.RangeExpression:
 		tc.walkExpr(n.Start)

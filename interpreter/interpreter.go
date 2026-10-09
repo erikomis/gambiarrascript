@@ -78,6 +78,7 @@ func New(out io.Writer) *Interpreter {
 		"ordena_com":   {Nome: "ordena_com", Fn: i.builtinOrdenaCom},
 		"agrupa_por":   {Nome: "agrupa_por", Fn: i.builtinAgrupaPor},
 		"reduz":        {Nome: "reduz", Fn: i.builtinReduz},
+		"lista":        {Nome: "lista", Fn: i.builtinLista},
 		"acha":         {Nome: "acha", Fn: i.builtinAcha},
 		"acha_indice":  {Nome: "acha_indice", Fn: i.builtinAchaIndice},
 		"pergunta":     {Nome: "pergunta", Fn: i.builtinPergunta},
@@ -238,7 +239,7 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 		return i.evalInfix(node, env)
 	case *ast.FuncaoLiteral:
 		// lambda anonima: closure sobre o env atual, igual gambiarra nomeada.
-		return &object.Funcao{Parametros: node.Parameters, Body: node.Body, Env: env, Nome: "<anonima>"}
+		return &object.Funcao{Parametros: node.Parameters, Body: node.Body, Env: env, Nome: "<anonima>", Gerador: node.Gerador}
 	case *ast.DesestruturaStatement:
 		return i.evalDesestrutura(node, env)
 	case *ast.EscolheStatement:
@@ -292,6 +293,8 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 			return val
 		}
 		return &object.Retorno{Value: val}
+	case *ast.RendeStatement:
+		return i.evalRende(node, env)
 	case *ast.VazaStatement:
 		return &object.Vaza{Line: node.Token.Line}
 	case *ast.ContinuaStatement:
@@ -307,7 +310,7 @@ func (i *Interpreter) Eval(node ast.Node, env *object.Environment) object.Object
 	case *ast.PraCadaListStatement:
 		return i.evalPraCadaList(node, env)
 	case *ast.GambiarraStatement:
-		fn := &object.Funcao{Parametros: node.Parameters, Body: node.Body, Env: env, Nome: node.Name.Value}
+		fn := &object.Funcao{Parametros: node.Parameters, Body: node.Body, Env: env, Nome: node.Name.Value, Gerador: node.Gerador}
 		env.Set(node.Name.Value, fn)
 		return NADA
 	case *ast.ArrumaStatement:
@@ -1176,6 +1179,11 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 	if isError(it) {
 		return it
 	}
+	// treta com itera(): percorre o que ele devolve
+	it = i.iteravel(it, node.Token.Line)
+	if isError(it) || it.Type() == object.SAIR_OBJ {
+		return it
+	}
 
 	doisNomes := len(node.Vars) == 2
 
@@ -1190,6 +1198,8 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 	}
 
 	switch c := it.(type) {
+	case *object.Gerador:
+		return i.praCadaGerador(c, node, env)
 	case *object.Lista:
 		// com concorrencia percorre um retrato tirado agora (ParaIterar); sem,
 		// le elemento a elemento, com o tamanho do inicio (igual a VM)
@@ -1246,7 +1256,7 @@ func (i *Interpreter) evalPraCadaList(node *ast.PraCadaListStatement, env *objec
 			}
 		}
 	default:
-		return newError(node.Token.Line, "pra_cada ... em ... so funciona com lista, dicionario ou conjunto, e isso ai e %s", it.Type())
+		return newError(node.Token.Line, "%s", object.MsgNaoIteravel(it))
 	}
 	return NADA
 }
@@ -1561,6 +1571,11 @@ func (i *Interpreter) applyFunction(fn object.Object, args []object.Object, linh
 		} else {
 			escopo.Set(p.Nome.Value, NADA)
 		}
+	}
+	if funcao.Gerador {
+		// gerador: a chamada so amarra os parametros; o corpo roda aos
+		// pedacos, a cada valor pedido (gerador.go)
+		return i.novoGerador(funcao, escopo, nome, linha)
 	}
 	var avaliado object.Object
 	if i.gancho != nil && i.gancho.dep != nil {

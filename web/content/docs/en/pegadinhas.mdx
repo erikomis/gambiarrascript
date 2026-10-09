@@ -302,3 +302,27 @@ pega_f()(arg())
 
 Don't rely on this order: if it matters, split it into two `bota`s before
 calling.
+
+## A generator gets used up
+
+A generator hands out each value **once**: after a full `pra_cada` (or a
+`lista(g)`), the same generator has nothing left. To walk it again, call the
+gambiarra again — or keep `lista(g)` in a variable.
+
+```gambiarrascript
+gambiarra tres()
+    rende 1
+    rende 2
+    rende 3
+acabou_finalmente
+
+bota g = tres()
+mostra lista(g)      # [1, 2, 3]
+mostra lista(g)      # []
+mostra lista(tres()) # [1, 2, 3]
+```
+
+Also, the `finalmente` inside a generator that nobody finished consuming (a
+`vaza` halfway, a `proximo` that was never called again) **does not run**: the
+generator stays paused until it is garbage. Cleanup that must happen belongs
+outside the generator, around the loop that consumes it.

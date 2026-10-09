@@ -18,6 +18,7 @@ const keywords = new Set([
   "em",
   "gambiarra",
   "funciona",
+  "rende",
   "arruma",
   "quebrou",
   "vaza",

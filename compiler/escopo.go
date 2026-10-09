@@ -139,6 +139,8 @@ func (v *varredura) stmt(s ast.Statement) {
 		v.expr(n.Value)
 	case *ast.FuncionaStatement:
 		v.expr(n.Value)
+	case *ast.RendeStatement:
+		v.expr(n.Value)
 	case *ast.ExpressionStatement:
 		v.expr(n.Expression)
 	case *ast.GambiarraStatement:

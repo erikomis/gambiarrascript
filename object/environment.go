@@ -19,6 +19,25 @@ type Environment struct {
 	// modulo: caminho absoluto do arquivo dono deste escopo — so no escopo
 	// raiz de um modulo importado (o principal fica "").
 	modulo string
+	// gerador: no escopo da chamada de um gerador do tree-walker, o contexto
+	// que o `rende` usa pra entregar o valor (interpreter/gerador.go).
+	gerador any
+}
+
+// MarcaGerador amarra o contexto do gerador neste escopo (o da chamada).
+// Chamado so na criacao do gerador, antes do corpo rodar.
+func (e *Environment) MarcaGerador(ctx any) { e.gerador = ctx }
+
+// Gerador devolve o contexto do gerador mais proximo subindo pelos escopos
+// (o `rende` so existe no corpo do proprio gerador, entao o primeiro achado
+// e o dele), ou nil.
+func (e *Environment) Gerador() any {
+	for env := e; env != nil; env = env.outer {
+		if env.gerador != nil {
+			return env.gerador
+		}
+	}
+	return nil
 }
 
 // MarcaModulo diz que este escopo e o topo do modulo `caminho` (absoluto).

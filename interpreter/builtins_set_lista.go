@@ -148,6 +148,10 @@ func (i *Interpreter) builtinReduz(args []object.Object) object.Object {
 	if len(args) < 2 || len(args) > 3 {
 		return erroBuiltin("reduz() quer lista + fn (+inicial), veio %d", len(args))
 	}
+	args, falha := consomeSeGerador(args)
+	if falha != nil {
+		return falha
+	}
 	lst, ok := args[0].(*object.Lista)
 	if !ok {
 		return erroBuiltin("reduz: lista esperada, veio %s", args[0].Type())

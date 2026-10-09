@@ -225,6 +225,94 @@ acabou_finalmente
 mostra fatorial(20)         # 2432902008176640000
 ```
 
+## Geradores (`rende`)
+
+Uma gambiarra com `rende` dentro vira um **gerador**: chamar ela **nao roda o
+corpo** — devolve um valor do tipo `gerador`. Cada vez que alguem pede um
+valor, o corpo roda ate o proximo `rende`, entrega o valor e **pausa ali**
+(locais, laco, tudo fica do jeito que estava) ate o proximo pedido.
+
+```gambiarrascript
+gambiarra conta(n)
+    pra_cada i de 1 ate n
+        rende i * 10
+    acabou_finalmente
+acabou_finalmente
+
+bota g = conta(3)
+mostra tipo(g)              # gerador
+mostra g                    # <gerador conta>
+pra_cada x em g
+    mostra x                # 10, 20, 30
+acabou_finalmente
+```
+
+Como o corpo so roda sob demanda, gerador **infinito** e de boa — o `vaza`
+para de pedir:
+
+```gambiarrascript
+gambiarra naturais()
+    bota n = 0
+    enquanto deu_bom
+        rende n
+        n += 1
+    acabou_finalmente
+acabou_finalmente
+
+pra_cada i, x em naturais()     # com dois nomes: posicao e valor
+    se_colar x > 2
+        vaza
+    acabou_finalmente
+    mostra "${i}: ${x}"
+acabou_finalmente
+mostra pega(naturais(), 5)      # [0, 1, 2, 3, 4]
+```
+
+- **Pedindo na mao**: `proximo(g)` devolve o proximo valor, ou `nada` quando o
+  gerador acabou. Como um gerador pode render `nada` de proposito, use
+  `proximo(g, padrao)` (devolve o padrao no fim) ou `acabou(g)` pra ter certeza.
+  O `acabou(g)` pode precisar rodar o corpo ate o proximo `rende` pra descobrir
+  (um `mostra` la dentro aparece nessa hora); o valor fica guardado pro proximo
+  pedido.
+- **Um gerador so anda pra frente**: o que ja saiu nao volta. Um `vaza` no
+  meio deixa ele parado onde estava — o proximo `pra_cada` (ou `proximo`)
+  continua dali. Gerador que acabou fica acabado; pra comecar de novo, chame a
+  gambiarra de novo (cada chamada e um gerador independente).
+- **`lista(g)`** puxa tudo numa lista; **`pega(g, n)`** puxa ate `n` valores.
+  `mapeia`, `filtra` e `reduz` aceitam gerador direto, mas **consomem ele
+  inteiro** antes (e devolvem lista) — com gerador infinito nunca voltam: use
+  `pega` antes, ou um gerador que filtra outro.
+- **`funciona` encerra** o gerador (o valor e jogado fora; o `gs check` avisa —
+  prefira `funciona nada`). Cair no fim do corpo tambem encerra.
+- **Erro** dentro do gerador estoura no ponto onde o valor foi pedido (o
+  `pra_cada`, o `proximo`...), com a linha de dentro do gerador, e da pra pegar
+  com `arruma` em volta do consumo. Depois de um erro o gerador acabou.
+- Os **parametros** sao amarrados na chamada (padrao inclusive): mudar a
+  variavel que voce passou depois nao muda o gerador.
+- Vale em gambiarra nomeada, lambda e metodo. O `rende` de uma lambda de dentro
+  e da lambda (so ela vira gerador). `rende` fora de gambiarra e erro de
+  sintaxe.
+- Gerador pode ser usado de varias goroutines (`bora`): um pedido por vez, cada
+  valor sai uma vez so. Um gerador que pede o proprio proximo valor enquanto
+  roda da erro (nunca ia andar).
+
+Gerador combinando gerador (pipeline preguicoso):
+
+```gambiarrascript
+gambiarra pares(origem)
+    pra_cada x em origem
+        se_colar x % 2 == 0
+            rende x
+        acabou_finalmente
+    acabou_finalmente
+acabou_finalmente
+
+mostra pega(pares(naturais()), 4)   # [0, 2, 4, 6]
+```
+
+Pra fazer uma treta percorrivel com `pra_cada`, de um `itera()` pra ela (que
+pode ser um gerador) — veja [Percorrendo uma treta](/docs/poo#percorrendo-uma-treta).
+
 ## Documentando
 
 Comentarios `#` logo acima de uma `gambiarra` (ou de um `crava` de topo) viram

@@ -19,10 +19,11 @@ Memorize this table and you've memorized the language.
 | `escolhe` / `caso`  | `switch` / `match`   | compares with `==` or matches a pattern (`caso [a, ...resto]`, `caso Ponto{x, y}`), with a guard `caso ... se cond`; no fallthrough; `se_nao_colar` is the default — see [Control flow](/docs/en/estruturas#pattern-matching-in-caso) |
 | `enquanto`          | `while`              | loops while the condition is true |
 | `pra_cada i de A ate B` | `for i in range(A, B+1)` | inclusive numeric loop (counts up only) |
-| `pra_cada x em colecao` | `for x in ...`   | for-each over a list, dict or set (for a dict, the **keys**) |
+| `pra_cada x em colecao` | `for x in ...`   | for-each over a list, dict, set, generator or treta with `itera()` (for a dict, the **keys**) |
 | `pra_cada i, v em colecao` | `for i, v in enumerate(...)` / `.items()` | index + item for a list, key + value for a dict |
 | `gambiarra`         | `func` / `fn` / `def`| declares a function (named) or a lambda (unnamed) |
 | `funciona`          | `return`             | returns a value from the gambiarra |
+| `rende`             | `yield`              | hands a value over and pauses: the gambiarra becomes a generator — see [Generators](/docs/en/funcoes#generators-rende) |
 | `arruma`            | `try`                | opens an error-handling block |
 | `quebrou <nome>`    | `catch <e>`          | catches the error into a variable |
 | `quebrou <nome> se <cond>` | `catch (e) when (cond)` | only catches if the condition holds; an `arruma` can have several |
@@ -128,4 +129,5 @@ quick reference:
 | Database | `conecta` `consulta` `executa` `fecha` |
 | Errors | `quebra` `envolve_erro` `erro_msg` `erro_tipo` `erro_linha` `erro_pilha` `erro_causa` |
 | Concurrency | `espera` `cano` `envia` `recebe` `fecha` `paralelo` (+ the `bora` keyword) |
+| Generators | `proximo` `acabou` `pega` `lista` (+ the `rende` keyword) |
 | Tests | `espera(recebido, esperado)` `afirma(cond, [msg])` |

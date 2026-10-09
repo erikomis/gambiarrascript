@@ -51,7 +51,7 @@ const (
 	OpIndex       // pop idx, pop container, push container[idx]
 	OpIndexSet    // pop val, pop idx, pop container, atribui
 	OpRange       // pop fim, pop inicio, push lista [inicio..fim] inclusive
-	OpIterSeq     // pop iteravel, push lista de iteracao (elementos p/ lista, chaves p/ dicionario)
+	OpIterSeq     // pop iteravel; push orig, seq (lista dos elementos/chaves, ou o gerador) e tamanho
 	OpIndexOuNada // igual OpIndex, mas indice/chave ausente vira nada (desestruturacao)
 	// --- fase 6d: funcoes ---
 	OpClosure     // constIdx (2): cria closure apontando pra CompiledFunction + freevars
@@ -141,6 +141,19 @@ const (
 	OpAmarrado // slot (1)
 	// OpCardapio: descritor object.DescCardapio; empilha o *object.Cardapio.
 	OpCardapio // descIdx (2)
+	// --- geradores (`rende`) e protocolo de iteracao ---
+	// OpGerador: primeira instrucao do corpo de um gerador (depois do
+	// prologo de celulas e padroes): guarda o frame recem-aberto num gerador
+	// (sub-VM propria) e retorna o gerador pra quem chamou, sem rodar o corpo.
+	OpGerador
+	// OpRende: pop valor; entrega pra quem pediu e pausa o gerador (o frame
+	// fica parado na instrucao seguinte ate o proximo pedido).
+	OpRende
+	// OpIterProx: uma volta do pra_cada. Pilha: [orig] seq it tam (orig so
+	// com 2 nomes). Acabou: pula pro alvo sem empilhar nada; senao empilha o
+	// valor (1 nome) ou indice/chave + valor (2 nomes). seq e lista (tam e o
+	// tamanho no comeco do laco) ou gerador (pede o proximo valor).
+	OpIterProx // alvo (2) + nomes (1)
 )
 
 type Definition struct {
@@ -242,6 +255,10 @@ var definitions = map[Opcode]*Definition{
 	OpCasa:     {"OpCasa", []int{2}},
 	OpAmarrado: {"OpAmarrado", []int{1}},
 	OpCardapio: {"OpCardapio", []int{2}},
+	// geradores e iteracao
+	OpGerador:  {"OpGerador", []int{}},
+	OpRende:    {"OpRende", []int{}},
+	OpIterProx: {"OpIterProx", []int{2, 1}},
 }
 
 func Lookup(op byte) (*Definition, error) {

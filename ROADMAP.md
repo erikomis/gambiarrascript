@@ -764,6 +764,29 @@ Coisas que não existem hoje e que a gente sente falta escrevendo exemplo e doc.
       Nome `opcoes` foi descartado (colide com o builtin `opcoes()`).
       `gs check` avisa `escolhe` sobre opcoes de um cardapio que esquece
       alguma sem `se_nao_colar` (so quando todo caso e `Cardapio.opcao`).
+- [x] **Geradores (`rende`)** — gambiarra/lambda/método com `rende` vira
+      gerador (`tipo` = `"gerador"`): a chamada amarra os parâmetros (padrão
+      roda na hora) e não roda o corpo; `pra_cada` (com 1 ou 2 nomes),
+      `proximo(g, [padrao])`, `acabou(g)`, `pega(g, n)` e `lista(g)` pedem os
+      valores; `mapeia`/`filtra`/`reduz` consomem inteiro. `funciona` encerra
+      (o `gs check` avisa valor jogado fora); erro sobe no consumo com a linha
+      de dentro; `rende` fora de gambiarra é erro de parse. Decisão de motor:
+      na **VM** é corrotina de verdade — o corpo começa com `OpGerador`, que
+      guarda o frame numa sub-VM só do gerador, e o `OpRende` volta do
+      `execDesde` com o frame parado (sem goroutine; abandonado vira lixo). No
+      **tree-walker**, que não pausa a recursão do `Eval`, o corpo roda numa
+      goroutine com handoff estrito (um lado anda por vez, então o modo
+      concorrente não liga); o gerador abandonado solta a goroutine pelo
+      finalizer (teste com `runtime.NumGoroutine`). Pedido serializado por
+      mutex (vale com `bora`); gerador pedindo o próprio valor é erro, não
+      deadlock. `finalmente` de gerador abandonado não roda (pegadinha
+      documentada).
+- [x] **Protocolo de iteração da treta** — `pra_cada x em inst` (e
+      `lista(inst)`) chama o `itera()` da treta (próprio ou promovido), que
+      devolve lista, dicionário, conjunto ou gerador; sem `itera()`: "a treta
+      Caixa nao tem itera(), nao da pra percorrer". Na VM o `pra_cada` ganhou o
+      `OpIterProx` (uma instrução por volta no lugar de compara+salta+indexa);
+      o `OpIterSeq` empilha orig/seq/tamanho.
 - [x] **Tarefas agendadas** — `a_cada(seg, f)`, `depois_de(seg, f)`,
       `agenda("cron", f)` e `cancela(h)` (`interpreter/builtins_agenda.go`).
       Cron de 5 campos próprio (`cron.go`: `*`, listas, faixas, passos, regra

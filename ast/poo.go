@@ -108,6 +108,7 @@ type MetodoDecl struct {
 	Nome       *Identifier
 	Parameters []*Parametro
 	Body       *BlockStatement
+	Gerador    bool // o corpo tem `rende` (marcado pelo parser)
 }
 
 func (s *MetodoDecl) statementNode()       {}

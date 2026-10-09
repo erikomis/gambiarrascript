@@ -103,6 +103,8 @@ func (ch *checaCrava) stmt(s Statement) {
 		ch.expr(n.Value)
 	case *FuncionaStatement:
 		ch.expr(n.Value)
+	case *RendeStatement:
+		ch.expr(n.Value)
 	case *ExpressionStatement:
 		ch.expr(n.Expression)
 	case *GambiarraStatement:

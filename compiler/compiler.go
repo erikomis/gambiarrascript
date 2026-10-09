@@ -176,6 +176,9 @@ type Compiler struct {
 
 	// funcAtual: nome da funcao sendo compilada (pra detectar self-tail-call).
 	funcAtual string
+	// emGerador: a funcao sendo compilada e gerador (tem `rende`): o
+	// `funciona` dela so encerra, entao nao vira tail call.
+	emGerador bool
 
 	// cravadas: nomes cravados no escopo global ate o ponto da compilacao
 	// (sobrevive entre entradas do REPL e recebe o que os modulos cravam).
@@ -289,6 +292,8 @@ var nomesBuiltins = []string{
 	"a_cada", "depois_de", "agenda", "cancela", "formata_data", "le_data",
 	// templates: renderiza/renderiza_arquivo e a resposta HTML
 	"renderiza", "renderiza_arquivo", "responde_html",
+	// geradores
+	"proximo", "acabou", "pega", "lista",
 }
 
 // indiceBuiltin devolve o indice canonico da builtin (pros desugars que
@@ -636,7 +641,7 @@ func (c *Compiler) compile(node ast.Node) error {
 			// que reusa o frame atual — recursao em cauda nao estoura os frames.
 			// Dentro de arruma nao: a chamada tem que rodar protegida pelo try.
 			// Chamada com `...lista` nao vira tail call (argc so se sabe em runtime).
-			if call, ok := node.Value.(*ast.CallExpression); ok && len(c.arrumas) == 0 && call.Espalhados == nil && ehSelfCall(call, c.funcAtual) {
+			if call, ok := node.Value.(*ast.CallExpression); ok && len(c.arrumas) == 0 && !c.emGerador && call.Espalhados == nil && ehSelfCall(call, c.funcAtual) {
 				for _, a := range call.Arguments {
 					if err := c.compile(a); err != nil {
 						return err
@@ -662,6 +667,14 @@ func (c *Compiler) compile(node ast.Node) error {
 			}
 			c.emit(code.OpReturnNada)
 		}
+	case *ast.RendeStatement:
+		if !c.emGerador {
+			return fmt.Errorf("linha %d: rende fora de gambiarra", node.Token.Line)
+		}
+		if err := c.compile(node.Value); err != nil {
+			return err
+		}
+		c.emit(code.OpRende)
 	case *ast.GambiarraStatement:
 		return c.compileGambiarra(node)
 	case *ast.CallExpression:
@@ -733,7 +746,7 @@ func (c *Compiler) compile(node ast.Node) error {
 		c.backpatch(jmpFim, len(c.instructions))
 	case *ast.FuncaoLiteral:
 		// lambda anonima: closure fica na pilha como valor de expressao.
-		return c.compileFuncaoValor("<anonima>", node.Parameters, node.Body)
+		return c.compileFuncao("<anonima>", node.Parameters, node.Body, node.Gerador)
 	case *ast.DesestruturaStatement:
 		return c.compileDesestrutura(node)
 	case *ast.EscolheStatement:
@@ -1095,16 +1108,19 @@ func (c *Compiler) compilePraCadaNum(node *ast.PraCadaNumStatement) error {
 	return nil
 }
 
-// compilePraCadaList compila `pra_cada x em lista ... ` gerando um iterador:
-// transforma no equivalente:
+// compilePraCadaList compila `pra_cada x em iteravel ...` num laco com
+// temporarios escondidos:
 //
-//	bota __it = 0
-//	bota __len = tamanho(iter)
-//	enquanto __it < __len
-//	  bota x = iter[__it]
+//	__orig, __seq, __len = OpIterSeq(iteravel)   (treta: o que o itera() devolve)
+//	__it = 0
+//	volta: [__orig] __seq __it __len OpIterProx fim  -> x (ou indice/chave, valor)
 //	  <body>
-//	  bota __it = __it + 1
-//	acabou_finalmente
+//	  __it = __it + 1; jump volta
+//	fim:
+//
+// __seq e a lista dos elementos (chaves, no dicionario) com __len o tamanho
+// do comeco, ou o proprio gerador (o OpIterProx pede um valor por volta).
+// __orig so fica guardado com 2 nomes (o valor de cada chave do dicionario).
 func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 	// sufixo pela profundidade: laco aninhado tem os proprios temporarios
 	// (com nome fixo o de dentro zerava o contador do de fora)
@@ -1116,49 +1132,40 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 
 	doisNomes := len(node.Vars) == 2
 
-	// __orig = iteravel original; __seq = OpIterSeq(orig) (elementos p/ lista,
-	// chaves p/ dict). Ambos usados quando ha 2 nomes (OpIterPar precisa do
-	// original pra resolver o valor de um dict).
 	if err := c.compile(node.Iterable); err != nil {
 		return err
 	}
-	origSym := c.defineVar(origNome)
-	c.emitVarSet(origSym)
-	c.emitVarGet(origSym)
-	c.emit(code.OpIterSeq)
+	c.emit(code.OpIterSeq) // -> orig, seq, tamanho
+	lenSym := c.defineVar(lenNome)
+	c.emitVarSet(lenSym)
 	seqSym := c.defineVar(seqNome)
 	c.emitVarSet(seqSym)
-
+	var origSym Symbol
+	if doisNomes {
+		origSym = c.defineVar(origNome)
+		c.emitVarSet(origSym)
+	} else {
+		c.emit(code.OpPop)
+	}
 	c.emit(code.OpConstant, c.addConstant(object.NumInt(0)))
 	itSym := c.defineVar(itNome)
 	c.emitVarSet(itSym)
-	c.emitVarGet(seqSym)
-	c.emit(code.OpCallBuiltin, indiceBuiltin("tamanho"), 1)
-	lenSym := c.defineVar(lenNome)
-	c.emitVarSet(lenSym)
 
 	startPos := len(c.instructions)
+	if doisNomes {
+		c.emitVarGet(origSym)
+	}
+	c.emitVarGet(seqSym)
 	c.emitVarGet(itSym)
 	c.emitVarGet(lenSym)
-	c.emit(code.OpMenor)
-	jmpFim := c.emit(code.OpJumpIfFalse, 9999)
-
+	jmpFim := c.emit(code.OpIterProx, 9999, len(node.Vars))
 	if doisNomes {
-		// OpIterPar: pop __it, pop __seq, pop __orig -> push (key, value)
-		c.emitVarGet(origSym)
-		c.emitVarGet(seqSym)
-		c.emitVarGet(itSym)
-		c.emit(code.OpIterPar)
-		// pilha: [key, value] (value no topo)
+		// pilha: [indice/chave, valor] (valor no topo)
 		v2Sym := c.defineVar(node.Vars[1].Value)
 		c.emitVarSet(v2Sym)
 		v1Sym := c.defineVar(node.Vars[0].Value)
 		c.emitVarSet(v1Sym)
 	} else {
-		// x = __seq[__it]
-		c.emitVarGet(seqSym)
-		c.emitVarGet(itSym)
-		c.emit(code.OpIndex)
 		xSym := c.defineVar(node.Vars[0].Value)
 		c.emitVarSet(xSym)
 	}
@@ -1187,8 +1194,6 @@ func (c *Compiler) compilePraCadaList(node *ast.PraCadaListStatement) error {
 	}
 	return nil
 }
-
-// compilePraCadaList original replaced by implementation above.
 
 // compileEscolhe vira uma cadeia if-else com jumps:
 //
@@ -1315,7 +1320,7 @@ func (c *Compiler) compileDesestrutura(node *ast.DesestruturaStatement) error {
 func (c *Compiler) compileGambiarra(node *ast.GambiarraStatement) error {
 	// Reserva o simbolo da funcao ANTES de compilar o body (permite recursao).
 	fnSym := c.defineVar(node.Name.Value)
-	if err := c.compileFuncaoValor(node.Name.Value, node.Parameters, node.Body); err != nil {
+	if err := c.compileFuncao(node.Name.Value, node.Parameters, node.Body, node.Gerador); err != nil {
 		return err
 	}
 	c.emitVarSet(fnSym)
@@ -1326,8 +1331,16 @@ func (c *Compiler) compileGambiarra(node *ast.GambiarraStatement) error {
 // Usado pela gambiarra nomeada (que em seguida amarra num simbolo) e pela
 // lambda anonima (que usa o valor direto como expressao).
 func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body *ast.BlockStatement) error {
-	funcSalva := c.funcAtual
-	c.funcAtual = nome
+	return c.compileFuncao(nome, params, body, false)
+}
+
+// compileFuncao e o compileFuncaoValor que sabe de gerador: o corpo com
+// `rende` ganha um OpGerador logo depois do prologo (a chamada amarra os
+// parametros, roda os padroes e devolve o gerador sem rodar o corpo).
+func (c *Compiler) compileFuncao(nome string, params []*ast.Parametro, body *ast.BlockStatement, gerador bool) error {
+	funcSalva, geradorSalvo := c.funcAtual, c.emGerador
+	c.funcAtual, c.emGerador = nome, gerador
+	defer func() { c.emGerador = geradorSalvo }()
 	// lacos e arrumas de fora nao valem dentro do corpo: `vaza` numa funcao
 	// nao pode pular pro laco de quem a declarou (o jump caia no bytecode
 	// errado e a VM panicava).
@@ -1402,6 +1415,9 @@ func (c *Compiler) compileFuncaoValor(nome string, params []*ast.Parametro, body
 		}
 		c.emitVarSet(paramSyms[i])
 		c.backpatch(jmpSkip, len(c.instructions))
+	}
+	if gerador {
+		c.emit(code.OpGerador)
 	}
 
 	if err := c.compile(body); err != nil {

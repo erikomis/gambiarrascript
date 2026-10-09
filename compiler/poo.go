@@ -111,7 +111,7 @@ func (c *Compiler) compileMetodoDecl(node *ast.MetodoDecl) error {
 		return err
 	}
 	nome := node.Tipo.Value + "." + node.Nome.Value
-	if err := c.compileFuncaoValor(nome, node.ParametrosComReceptor(), node.Body); err != nil {
+	if err := c.compileFuncao(nome, node.ParametrosComReceptor(), node.Body, node.Gerador); err != nil {
 		return err
 	}
 	c.linhaAtual = node.Token.Line

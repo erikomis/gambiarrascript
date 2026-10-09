@@ -177,6 +177,18 @@ func (s *FuncionaStatement) statementNode()       {}
 func (s *FuncionaStatement) TokenLiteral() string { return s.Token.Literal }
 func (s *FuncionaStatement) String() string       { return "funciona " + s.Value.String() }
 
+// RendeStatement e o `rende expr`: so vale dentro de gambiarra (nomeada,
+// lambda ou metodo) e faz dela um GERADOR — chamar nao roda o corpo, devolve
+// um gerador que roda ate cada `rende` quando alguem pede o proximo valor.
+type RendeStatement struct {
+	Token token.Token
+	Value Expression
+}
+
+func (s *RendeStatement) statementNode()       {}
+func (s *RendeStatement) TokenLiteral() string { return s.Token.Literal }
+func (s *RendeStatement) String() string       { return "rende " + s.Value.String() }
+
 type VazaStatement struct{ Token token.Token }
 
 func (s *VazaStatement) statementNode()       {}
@@ -298,6 +310,7 @@ type GambiarraStatement struct {
 	Name       *Identifier
 	Parameters []*Parametro
 	Body       *BlockStatement
+	Gerador    bool // o corpo tem `rende` (marcado pelo parser)
 }
 
 func (s *GambiarraStatement) statementNode()       {}
@@ -568,6 +581,7 @@ type FuncaoLiteral struct {
 	Token      token.Token
 	Parameters []*Parametro
 	Body       *BlockStatement
+	Gerador    bool // o corpo tem `rende` (marcado pelo parser)
 }
 
 func (e *FuncaoLiteral) expressionNode()      {}

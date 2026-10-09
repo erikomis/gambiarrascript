@@ -90,7 +90,7 @@ func (i *Interpreter) evalMetodoDecl(node *ast.MetodoDecl, env *object.Environme
 	if !ok {
 		return newError(node.Token.Line, "metodo %s: %s", node.Nome.Value, object.MsgNaoETreta(node.Tipo.Value, v))
 	}
-	fn := &object.Funcao{Parametros: node.ParametrosComReceptor(), Body: node.Body, Env: env, Nome: node.Tipo.Value + "." + node.Nome.Value}
+	fn := &object.Funcao{Parametros: node.ParametrosComReceptor(), Body: node.Body, Env: env, Nome: node.Tipo.Value + "." + node.Nome.Value, Gerador: node.Gerador}
 	if msg := t.DefineMetodo(node.Nome.Value, fn); msg != "" {
 		return newError(node.Token.Line, "%s", msg)
 	}

@@ -62,6 +62,8 @@ func LinhaDoStatement(s Statement) int {
 		return n.Token.Line
 	case *FuncionaStatement:
 		return n.Token.Line
+	case *RendeStatement:
+		return n.Token.Line
 	case *VazaStatement:
 		return n.Token.Line
 	case *ContinuaStatement:
@@ -141,6 +143,8 @@ func (w *coletaExec) filhos(s Statement) {
 	case *MostraStatement:
 		w.expr(n.Value)
 	case *FuncionaStatement:
+		w.expr(n.Value)
+	case *RendeStatement:
 		w.expr(n.Value)
 	case *ExpressionStatement:
 		w.expr(n.Expression)

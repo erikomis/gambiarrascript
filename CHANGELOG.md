@@ -6,6 +6,24 @@ no [ROADMAP](ROADMAP.md).
 
 ## Não lançado
 
+- **Geradores**: `rende valor` dentro de uma gambiarra (nomeada, lambda ou
+  método) faz dela um gerador — chamar não roda o corpo, devolve um valor
+  `gerador` que entrega um valor por vez, sob demanda (gerador infinito é de
+  boa). `pra_cada x em g` (ou `pra_cada i, x em g`), `proximo(g, [padrao])`,
+  `acabou(g)`, `pega(g, n)` e `lista(g)`; `mapeia`/`filtra`/`reduz` aceitam
+  gerador (consomem inteiro). `funciona` encerra o gerador; erro lá dentro
+  estoura onde o valor foi pedido, com a linha certa. Veja
+  [Geradores](https://erikomis.github.io/gambiarrascript/docs/funcoes#geradores-rende).
+- **Treta percorrível**: `pra_cada x em instancia` chama o `itera()` da treta
+  (que devolve lista, dicionário, conjunto ou gerador). Sem `itera()` o erro
+  diz: `a treta Caixa nao tem itera(), nao da pra percorrer`.
+- `lista(x)` nova: copia lista, itens de conjunto, chaves de dicionário,
+  valores de gerador ou de treta com `itera()`.
+- **Mudança**: `rende` virou palavra-chave (não dá mais pra usar como nome).
+  O `pra_cada` sobre lista percorre o retrato do começo do laço nos dois
+  motores; o erro de `pra_cada` em valor não percorrível agora mostra o tipo
+  em minúsculo (`numero`).
+
 - **Migrações de banco**: `gs migra [sobe | desce [n] | status | novo nome]`
   aplica os arquivos `migracoes/NNN_nome.sobe.sql` (e desfaz com o
   `.desce.sql`) em SQLite, Postgres e MySQL/MariaDB. Cada migração roda numa

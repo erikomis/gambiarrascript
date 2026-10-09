@@ -34,6 +34,7 @@ acabou_finalmente
 | `pra_cada x em lista`    | for-each       |
 | `gambiarra`         | declara função      |
 | `funciona`          | return              |
+| `rende`             | yield (gerador)     |
 | `arruma` / `quebrou`| try / catch         |
 | `vaza` / `continua` | break / continue    |
 | `deu_bom` / `deu_ruim` | true / false     |
@@ -113,6 +114,32 @@ acabou_finalmente
 - `gs check` avisa `escolhe` sobre um cardapio que esquece opção sem
   `se_nao_colar`. Guia em `web/content/docs/estruturas.mdx` e `poo.mdx`;
   exemplo em `examples/padroes.gs`.
+
+## Geradores (`rende`)
+
+Gambiarra com `rende` vira gerador: entrega um valor por vez, só quando
+alguém pede — infinito sem drama.
+
+```
+gambiarra naturais()
+    bota n = 0
+    enquanto deu_bom
+        rende n
+        n += 1
+    acabou_finalmente
+acabou_finalmente
+
+mostra pega(naturais(), 5)    # [0, 1, 2, 3, 4]
+pra_cada x em naturais()
+    se_colar x > 2
+        vaza
+    acabou_finalmente
+    mostra x
+acabou_finalmente
+```
+
+`proximo(g, [padrao])`, `acabou(g)`, `lista(g)`; treta com `itera()` funciona no
+`pra_cada`. Exemplo em `examples/geradores.gs`.
 
 ## Falando com o mundo (HTTP)
 

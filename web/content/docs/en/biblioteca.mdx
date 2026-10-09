@@ -27,7 +27,7 @@ This page lists **every** builtin. Each one is a global function — no
 | `texto(v)` | `(qualquer)` | `texto` — universal conversion (the same thing `mostra` prints) |
 | `numero(t)` | `(texto)` | `numero` — accepts `"42"`, `" 3.5 "`, `"1e3"`; non-numeric text **throws** |
 | `tamanho(x)` | `(texto, lista, dicionario ou conjunto)` | `numero` — on text it counts characters (UTF-8), not bytes |
-| `tipo(x)` | `(qualquer)` | `texto` — `"numero"`, `"texto"`, `"booleano"`, `"nada"`, `"lista"`, `"dicionario"`, `"conjunto"`, `"funcao"`, `"erro"`, `"futuro"`, `"cano"`, `"trava"`, `"nativo"`, `"treta"`, `"combinado"`, `"cardapio"` or, for a treta instance, its name (`"Ponto"`) and, for a cardapio option, the cardapio's name (`"Cor"`) |
+| `tipo(x)` | `(qualquer)` | `texto` — `"numero"`, `"texto"`, `"booleano"`, `"nada"`, `"lista"`, `"dicionario"`, `"conjunto"`, `"funcao"`, `"erro"`, `"futuro"`, `"cano"`, `"trava"`, `"nativo"`, `"gerador"`, `"treta"`, `"combinado"`, `"cardapio"` or, for a treta instance, its name (`"Ponto"`) and, for a cardapio option, the cardapio's name (`"Cor"`) |
 
 ```gambiarrascript
 mostra tipo(3.14)                # numero
@@ -127,6 +127,19 @@ The ones that **return something new** (the original stays untouched):
 
 `tamanho(lista)` and `junta(lista, sep)` work on lists too. Examples in
 [Lists and dictionaries](/docs/en/colecoes).
+
+## Generator
+
+A generator is what a gambiarra with `rende` returns (see
+[Generators](/docs/en/funcoes#generators-rende)). `mapeia`, `filtra` and
+`reduz` also accept a generator, consuming it entirely.
+
+| Function | Takes | Returns |
+| -------- | ----- | ------- |
+| `proximo(g, [padrao])` | `(gerador, any)` | the next value; at the end, `nada` (or the `padrao`) |
+| `acabou(g)` | `(gerador)` | `booleano` — no more values (may run the body up to the next `rende`) |
+| `pega(g, n)` | `(gerador, integer)` | `lista` with up to `n` values |
+| `lista(x)` | `(generator, list, set, dict or treta with itera())` | a new `lista`: the generator's values (all of them), a copy of the list, the set's items, the dict's keys |
 
 ## Dictionary
 

@@ -318,6 +318,8 @@ func (a *analise) andaStmt(s ast.Statement, esc *escopo, m mapaPos) {
 		a.andaExpr(n.Value, esc, m)
 	case *ast.FuncionaStatement:
 		a.andaExpr(n.Value, esc, m)
+	case *ast.RendeStatement:
+		a.andaExpr(n.Value, esc, m)
 	case *ast.ExpressionStatement:
 		a.andaExpr(n.Expression, esc, m)
 	case *ast.BlockStatement:

@@ -105,6 +105,9 @@ type Parser struct {
 	adiante []token.Token
 	// prof e quantos blocos estao abertos: treta/combinado/metodo so no topo.
 	prof int
+	// funcs e a pilha das gambiarras sendo lidas (nomeada, lambda, metodo):
+	// o `rende` marca a de cima como gerador; fora de gambiarra e erro.
+	funcs []bool
 }
 
 func New(l *lexer.Lexer) *Parser {
@@ -761,6 +764,8 @@ func (p *Parser) parseStatementCru() ast.Statement {
 		return p.parseMostra()
 	case token.FUNCIONA:
 		return p.parseFunciona()
+	case token.RENDE:
+		return p.parseRende()
 	case token.VAZA:
 		return &ast.VazaStatement{Token: p.curToken}
 	case token.CONTINUA:
@@ -980,6 +985,33 @@ func (p *Parser) parseFunciona() ast.Statement {
 	return stmt
 }
 
+// parseRende monta `rende expr` e marca a gambiarra de cima como gerador.
+func (p *Parser) parseRende() ast.Statement {
+	stmt := &ast.RendeStatement{Token: p.curToken}
+	if len(p.funcs) == 0 {
+		p.addErro(p.curToken.Line, p.curToken.Coluna,
+			"rende fora de gambiarra? o rende so vale dentro de uma gambiarra (que vira gerador)")
+	} else {
+		p.funcs[len(p.funcs)-1] = true
+	}
+	p.nextToken()
+	stmt.Value = p.parseExpression(LOWEST)
+	if stmt.Value == nil {
+		return nil
+	}
+	return stmt
+}
+
+// corpoDeFuncao le o corpo de uma gambiarra e diz se ele tem `rende` (o
+// `rende` de uma lambda de dentro e da lambda, nao desta).
+func (p *Parser) corpoDeFuncao() (*ast.BlockStatement, bool) {
+	p.funcs = append(p.funcs, false)
+	corpo := p.parseBlockStatement()
+	gerador := p.funcs[len(p.funcs)-1]
+	p.funcs = p.funcs[:len(p.funcs)-1]
+	return corpo, gerador
+}
+
 // parseBlockStatement le statements ate um terminador, sem consumi-lo.
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	block := &ast.BlockStatement{Token: p.curToken, Statements: []ast.Statement{}}
@@ -1104,7 +1136,7 @@ func (p *Parser) parseFuncaoLiteral() ast.Expression {
 	}
 	lit.Parameters = p.parseFunctionParameters()
 	p.nextToken() // sai do ) para o corpo
-	lit.Body = p.parseBlockStatement()
+	lit.Body, lit.Gerador = p.corpoDeFuncao()
 	if !p.curTokenIs(token.ACABOU) {
 		p.addErro(p.curToken.Line, p.curToken.Coluna,
 			"lambda sem acabou_finalmente? fecha ela, parca")
@@ -1124,7 +1156,7 @@ func (p *Parser) parseGambiarra() ast.Statement {
 	}
 	stmt.Parameters = p.parseFunctionParameters()
 	p.nextToken() // sai do ) para o corpo
-	stmt.Body = p.parseBlockStatement()
+	stmt.Body, stmt.Gerador = p.corpoDeFuncao()
 	return stmt
 }
 

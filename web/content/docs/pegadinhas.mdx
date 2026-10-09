@@ -293,3 +293,27 @@ pega_f()(arg())
 ```
 
 Nao dependa dessa ordem: se importa, separa em dois `bota` antes de chamar.
+
+## Gerador se gasta
+
+Um gerador entrega cada valor **uma vez**: depois de um `pra_cada` inteiro (ou
+de um `lista(g)`), o mesmo gerador nao tem mais nada. Pra percorrer de novo,
+chame a gambiarra de novo — ou guarde `lista(g)` numa variavel.
+
+```gambiarrascript
+gambiarra tres()
+    rende 1
+    rende 2
+    rende 3
+acabou_finalmente
+
+bota g = tres()
+mostra lista(g)      # [1, 2, 3]
+mostra lista(g)      # []
+mostra lista(tres()) # [1, 2, 3]
+```
+
+E o `finalmente` de dentro de um gerador que ninguem terminou de consumir
+(um `vaza` no meio, um `proximo` que nao foi chamado de novo) **nao roda**: o
+gerador fica pausado ate virar lixo. Limpeza que precisa acontecer fica fora
+do gerador, em volta do laco que consome.

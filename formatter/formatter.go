@@ -97,6 +97,8 @@ func (f *formatter) emitStmt(s ast.Statement, nivel int, primeiro *bool) {
 		simples("mostra " + f.emitExpr(n.Value))
 	case *ast.FuncionaStatement:
 		simples("funciona " + f.emitExpr(n.Value))
+	case *ast.RendeStatement:
+		simples("rende " + f.emitExpr(n.Value))
 	case *ast.VazaStatement:
 		simples("vaza")
 	case *ast.ContinuaStatement:

@@ -227,6 +227,97 @@ acabou_finalmente
 mostra fatorial(20)         # 2432902008176640000
 ```
 
+## Generators (`rende`)
+
+A gambiarra with `rende` inside becomes a **generator**: calling it **does not
+run the body** — it returns a value of type `gerador`. Each time someone asks
+for a value, the body runs up to the next `rende`, hands the value over and
+**pauses right there** (locals, loops, everything stays as it was) until the
+next request.
+
+```gambiarrascript
+gambiarra conta(n)
+    pra_cada i de 1 ate n
+        rende i * 10
+    acabou_finalmente
+acabou_finalmente
+
+bota g = conta(3)
+mostra tipo(g)              # gerador
+mostra g                    # <gerador conta>
+pra_cada x em g
+    mostra x                # 10, 20, 30
+acabou_finalmente
+```
+
+Since the body only runs on demand, an **infinite** generator is fine — `vaza`
+stops asking:
+
+```gambiarrascript
+gambiarra naturais()
+    bota n = 0
+    enquanto deu_bom
+        rende n
+        n += 1
+    acabou_finalmente
+acabou_finalmente
+
+pra_cada i, x em naturais()     # two names: position and value
+    se_colar x > 2
+        vaza
+    acabou_finalmente
+    mostra "${i}: ${x}"
+acabou_finalmente
+mostra pega(naturais(), 5)      # [0, 1, 2, 3, 4]
+```
+
+- **Asking by hand**: `proximo(g)` returns the next value, or `nada` once the
+  generator is done. Since a generator may yield `nada` on purpose, use
+  `proximo(g, padrao)` (returns the default at the end) or `acabou(g)` to be
+  sure. `acabou(g)` may have to run the body up to the next `rende` to find
+  out (a `mostra` in there shows up at that moment); the value is kept for the
+  next request.
+- **A generator only moves forward**: what came out does not come back. A
+  `vaza` in the middle leaves it paused where it was — the next `pra_cada` (or
+  `proximo`) continues from there. A finished generator stays finished; to
+  start over, call the gambiarra again (each call is an independent generator).
+- **`lista(g)`** pulls everything into a list; **`pega(g, n)`** pulls up to `n`
+  values. `mapeia`, `filtra` and `reduz` take a generator directly, but
+  **consume it entirely** first (and return a list) — with an infinite
+  generator they never return: use `pega` first, or a generator that filters
+  another one.
+- **`funciona` ends** the generator (the value is thrown away; `gs check` warns
+  — prefer `funciona nada`). Falling off the end of the body also ends it.
+- An **error** inside the generator blows up where the value was requested (the
+  `pra_cada`, the `proximo`...), with the line from inside the generator, and
+  you can catch it with `arruma` around the consumer. After an error the
+  generator is done.
+- **Parameters** are bound at the call (defaults included): changing the
+  variable you passed afterwards does not change the generator.
+- Works for named gambiarras, lambdas and methods. A `rende` inside an inner
+  lambda belongs to the lambda (only it becomes a generator). `rende` outside a
+  gambiarra is a syntax error.
+- A generator can be used from several goroutines (`bora`): one request at a
+  time, each value comes out once. A generator that asks for its own next value
+  while running is an error (it would never move).
+
+Generator combining generator (lazy pipeline):
+
+```gambiarrascript
+gambiarra pares(origem)
+    pra_cada x em origem
+        se_colar x % 2 == 0
+            rende x
+        acabou_finalmente
+    acabou_finalmente
+acabou_finalmente
+
+mostra pega(pares(naturais()), 4)   # [0, 2, 4, 6]
+```
+
+To make a treta walkable with `pra_cada`, give it an `itera()` (which can be a
+generator) — see [Walking a treta](/docs/en/poo#walking-a-treta).
+
 ## Documenting
 
 `#` comments right above a `gambiarra` (or a top-level `crava`) become

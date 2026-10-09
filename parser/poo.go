@@ -290,7 +290,7 @@ func (p *Parser) parseMetodo() ast.Statement {
 	}
 	stmt.Parameters = p.parseFunctionParameters()
 	p.nextToken() // sai do ) para o corpo
-	stmt.Body = p.parseBlockStatement()
+	stmt.Body, stmt.Gerador = p.corpoDeFuncao()
 	if !p.curTokenIs(token.ACABOU) {
 		p.addErro(p.curToken.Line, p.curToken.Coluna,
 			"cade o acabou_finalmente do metodo %s?", stmt.Nome.Value)

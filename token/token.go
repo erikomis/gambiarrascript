@@ -102,6 +102,9 @@ const (
 	// concorrencia
 	BORA = "BORA" // bora fn(args) -> Futuro
 
+	// geradores: `rende x` dentro de uma gambiarra faz dela um gerador
+	RENDE = "RENDE"
+
 	// POO no modelo do Go (Tier 8)
 	TRETA     = "TRETA"     // treta Nome <campos> acabou_finalmente (struct)
 	COMBINADO = "COMBINADO" // combinado Nome <assinaturas> acabou_finalmente (interface)
@@ -139,6 +142,7 @@ var keywords = map[string]TokenType{
 	"nao":               NAO,
 	"importa":           IMPORTA,
 	"bora":              BORA,
+	"rende":             RENDE,
 	"entao":             ENTAO,
 	"como":              COMO,
 	"treta":             TRETA,

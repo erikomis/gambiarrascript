@@ -105,6 +105,10 @@ type VM struct {
 	pai     *VM
 	fluxoID int64
 	depMain *object.InfoDepuracao
+
+	// rendido: o valor do ultimo OpRende (so na sub-VM de um gerador, ver
+	// gerador.go). O execDesde volta com o frame parado depois do rende.
+	rendido object.Object
 }
 
 func New(bytecode *compiler.Bytecode, out io.Writer) *VM {
@@ -382,8 +386,13 @@ func (vm *VM) frameEm(idx int) *Frame {
 // profundidade), setando seus campos sem alocar por chamada. Faz o bounds-check
 // de overflow (recursao funda demais).
 func (vm *VM) empurraFrame(fn *object.CompiledFunction, bp, callPos int) *Frame {
-	if vm.framesIdx >= MaxFrames {
-		panic(VMError{err: &object.Erro{Message: fmt.Sprintf("recursao funda demais (passou de %d chamadas) — usa recursao em cauda (funciona f(...)) ou um laco", MaxFrames), Kind: "runtime"}})
+	if vm.framesIdx >= len(vm.frames) {
+		// a sub-VM de gerador nasce com poucos slots e cresce aqui; as outras
+		// ja tem MaxFrames, entao chegar aqui e recursao funda demais
+		if len(vm.frames) >= MaxFrames {
+			panic(VMError{err: &object.Erro{Message: fmt.Sprintf("recursao funda demais (passou de %d chamadas) — usa recursao em cauda (funciona f(...)) ou um laco", MaxFrames), Kind: "runtime"}})
+		}
+		vm.cresceFrames(vm.framesIdx)
 	}
 	fr := vm.frameEm(vm.framesIdx)
 	fr.fn = fn
@@ -907,26 +916,19 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 			}
 			ip++
 		case code.OpIterSeq:
-			it := vm.pop()
-			switch c := it.(type) {
-			case *object.Lista:
-				// com concorrencia o laco percorre um retrato tirado agora
-				vm.push(c.ParaIterar())
-			case *object.Dicionario:
-				chaves := make([]object.Object, 0, c.Tamanho())
-				c.Itera(func(par object.ParDic) { chaves = append(chaves, par.Chave) })
-				vm.push(object.NovaLista(chaves))
-			case *object.Conjunto:
-				// retrato dos itens na ordem de insercao; com dois nomes o
-				// OpIterPar trata como lista (indice, item)
-				vm.push(object.NovaLista(c.Valores()))
-			case *object.Cardapio:
-				// as opcoes na ordem da declaracao (igual lista)
-				vm.push(object.NovaLista(c.ListaOpcoes()))
-			default:
-				panic(VMError{err: &object.Erro{Message: fmt.Sprintf("pra_cada ... em ... so funciona com lista, dicionario ou conjunto, e isso ai e %s", it.Type()), Kind: "runtime"}})
-			}
+			vm.iterSeq(vm.pop(), fn, ip)
 			ip++
+		case code.OpIterProx:
+			if !vm.iterProx(int(fn.Bytecode[ip+3])) {
+				ip = int(code.ReadUint16(fn.Bytecode[ip+1:]))
+				continue
+			}
+			ip += 4
+		case code.OpRende:
+			// so roda na sub-VM do gerador, no frame 0: pausa aqui
+			vm.rendido = vm.pop()
+			frame.ip = ip + 1
+			return nil
 		case code.OpGetLocal:
 			idx := int(fn.Bytecode[ip+1])
 			ip += 2
@@ -1273,6 +1275,11 @@ func (vm *VM) execDesde(frame *Frame, baseIdx int) (errRet error) {
 				panic(VMError{err: e})
 			}
 			vm.push(res)
+		case code.OpGerador:
+			// a chamada de um gerador: guarda o frame numa sub-VM e devolve
+			// o gerador como se fosse o `funciona` dele
+			vm.push(vm.novoGerador(frame, ip+1))
+			fallthrough
 		case code.OpReturn:
 			val := vm.pop()
 			returnedFn := vm.popFrame()

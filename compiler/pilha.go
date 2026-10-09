@@ -111,6 +111,11 @@ func MaxPilha(ins code.Instructions, consts []object.Object) int {
 			if !visita(alvo, depois+1) || !visita(prox, depois) {
 				return 0
 			}
+		case ef.salta && ef.poeSoSegue:
+			// OpIterProx: acabou -> pula sem empilhar; senao segue com os valores
+			if !visita(alvo, d-ef.tira) || !visita(prox, depois) {
+				return 0
+			}
 		case ef.salta:
 			if !visita(alvo, depois) || !visita(prox, depois) {
 				return 0
@@ -131,6 +136,7 @@ type efeito struct {
 	tira, poe  int
 	salta      bool
 	poeSeSalta bool
+	poeSoSegue bool // so empilha (poe) no caminho que segue; o salto so tira
 	fim        bool
 }
 
@@ -155,7 +161,7 @@ func efeitoPilha(op code.Opcode, operandos []byte, consts []object.Object) (efei
 		code.OpMenor, code.OpMenorEqual,
 		code.OpIndex, code.OpRange, code.OpIndexOuNada:
 		return efeito{tira: 2, poe: 1}, true
-	case code.OpMinus, code.OpNao, code.OpBNot, code.OpIterSeq, code.OpIsNada, code.OpBinConst:
+	case code.OpMinus, code.OpNao, code.OpBNot, code.OpIsNada, code.OpBinConst:
 		return efeito{tira: 1, poe: 1}, true
 	case code.OpDup:
 		return efeito{tira: 1, poe: 2}, true
@@ -167,6 +173,20 @@ func efeitoPilha(op code.Opcode, operandos []byte, consts []object.Object) (efei
 		return efeito{tira: 3, poe: 1}, true
 	case code.OpIterPar:
 		return efeito{tira: 3, poe: 2}, true
+	case code.OpIterSeq:
+		// iteravel -> orig, seq, tamanho
+		return efeito{tira: 1, poe: 3}, true
+	case code.OpIterProx:
+		// [orig] seq it tam -> valor(es); no salto (acabou) nao empilha nada
+		nomes := u8(2)
+		return efeito{tira: nomes + 2, poe: nomes, salta: true, poeSoSegue: true}, true
+	case code.OpRende:
+		return efeito{tira: 1}, true
+	case code.OpGerador:
+		// na chamada vira retorno (o gerador cai no slot do chamador, igual o
+		// OpReturn); o corpo segue daqui na sub-VM do gerador com a mesma
+		// pilha — por isso conta como instrucao que nao mexe e segue
+		return efeito{}, true
 	case code.OpJump:
 		return efeito{salta: true}, true
 	case code.OpJumpIfFalse, code.OpJumpIfTrue:

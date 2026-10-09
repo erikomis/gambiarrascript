@@ -228,6 +228,8 @@ type Funcao struct {
 	// Nome da definicao (gambiarra nomeada, "Tipo.metodo", "<anonima>"): o
 	// depurador mostra no quadro, igual o Name da CompiledFunction na VM.
 	Nome string
+	// Gerador: o corpo tem `rende` — chamar devolve um *Gerador.
+	Gerador bool
 }
 
 func (f *Funcao) Type() ObjectType { return FUNCAO_OBJ }

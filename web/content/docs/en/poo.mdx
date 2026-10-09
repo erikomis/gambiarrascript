@@ -318,6 +318,43 @@ mostra tempo[Sinal.verde]    # 30
   `gs check` warns about an `escolhe` that only tests options of one
   cardapio, forgets some of them and has no `se_nao_colar`.
 
+## Walking a treta
+
+`pra_cada x em instance` calls the treta's **`itera()`** method and walks
+whatever it returns: list, dictionary, set, cardapio or **generator**. That way your own
+collection works in loops just like the built-in ones — with two names too
+(`pra_cada i, x em box`), the same way as the returned value (list and
+generator: position and value; dictionary: key and value).
+
+```gambiarrascript
+treta Intervalo
+    inicio
+    fim
+acabou_finalmente
+
+gambiarra (r Intervalo) itera()
+    bota i = r.inicio
+    enquanto i <= r.fim
+        rende i
+        i += 1
+    acabou_finalmente
+acabou_finalmente
+
+pra_cada x em Intervalo{1, 3}
+    mostra x                    # 1, 2, 3
+acabou_finalmente
+mostra lista(Intervalo{5, 7})   # [5, 6, 7]
+```
+
+- `itera()` runs **once per loop**, when the `pra_cada` starts (with a
+  generator, the values come out on demand).
+- `lista(instance)` uses `itera()` too.
+- A treta without `itera()` gives a clear error: `a treta Caixa nao tem
+  itera(), nao da pra percorrer`. If `itera()` returns something else (a
+  number, another treta...), the error says what came back.
+- An embedded treta's `itera()` is promoted like any method: a treta that
+  embeds a walkable one is walkable.
+
 ## Printing, comparing, JSON
 
 - `mostra p` prints `Ponto{x: 1, y: 2}` (text in quotes, like a dictionary).

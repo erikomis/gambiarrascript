@@ -15,6 +15,10 @@ func (i *Interpreter) builtinMapeia(args []object.Object) object.Object {
 	if len(args) != 2 {
 		return erroBuiltin("mapeia() quer 2 argumentos (lista, gambiarra), veio %d", len(args))
 	}
+	args, falha := consomeSeGerador(args)
+	if falha != nil {
+		return falha
+	}
 	l, ok := args[0].(*object.Lista)
 	if !ok {
 		return erroBuiltin("mapeia() espera uma lista, veio %s", args[0].Type())
@@ -42,6 +46,10 @@ func (i *Interpreter) builtinMapeia(args []object.Object) object.Object {
 func (i *Interpreter) builtinFiltra(args []object.Object) object.Object {
 	if len(args) != 2 {
 		return erroBuiltin("filtra() quer 2 argumentos (lista, gambiarra), veio %d", len(args))
+	}
+	args, falha := consomeSeGerador(args)
+	if falha != nil {
+		return falha
 	}
 	l, ok := args[0].(*object.Lista)
 	if !ok {

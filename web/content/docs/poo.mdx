@@ -305,6 +305,43 @@ mostra tempo[Sinal.verde]    # 30
   O `gs check` avisa o `escolhe` que so testa opcoes de um cardapio, esquece
   alguma e nao tem `se_nao_colar`.
 
+## Percorrendo uma treta
+
+`pra_cada x em instancia` chama o metodo **`itera()`** da treta e percorre o
+que ele devolver: lista, dicionario, conjunto, cardapio ou **gerador**. Assim tua colecao
+funciona em laco igual as da linguagem — com dois nomes (`pra_cada i, x em
+caixa`) tambem, do mesmo jeito que o valor devolvido (lista e gerador: posicao
+e valor; dicionario: chave e valor).
+
+```gambiarrascript
+treta Intervalo
+    inicio
+    fim
+acabou_finalmente
+
+gambiarra (r Intervalo) itera()
+    bota i = r.inicio
+    enquanto i <= r.fim
+        rende i
+        i += 1
+    acabou_finalmente
+acabou_finalmente
+
+pra_cada x em Intervalo{1, 3}
+    mostra x                    # 1, 2, 3
+acabou_finalmente
+mostra lista(Intervalo{5, 7})   # [5, 6, 7]
+```
+
+- O `itera()` roda **uma vez por laco**, quando o `pra_cada` comeca (com
+  gerador, os valores saem sob demanda).
+- `lista(instancia)` tambem usa o `itera()`.
+- Treta sem `itera()` da erro claro: `a treta Caixa nao tem itera(), nao da pra
+  percorrer`. Se o `itera()` devolver outra coisa (numero, outra treta...), o
+  erro diz o que veio.
+- O `itera()` de um puxadinho e promovido como qualquer metodo: a treta que
+  embute uma percorrivel ja e percorrivel.
+
 ## Imprimir, comparar, JSON
 
 - `mostra p` imprime `Ponto{x: 1, y: 2}` (texto com aspas, igual dicionario).

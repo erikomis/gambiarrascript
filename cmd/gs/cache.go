@@ -62,7 +62,10 @@ func init() {
 // 17 = templates: renderiza, renderiza_arquivo e responde_html no fim da lista.
 // 18 = pattern matching no caso (OpCasa/OpAmarrado, descritor DescPadrao) e
 // cardapio (OpCardapio, descritor DescCardapio).
-const formatoGSC = 18
+// 19 = geradores (OpGerador/OpRende), pra_cada com OpIterProx (OpIterSeq
+// empilha orig/seq/tamanho; treta com itera()) e proximo/acabou/pega/lista
+// no fim da lista de builtins.
+const formatoGSC = 19
 
 type cacheGSC struct {
 	Formato      int      // formatoGSC de quem gravou (cache sem o campo = 0)

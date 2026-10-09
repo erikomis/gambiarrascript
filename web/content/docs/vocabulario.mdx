@@ -19,10 +19,11 @@ Decorou essa tabela, decorou a lingua.
 | `escolhe` / `caso`  | `switch` / `match`   | compara com `==` ou casa um padrao (`caso [a, ...resto]`, `caso Ponto{x, y}`), com guarda `caso ... se cond`; sem fallthrough; `se_nao_colar` e o default — veja [Estruturas](/docs/estruturas#pattern-matching-no-caso) |
 | `enquanto`          | `while`              | loop enquanto condicao for verdadeira |
 | `pra_cada i de A ate B` | `for i in range(A, B+1)` | loop numerico inclusivo (so sobe) |
-| `pra_cada x em colecao` | `for x in ...`   | for-each em lista, dicionario ou conjunto (no dic, as **chaves**) |
+| `pra_cada x em colecao` | `for x in ...`   | for-each em lista, dicionario, conjunto, gerador ou treta com `itera()` (no dic, as **chaves**) |
 | `pra_cada i, v em colecao` | `for i, v in enumerate(...)` / `.items()` | indice + item na lista, chave + valor no dic |
 | `gambiarra`         | `func` / `fn` / `def`| declara funcao (com nome) ou lambda (sem nome) |
 | `funciona`          | `return`             | devolve valor da gambiarra |
+| `rende`             | `yield`              | entrega um valor e pausa: a gambiarra vira gerador — veja [Geradores](/docs/funcoes#geradores-rende) |
 | `arruma`            | `try`                | abre bloco de tratamento de erro |
 | `quebrou <nome>`    | `catch <e>`          | captura o erro numa variavel |
 | `quebrou <nome> se <cond>` | `catch (e) when (cond)` | so pega se a condicao colar; da pra ter varios no mesmo `arruma` |
@@ -125,4 +126,5 @@ para referencia rapida:
 | Banco | `conecta` `consulta` `executa` `fecha` |
 | Erros | `quebra` `envolve_erro` `erro_msg` `erro_tipo` `erro_linha` `erro_pilha` `erro_causa` |
 | Concorrencia | `espera` `cano` `envia` `recebe` `fecha` `paralelo` (+ a palavra-chave `bora`) |
+| Geradores | `proximo` `acabou` `pega` `lista` (+ a palavra-chave `rende`) |
 | Testes | `espera(recebido, esperado)` `afirma(cond, [msg])` |

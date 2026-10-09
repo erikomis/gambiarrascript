@@ -69,6 +69,17 @@
     "body": ["bota ${1:resp} = busca(\"${2:https://}\")"],
     "description": "Requisicao HTTP (cliente)"
   },
+  "Gerador": {
+    "prefix": "gerador",
+    "body": [
+      "gambiarra ${1:numeros}(${2:n})",
+      "\tpra_cada ${3:i} de 1 ate ${2:n}",
+      "\t\trende ${3:i}",
+      "\tacabou_finalmente",
+      "acabou_finalmente"
+    ],
+    "description": "Gambiarra que rende valores (gerador preguicoso)"
+  },
   "Rota (servidor)": {
     "prefix": "rota",
     "body": [
