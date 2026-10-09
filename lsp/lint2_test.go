@@ -127,3 +127,22 @@ bota cedo = 1`)
 		t.Fatalf("uso no topo antes de botar devia avisar: %v", diags)
 	}
 }
+
+func TestLintImportaComoEImportaAberto(t *testing.T) {
+	// `como m` define m; o importa sem alias traz nomes que o linter nao ve
+	diags := diagsDeTypecheck(t, `importa "util.gs" como u
+mostra u.dobra(2)`)
+	if contemMsg(diags, "indefinido") {
+		t.Fatalf("alias do importa nao e indefinido: %v", diags)
+	}
+	diags = diagsDeTypecheck(t, `importa "util.gs"
+mostra dobra(3)`)
+	if contemMsg(diags, "indefinido") {
+		t.Fatalf("nome vindo de importa sem alias nao da pra acusar: %v", diags)
+	}
+	// sem importa, nome solto continua avisando
+	diags = diagsDeTypecheck(t, `mostra dobra(3)`)
+	if !contemMsg(diags, "indefinido") {
+		t.Fatalf("sem importa devia avisar: %v", diags)
+	}
+}

@@ -603,6 +603,9 @@ type typechecker struct {
 	// gambiarra eles ja existem quando ela roda (os 2 engines resolvem global
 	// declarada depois da funcao). No topo, usar antes de botar continua aviso.
 	globaisDoTopo map[string]bool
+	// importaAberto: o arquivo tem `importa` sem alias — nome desconhecido
+	// pode ter vindo do modulo, entao nao da pra avisar "pode estar indefinido"
+	importaAberto bool
 	// paralelo a scopes: o que se sabe da funcao dona do escopo (nil no topo)
 	funcs []*escopoFunc
 	// cardapios declarados no topo deste arquivo: nome -> opcoes (lint de
@@ -783,6 +786,12 @@ func (tc *typechecker) walkProgram(prog *ast.Program) {
 			tc.globaisDoTopo[n.Nome.Value] = true
 		case *ast.CombinadoDecl:
 			tc.globaisDoTopo[n.Nome.Value] = true
+		case *ast.ImportaStatement:
+			if n.Alias != nil {
+				tc.globaisDoTopo[n.Alias.Value] = true
+			} else {
+				tc.importaAberto = true
+			}
 		case *ast.CardapioDecl:
 			tc.globaisDoTopo[n.Nome.Value] = true
 			if tc.cardapios == nil {
@@ -891,7 +900,15 @@ func (tc *typechecker) walkStmt(s ast.Statement) {
 	case *ast.ExpressionStatement:
 		tc.walkExpr(n.Expression)
 	case *ast.ImportaStatement:
-		// sem checagem — caminho dinâmico
+		// o caminho nao e checado (pode ser dinamico). Com `como m` o nome
+		// m passa a existir; sem alias o modulo despeja nomes que o linter
+		// nao conhece (ele nao le o outro arquivo), entao "pode estar
+		// indefinido" deixa de valer pro arquivo
+		if n.Alias != nil {
+			tc.define(n.Alias.Value)
+		} else {
+			tc.importaAberto = true
+		}
 	// POO: treta/combinado definem o nome; o metodo e uma gambiarra com o
 	// receiver de primeiro parametro (nome de campo/metodo nao e variavel)
 	case *ast.TretaDecl:
@@ -1057,7 +1074,7 @@ func (tc *typechecker) walkExpr(e ast.Expression) {
 		tc.marcaUsado(nome)
 		_, predefinida := object.Predefinidas[nome]
 		dentroDeFuncao := len(tc.scopes) > 1
-		if !tc.resolvivel(nome) && !(dentroDeFuncao && tc.globaisDoTopo[nome]) && !builtinsSet[nome] && !predefinida && !ehKeyword(nome) {
+		if !tc.importaAberto && !tc.resolvivel(nome) && !(dentroDeFuncao && tc.globaisDoTopo[nome]) && !builtinsSet[nome] && !predefinida && !ehKeyword(nome) {
 			tc.warn(n.Token.Line, n.Token.Coluna, "`"+nome+"` pode estar indefinido (nao e builtin nem keyword)")
 		}
 	case *ast.PrefixExpression:
